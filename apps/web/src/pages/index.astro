@@ -1,0 +1,119 @@
+---
+import BaseHead from '../components/seo/BaseHead.astro';
+import SchemaJsonLd from '../components/seo/SchemaJsonLd.astro';
+import DashboardIsland from '../components/dashboard/DashboardIsland.tsx';
+import RoiCalculator from '../components/marketing/RoiCalculator.tsx';
+import '../styles/global.css';
+
+export const prerender = true;
+---
+
+<html lang="en">
+	<head>
+		<BaseHead
+			title="Grosslytics — True Net Profit & Multi-Touch Revenue Attribution"
+			description="Don't settle for gross vanity metrics. Grosslytics ties every click, post, and AI search query directly to your Gross MRR, True Net Profit (after payment fees), and RPV."
+		/>
+		<SchemaJsonLd type="software" />
+	</head>
+	<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-emerald-500 selection:text-black">
+		<!-- Navigation -->
+		<header class="border-b border-zinc-800/80 sticky top-0 bg-zinc-950/80 backdrop-blur-md z-50">
+			<div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+				<div class="flex items-center gap-2">
+					<span class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center font-black text-black text-base">G</span>
+					<span class="font-bold text-lg tracking-tight text-white">Grosslytics</span>
+				</div>
+				<nav class="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-400">
+					<a href="/compare/datafast-alternative" class="hover:text-white transition-colors">vs DataFast</a>
+					<a href="/compare/databull-alternative" class="hover:text-white transition-colors">vs DataBull</a>
+					<a href="/compare/plausible-alternative" class="hover:text-white transition-colors">vs Plausible</a>
+					<a href="/llms.txt" class="hover:text-white transition-colors font-mono text-xs text-zinc-500">llms.txt</a>
+				</nav>
+				<div class="flex items-center gap-3">
+					<a
+						href="/app"
+						class="text-xs font-semibold px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"
+					>
+						Launch App
+					</a>
+				</div>
+			</div>
+		</header>
+
+		<!-- Hero Section -->
+		<main class="max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-20">
+			<div class="text-center max-w-3xl mx-auto mb-14">
+				<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono mb-6">
+					<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+					Sub-10ms Edge Ingestion • 0KB Client JS by default
+				</div>
+				<h1 class="text-4xl sm:text-6xl font-black tracking-tight text-white leading-[1.1] mb-6">
+					Stop measuring gross vanity metrics. <br />
+					<span class="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+						Track True Net Profit.
+					</span>
+				</h1>
+				<p class="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+					Grosslytics ties every click, X post, and AI search citation directly to your Gross MRR, True Net Profit (after Stripe/Razorpay processing fees & ad spend), and Revenue Per Visitor.
+				</p>
+			</div>
+
+			<!-- Interactive Live Dashboard Island -->
+			<div class="mb-24">
+				<DashboardIsland client:visible />
+			</div>
+
+			<!-- ROI & Savings Calculator Island -->
+			<section class="mb-24">
+				<div class="text-center mb-10">
+					<h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-3">
+						Calculate Your Margin Advantage
+					</h2>
+					<p class="text-sm text-zinc-400 max-w-xl mx-auto">
+						See exact annual infrastructure savings and recovered fee accuracy on Grosslytics vs. legacy analytics.
+					</p>
+				</div>
+				<RoiCalculator client:visible />
+			</section>
+
+			<!-- Feature Grid -->
+			<section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-24">
+				<div class="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+					<div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-mono font-bold mb-4">
+						&lt;8ms
+					</div>
+					<h3 class="font-bold text-lg text-white mb-2">Write-Behind Queue Batching</h3>
+					<p class="text-sm text-zinc-400 leading-relaxed">
+						Never wait on synchronous SQLite writes. Global Cloudflare Queues batch up to 500 events per transaction, cutting database write ops by 99%.
+					</p>
+				</div>
+
+				<div class="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+					<div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 font-mono font-bold mb-4">
+						AI
+					</div>
+					<h3 class="font-bold text-lg text-white mb-2">Unmasked Direct & AI Search</h3>
+					<p class="text-sm text-zinc-400 leading-relaxed">
+						Stop lumping in-app mobile WebViews (Instagram, LinkedIn, X, TikTok) and AI search engines (ChatGPT, Perplexity, Claude) into fake Direct.
+					</p>
+				</div>
+
+				<div class="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+					<div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-mono font-bold mb-4">
+						MCP
+					</div>
+					<h3 class="font-bold text-lg text-white mb-2">Built-In Model Context Protocol</h3>
+					<p class="text-sm text-zinc-400 leading-relaxed">
+						Ask Claude Code, Cursor, or Windsurf directly: "Which X posts drove our top 5 Stripe buyers this week?" with zero custom script writing.
+					</p>
+				</div>
+			</section>
+		</main>
+
+		<!-- Footer -->
+		<footer class="border-t border-zinc-900 py-12 text-center text-xs text-zinc-500 font-mono">
+			<p>© 2025 Grosslytics (`grosslytics.com`). Sub-10ms edge-native analytics.</p>
+		</footer>
+	</body>
+</html>

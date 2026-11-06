@@ -1,0 +1,24 @@
+{
+  "name": "grosslytics",
+  "version": "0.1.0",
+  "description": "1-Click Self-Host & MCP CLI for Grosslytics",
+  "type": "module",
+  "bin": {
+    "grosslytics": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --target node --outfile dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.0",
+    "commander": "^13.1.0",
+    "picocolors": "^1.1.1",
+    "@grosslytics/shared": "workspace:*",
+    "@grosslytics/db-d1": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

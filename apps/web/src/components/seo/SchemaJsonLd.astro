@@ -1,0 +1,75 @@
+---
+interface Props {
+	type: 'software' | 'article' | 'faq';
+	title?: string;
+	description?: string;
+	datePublished?: string;
+	dateModified?: string;
+	faqs?: Array<{ question: string; answer: string }>;
+}
+
+const { type, title, description, datePublished, dateModified, faqs = [] } = Astro.props;
+
+let schemaObj: Record<string, unknown> = {};
+
+if (type === 'software') {
+	schemaObj = {
+		'@context': 'https://schema.org',
+		'@graph': [
+			{
+				'@type': 'SoftwareApplication',
+				name: 'Grosslytics',
+				applicationCategory: 'BusinessApplication',
+				operatingSystem: 'Cloudflare Workers, Docker, Web',
+				offers: {
+					'@type': 'AggregateOffer',
+					priceCurrency: 'USD',
+					lowPrice: '0',
+					highPrice: '29',
+					offerCount: '3',
+				},
+				description: 'Privacy-first, sub-10ms edge-native multi-touch revenue attribution engine for SaaS founders.',
+			},
+			{
+				'@type': 'Organization',
+				name: 'Grosslytics',
+				url: 'https://grosslytics.com',
+				logo: 'https://grosslytics.com/logo.png',
+			},
+			{
+				'@type': 'WebSite',
+				name: 'Grosslytics',
+				url: 'https://grosslytics.com',
+			},
+		],
+	};
+} else if (type === 'article') {
+	schemaObj = {
+		'@context': 'https://schema.org',
+		'@type': 'TechArticle',
+		headline: title,
+		description: description,
+		author: {
+			'@type': 'Organization',
+			name: 'Grosslytics Architecture Team',
+		},
+		datePublished: datePublished || '2025-01-01',
+		dateModified: dateModified || new Date().toISOString().split('T')[0],
+	};
+} else if (type === 'faq' && faqs.length > 0) {
+	schemaObj = {
+		'@context': 'https://schema.org',
+		'@type': 'FAQPage',
+		mainEntity: faqs.map((f) => ({
+			'@type': 'Question',
+			name: f.question,
+			acceptedAnswer: {
+				'@type': 'Answer',
+				text: f.answer,
+			},
+		})),
+	};
+}
+---
+
+<script type="application/ld+json" set:html={JSON.stringify(schemaObj)} />

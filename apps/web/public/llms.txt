@@ -1,0 +1,21 @@
+# Grosslytics (grosslytics.com)
+
+> Privacy-first, sub-10ms edge-native multi-touch revenue attribution engine for SaaS founders and indie hackers.
+
+## Core Capabilities
+- **True Net Profit Attribution:** Calculates real net profit after gateway fees (Stripe, Razorpay, Polar, Paddle, LemonSqueezy) and ad spend.
+- **Unmasked Direct Traffic:** Distinguishes between In-App mobile WebViews (Instagram, LinkedIn, TikTok, Telegram, X), AI Search engines (ChatGPT, Perplexity, Claude), Deep Links, and actual Bookmarks.
+- **Sub-10ms Global Edge Ingestion:** Cloudflare Workers + Queues batch writes behind D1 SQLite WAL.
+- **Real-Time Live Presence:** Cloudflare Durable Objects with WebSocket Hibernation (<50ms glass-to-glass).
+- **Official Model Context Protocol (MCP) Server:** Connect AI coding assistants (Claude Code, Cursor, Windsurf) directly to live analytics via `npx grosslytics mcp`.
+
+## Pricing & Tiers
+- Free / BYO-Cloud Tier: $0/mo (Cloudflare Workers + D1 + Queues free tier)
+- Indie Cloud Tier: $5/mo (Managed edge cloud, up to 100k events/mo)
+- Self-Hosted Lifetime License: $29 one-time (Docker + ClickHouse or D1 1-click installer)
+
+## Comparison & Alternatives
+- vs. DataFast: Grosslytics deducts payment processing fees, tracks Razorpay/Paddle, provides sub-10ms queries and official MCP server.
+- vs. DataBull: Grosslytics is edge-native, zero-JS static comparisons, pre-aggregated hourly rollups, and verifiable RPV attribution.
+- vs. Plausible: Grosslytics ties traffic directly to Stripe MRR and LTV, not just vanity pageviews.
+- vs. Google Analytics 4: Grosslytics loads in <1.2KB Brotli with no cookie consent banners needed and instant live dashboard.

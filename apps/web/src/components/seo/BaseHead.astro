@@ -1,0 +1,43 @@
+---
+interface Props {
+	title: string;
+	description: string;
+	ogImage?: string;
+	noindex?: boolean;
+	schema?: Record<string, unknown>[];
+}
+
+const { title, description, ogImage, noindex = false, schema = [] } = Astro.props;
+const cleanPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const siteOrigin = Astro.site?.toString() || 'https://grosslytics.com';
+const canonicalURL = new URL(cleanPath, siteOrigin).toString();
+const resolvedOgImage = ogImage || new URL(`/og${cleanPath === '/' ? '/index' : cleanPath}.png`, siteOrigin).toString();
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonicalURL} />
+
+{noindex ? (
+	<meta name="robots" content="noindex, nofollow" />
+) : (
+	<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+)}
+
+<!-- OpenGraph / X Cards -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content={canonicalURL} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={resolvedOgImage} />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={resolvedOgImage} />
+
+<!-- Structured Data (JSON-LD) -->
+{schema.map((item) => (
+	<script type="application/ld+json" set:html={JSON.stringify(item)} />
+))}

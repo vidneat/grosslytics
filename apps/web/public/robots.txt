@@ -1,0 +1,28 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
+# AI Search & Indexer Agents
+User-agent: Googlebot
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /app/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /app/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /app/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /app/
+
+Sitemap: https://grosslytics.com/sitemap-index.xml
