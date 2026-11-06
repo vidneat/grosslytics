@@ -3,13 +3,19 @@ import Page from '../../layouts/Page.astro';
 import DashboardIsland from '../../components/dashboard/DashboardIsland.tsx';
 
 export const prerender = false;
+
+// /app/demo is the full sample workspace; every other /app path is the owner's live dashboard.
+const demo = Astro.params.slug === 'demo';
 ---
 
-<Page title="Grosslytics Workspace" description="Real-time revenue attribution workspace." noindex app>
+<Page title={demo ? 'Grosslytics Demo Workspace' : 'Grosslytics Workspace'} description="Real-time revenue attribution workspace." noindex app>
 	<main class="min-h-[calc(100vh-3rem)] bg-band px-5 py-8">
 		<div class="mx-auto max-w-7xl">
-			<h1 class="mb-6 text-[28px] font-semibold tracking-[-0.025em]">Overview</h1>
-			<DashboardIsland client:only="react" />
+			<div class="mb-6 flex items-baseline justify-between gap-4">
+				<h1 class="text-[28px] font-semibold tracking-[-0.025em]">Overview</h1>
+				{demo ? <a href="/app/" class="text-[13px] text-accent hover:underline">Connect your own data ›</a> : <a href="/app/demo" class="text-[13px] text-ink-2 hover:underline">View sample data</a>}
+			</div>
+			{demo ? <DashboardIsland client:only="react" source="demo" /> : <DashboardIsland client:only="react" source="api" />}
 		</div>
 	</main>
 </Page>

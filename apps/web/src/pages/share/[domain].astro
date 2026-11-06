@@ -22,18 +22,18 @@ const badgePath = `/badge/${encodeURIComponent(domain)}.svg`;
 				</div>
 
 				<div class="flex items-center gap-3 rounded-2xl bg-card p-3 ring-1 ring-line">
-					<img src={badgePath} alt="Verified net profit badge" width="210" height="32" class="h-8 w-auto" />
+					<img src={badgePath} alt="Verified revenue badge" width="210" height="32" class="h-8 w-auto" />
 					<button
 						type="button"
 						class="btn btn-quiet !px-3 !py-1.5 !text-[13px]"
-						data-copy-badge={`<img src="https://grosslytics.com${badgePath}" alt="Verified Net Profit"/>`}
+						data-copy-badge={`<img src="https://grosslytics.com${badgePath}" alt="Verified revenue on Grosslytics"/>`}
 					>
 						Copy embed
 					</button>
 				</div>
 			</header>
 
-			<DashboardIsland client:visible site={domain} />
+			<DashboardIsland client:only="react" source="share" site={domain} />
 
 			<p class="mt-6 text-center text-[13px] text-ink-3">
 				Want a page like this? <a href="/#pricing" class="text-accent hover:underline">Track your startup with Grosslytics ›</a>

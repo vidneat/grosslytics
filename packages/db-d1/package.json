@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./adapter": "./src/adapter.ts",
-    "./migrations": "./src/migrations.ts"
+    "./migrations": "./src/migrations.ts",
+    "./dashboard": "./src/dashboard.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -26,4 +27,3 @@
     "@cloudflare/workers-types": "^4.20241205.0"
   }
 }
-

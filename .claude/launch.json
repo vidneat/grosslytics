@@ -4,8 +4,25 @@
     {
       "name": "web",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--cwd", "apps/web", "dev"],
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/web",
+        "dev"
+      ],
       "port": 4321,
+      "autoPort": false
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8787"
+      ],
+      "port": 8787,
       "autoPort": false
     }
   ]

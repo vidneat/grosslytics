@@ -9,7 +9,8 @@
     "./attribution": "./src/attribution.ts",
     "./fees": "./src/fees.ts",
     "./constants": "./src/constants.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./dashboard": "./src/dashboard.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -24,4 +25,3 @@
     "typescript": "^5.7.0"
   }
 }
-

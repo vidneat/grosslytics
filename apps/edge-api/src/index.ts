@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { collectRoute } from './routes/collect.js';
 import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
+import { shareRoute } from './routes/share.js';
 import { mcpRoute } from './mcp.js';
 import { handleQueueBatch } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
@@ -35,6 +36,7 @@ app.use('/api/mcp/*', requireToken);
 app.route('/api/collect', collectRoute);
 app.route('/api/stats', statsRoute);
 app.route('/api/webhooks', webhooksRoute);
+app.route('/api/share', shareRoute);
 app.route('/api/mcp', mcpRoute);
 
 // Export worker handler with fetch and queue consumer

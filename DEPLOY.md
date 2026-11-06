@@ -11,6 +11,41 @@ Both must sit on **one domain**. The tracker sends beacons to `<origin of g.js>/
 
 ---
 
+## 0. Run everything locally first
+
+Create `.dev.vars` in the repo root (it's gitignored). Use any long random strings:
+
+```
+API_TOKEN=<long random string>
+STRIPE_WEBHOOK_SECRET=whsec_<anything>
+```
+
+Create the local tables and load 180 days of sample data for `acme.io` (site id `gl_local_acme`). This only touches the local database in `.wrangler/`:
+
+```bash
+bun run db:seed:local
+```
+
+Start the API (port 8787) and the website (port 4321) in two terminals:
+
+```bash
+bun run dev:api
+```
+
+```bash
+bun run dev:web
+```
+
+Then:
+
+- http://localhost:4321/app/ connects to your local API. Paste the `API_TOKEN` from `.dev.vars` and pick `acme.io`.
+- http://localhost:4321/share/acme.io is the public revenue page. No token is needed, and it shows no customer emails.
+- http://localhost:4321/app/demo is the sample workspace used on the homepage.
+
+To send your own traffic, add `data-api="http://localhost:8787/api/collect"` to the tracker tag on a test page. For a test sale, sign a Stripe `checkout.session.completed` event (with `payment_status: "paid"` and `client_reference_id` set to the visitor id) using `STRIPE_WEBHOOK_SECRET`, and POST it to `http://localhost:8787/api/webhooks/stripe?siteId=gl_local_acme`. Locally, every visitor's country shows as Unknown, because only Cloudflare's edge adds geo data.
+
+---
+
 ## 1. Check the code locally
 
 ```bash
@@ -68,7 +103,7 @@ Copy the `database_id` it prints into `wrangler.toml`, replacing `database_id = 
 The schema lives in `packages/db-d1/src/migrations.ts`. This writes it out as a `.sql` file and drops the two `PRAGMA` lines, because D1 runs in WAL mode already and doesn't allow changing it:
 
 ```bash
-bun -e "import {MIGRATION_001_INIT as m} from './packages/db-d1/src/migrations.ts'; await Bun.write('migration_001.sql', m.replace(/^PRAGMA.*$/gm, ''))"
+bun -e "import {MIGRATION_001_INIT as a, MIGRATION_002_ANNOTATIONS as b} from './packages/db-d1/src/migrations.ts'; await Bun.write('migration_001.sql', (a + b).replace(/^PRAGMA.*$/gm, ''))"
 ```
 
 ```bash
@@ -146,6 +181,8 @@ routes = [
 ```
 
 Also set `TRACKER_ORIGIN` under `[vars]` to your domain.
+
+The dashboard calls the API on its own origin (`/api/*`), so on one domain nothing else is needed. If the API lives on a different host, build the website with `PUBLIC_API_URL=https://api.yourdomain.com`.
 
 ## 10. Deploy
 
@@ -238,9 +275,11 @@ For stdio-only clients, run `GROSSLYTICS_API_TOKEN=... npx grosslytics mcp --sit
 
 ## Not production-ready yet
 
-- **`/app` has no login.** It only shows demo data, and the real data APIs are token-protected, but don't link to it as a real product yet.
-- **The dashboard, `/share/*`, badge and OG images show placeholder data.** The badge always shows `$18,420`, and OG images are SVG, not PNG.
+- **`/app` signs in with the API token, which is stored in the browser's localStorage.** That's fine for one owner on their own device. A hosted multi-user product needs real accounts and sessions.
 - **One `API_TOKEN` covers every site.** That's fine for self-hosting one owner's sites. A hosted multi-tenant service needs a key per site.
+- **The dashboard queries raw events on every load.** The 90-day view of the sample data (19k visitors, 95k events) takes about 0.7s locally. Sites with millions of events a month will need the dashboard moved onto pre-aggregated rollups, or onto the ClickHouse adapter, which doesn't implement the dashboard query yet.
+- **Ad spend is entered by hand** (the dashboard's "Add ad spend" button, or `POST /api/stats/ad-spend`). There's no Google or Meta Ads import.
 - **No historical Stripe import, and no Telegram/Discord alerts.**
 - **The Paddle, Polar and LemonSqueezy field mapping is untested against real payloads.** Send a real test event and check the `payments` row (amount, currency, `visitor_id`) before you rely on those numbers.
+- **OG images are SVG, not PNG.**
 - **The tracker is 1.32KB Brotli**, against the spec's 1.2KB target.

@@ -4,7 +4,7 @@ import pc from 'picocolors';
 import { Command } from 'commander';
 import { execFileSync, execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { MIGRATION_001_INIT } from '@grosslytics/db-d1/migrations';
+import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS } from '@grosslytics/db-d1/migrations';
 import { writeFileSync } from 'node:fs';
 
 const program = new Command();
@@ -70,7 +70,7 @@ program
 		// Step 3: Run Database Migrations
 		s.start('Executing sub-5ms schema migrations (WAL mode, Hourly Rollups)...');
 		try {
-			writeFileSync('migration_init.sql', MIGRATION_001_INIT);
+			writeFileSync('migration_init.sql', MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS);
 			execSync(`npx wrangler d1 execute grosslytics-db --file=migration_init.sql --yes`, { stdio: 'pipe' });
 			execSync('rm -f migration_init.sql');
 			s.stop(pc.green('Schema migrations applied to D1'));

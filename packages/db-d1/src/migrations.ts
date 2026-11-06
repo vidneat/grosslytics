@@ -143,3 +143,15 @@ CREATE TABLE IF NOT EXISTS webhook_dedup_log (
 ) STRICT, WITHOUT ROWID;
 `;
 
+
+/** Chart annotations ("Launched on Product Hunt"), shown as markers on the main chart. */
+export const MIGRATION_002_ANNOTATIONS = `
+CREATE TABLE IF NOT EXISTS annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    site_id TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    label TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_annotations_site_at ON annotations(site_id, at);
+`;

@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import {
+	ArrowRight,
+	BookOpen,
 	Bot,
+	CalendarDays,
 	ChartColumn,
 	FileText,
 	Filter as FilterIcon,
@@ -9,22 +12,25 @@ import {
 	Globe,
 	Hourglass,
 	Lightbulb,
+	LogOut,
 	Monitor,
 	Radio,
 	Receipt,
 	Route,
 	Share2,
+	StickyNote,
 	Trophy,
 	Users,
 	X,
-	CalendarDays,
-	BookOpen,
-	ArrowRight,
 } from 'lucide-react';
+import type { DashboardData, DashSale } from '@grosslytics/shared/dashboard';
+import { sourceIcon } from '@grosslytics/shared/dashboard';
 import { $dashboardFilters, setAttributionModel, setDateRange, setRevenueMode } from '../../stores/filterStore.js';
-import { ANNOTATIONS_30D, buildDemo, type Dimension, type Filter, type Metric, type Mode, type Model, type Range, SALES, flag } from './demo';
+import { apiFetch, fetchJourney, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from './api';
 import { Funnel, Heatmap, MainChart, MiniBars, ProfitBridge, type Point } from './charts';
-import { JourneyDrawer, LiveFeed } from './live';
+import { Connect, InstallSnippet } from './connect';
+import { buildDemo, DEMO_NOW, flag, journeyFor, type Dimension, type Filter, type Metric, type Mode, type Model, type Range } from './demo';
+import { gatewayLabel, JourneyDrawer, LiveFeed } from './live';
 import { BarList, Delta, Panel, SourceIcon, Sparkline, compact, num, usd } from './ui';
 
 const MODELS = [
@@ -42,6 +48,8 @@ const MODE_LABEL: Record<Mode, string> = { gross: 'Gross revenue', net: 'Net rev
 const MODE_SHORT: Record<Mode, string> = { gross: 'Gross', net: 'Net', profit: 'Profit' };
 const DIM_LABEL: Record<Dimension, string> = { source: 'Source', page: 'Page', country: 'Country', device: 'Device' };
 
+type Source = 'demo' | 'api' | 'share';
+
 function Segmented<T extends string>(props: { label: string; value: T; options: ReadonlyArray<{ id: T; label: string }>; onChange: (v: T) => void }) {
 	return (
 		<div className="seg" role="group" aria-label={props.label}>
@@ -54,20 +62,67 @@ function Segmented<T extends string>(props: { label: string; value: T; options: 
 	);
 }
 
-function pointLabel(range: Range, i: number, n: number): string {
-	const back = n - 1 - i;
-	if (range === '24h') return back === 0 ? 'Now' : `${back}h ago`;
-	return new Date(Date.UTC(2026, 2, 31) - back * 86_400_000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const bucketLabel = (t: number, step: number) =>
+	step < 86400
+		? new Date(t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', timeZone: 'UTC' })
+		: new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+const agoText = (s: number) => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < 86400 ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / 86400)} d ago`);
+
+/**
+ * The dashboard. `source` picks the data: the marketing demo, the owner's API (/app), or a public share page.
+ */
+export default function DashboardIsland({ site = 'acme.io', variant = 'full', source = 'demo' }: { site?: string; variant?: 'full' | 'preview'; source?: Source }) {
+	if (source === 'api') return <OwnerDashboard variant={variant} />;
+	return <Workspace site={site} variant={variant} source={source} />;
 }
 
-function annotationAt(range: Range, i: number, n: number): string | undefined {
-	if (range === '24h') return undefined;
-	const offset = 30 - n; // index i in this range == day (offset + i) of the 30-day baseline
-	const day = range === '90d' ? i - 60 : offset + i;
-	return ANNOTATIONS_30D.find((a) => a.at === day)?.label;
+/** /app: connect once (API URL + token + site), then the live workspace. */
+function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
+	const [conn, setConn] = useState<Connection | null | undefined>(undefined);
+	const [sites, setSites] = useState<SiteInfo[]>([]);
+	useEffect(() => setConn(loadConnection()), []);
+	useEffect(() => {
+		if (conn) apiFetch<{ sites: SiteInfo[] }>(conn, '/api/stats/sites').then((r) => setSites(r.sites), () => {});
+	}, [conn?.api, conn?.token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	const connect = (c: Connection | null) => {
+		saveConnection(c);
+		setConn(c);
+	};
+	if (conn === undefined) return null;
+	if (!conn) return <Connect onConnect={connect} />;
+	const current = sites.find((s) => s.id === conn.siteId);
+	return (
+		<Workspace
+			site={current?.domain ?? conn.siteId}
+			variant={variant}
+			source="api"
+			conn={conn}
+			sites={sites}
+			onSite={(siteId) => connect({ ...conn, siteId })}
+			onDisconnect={() => connect(null)}
+			shared={!!current?.shared}
+			onShare={async (enabled) => {
+				await apiFetch(conn, `/api/stats/sites/${conn.siteId}/share`, { method: 'POST', body: JSON.stringify({ enabled }) });
+				setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, shared: enabled ? 1 : 0 } : s)));
+			}}
+		/>
+	);
 }
 
-export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: { site?: string; variant?: 'full' | 'preview' }) {
+function Workspace(props: {
+	site: string;
+	variant: 'full' | 'preview';
+	source: Source;
+	conn?: Connection;
+	sites?: SiteInfo[];
+	onSite?: (id: string) => void;
+	onDisconnect?: () => void;
+	shared?: boolean;
+	onShare?: (enabled: boolean) => Promise<void>;
+}) {
+	const { site, variant, source, conn } = props;
 	const f = useStore($dashboardFilters);
 	const range = (f.dateRange === 'custom' ? '30d' : f.dateRange) as Range;
 	const model = f.attributionModel as Model;
@@ -78,17 +133,58 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 	const [filters, setFilters] = useState<Filter[]>([]);
 	const [tabs, setTabs] = useState({ sources: 'referrers', pages: 'top', geo: 'countries', tech: 'devices' });
 	const [sorts, setSorts] = useState<Record<string, 'visitors' | 'revenue'>>({});
-	const [sale, setSale] = useState<(typeof SALES)[number] | null>(null);
-	const [online, setOnline] = useState(27);
+	const [sale, setSale] = useState<DashSale | null>(null);
+	const [refresh, setRefresh] = useState(0);
+	const [demoOnline, setDemoOnline] = useState(27);
 
+	// Data: demo is computed locally; owner and share pages come from the API.
+	const q = { range, model, mode, filters };
+	const demo = useMemo(() => (source === 'demo' ? buildDemo(range, model, mode, filters) : null), [source, range, model, mode, filters]);
+	const remote = useRemoteDashboard(source === 'api' && conn ? { conn } : source === 'share' ? { shareDomain: site } : null, q, refresh);
+	const d: DashboardData | null = demo ?? remote.data;
+
+	// Live: the owner gets the real socket; the demo simulates; share pages have none (presence is private).
+	const live = useLiveSocket(source === 'api' ? (conn ?? null) : null);
 	useEffect(() => {
-		// Demo only: random walk standing in for the SiteLiveHub presence count
-		const t = setInterval(() => setOnline((n) => Math.max(14, Math.min(48, n + (Math.random() > 0.5 ? 1 : -1)))), 4000);
+		if (source !== 'demo') return;
+		const t = setInterval(() => setDemoOnline((n) => Math.max(14, Math.min(48, n + (Math.random() > 0.5 ? 1 : -1)))), 4000);
 		return () => clearInterval(t);
-	}, []);
+	}, [source]);
+	const online = source === 'demo' ? demoOnline : (live.online ?? 0);
 
-	const d = useMemo(() => buildDemo(range, model, mode, filters), [range, model, mode, filters]);
+	// Owner view refreshes every minute, and right away when a sale lands.
+	const saleCount = live.entries.filter((e) => e.sale).length;
+	const lastSales = useRef(saleCount);
+	useEffect(() => {
+		if (saleCount > lastSales.current) setRefresh((r) => r + 1);
+		lastSales.current = saleCount;
+	}, [saleCount]);
+	useEffect(() => {
+		if (source !== 'api') return;
+		const t = setInterval(() => setRefresh((r) => r + 1), 60_000);
+		return () => clearInterval(t);
+	}, [source]);
+
 	const closeSale = useCallback(() => setSale(null), []);
+	const loadJourney = useCallback(async (s: DashSale) => (source === 'api' && conn ? fetchJourney(conn, s) : journeyFor(s.id)), [source, conn]);
+
+	if (!d) {
+		return (
+			<div className="rounded-[22px] bg-card p-10 text-center ring-1 ring-line">
+				{remote.error ? (
+					<>
+						<p className="text-[15px] text-ink-2" role="alert">{remote.error}</p>
+						<div className="mt-4 flex justify-center gap-2">
+							<button type="button" className="btn btn-primary" onClick={() => setRefresh((r) => r + 1)}>Try again</button>
+							{props.onDisconnect && <button type="button" className="btn btn-quiet" onClick={props.onDisconnect}>Change connection</button>}
+						</div>
+					</>
+				) : (
+					<p className="text-[15px] text-ink-3">Loading {site}…</p>
+				)}
+			</div>
+		);
+	}
 
 	const pick = (dim: Dimension) => (value: string) =>
 		setFilters((list) => {
@@ -103,9 +199,9 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 
 	// KPIs
 	const t = d.totals;
+	const s = d.series;
 	const conv = t.visitors ? t.sales / t.visitors : 0;
 	const prevConv = d.prev.visitors ? d.prev.sales / d.prev.visitors : 0;
-	const s = d.series;
 	const kpis: Array<{ id: Metric; label: string; value: string; now: number; before: number; spark: number[]; icon: typeof Users }> = [
 		{ id: 'visitors', label: 'Visitors', value: compact(t.visitors), now: t.visitors, before: d.prev.visitors, spark: s.visitors, icon: Users },
 		{ id: 'revenue', label: MODE_LABEL[mode], value: usd(t.revenue), now: t.revenue, before: d.prev.revenue, spark: s.revenue, icon: Receipt },
@@ -113,9 +209,12 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 		{ id: 'conversion', label: 'Conversion', value: `${(conv * 100).toFixed(2)}%`, now: conv, before: prevConv, spark: s.sales.map((x, i) => x / Math.max(1, s.visitors[i]!)), icon: ChartColumn },
 	];
 
+	const notes = new Map<number, string>();
+	for (const a of d.annotations) {
+		const i = Math.floor((a.at - s.start) / s.step);
+		if (i >= 0 && i < s.n) notes.set(i, notes.has(i) ? `${notes.get(i)} · ${a.label}` : a.label);
+	}
 	const points: Point[] = Array.from({ length: s.n }, (_, i) => {
-		const label = pointLabel(range, i, s.n);
-		const note = annotationAt(range, i, s.n);
 		const v = s.visitors[i]!;
 		const pv = s.prevVisitors[i]!;
 		const by: Record<Metric, [number, number]> = {
@@ -124,7 +223,7 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 			rpv: [s.revenue[i]! / Math.max(1, v), s.prevRevenue[i]! / Math.max(1, pv)],
 			conversion: [(s.sales[i]! / Math.max(1, v)) * 100, (s.prevSales[i]! / Math.max(1, pv)) * 100],
 		};
-		return { label, note, value: by[metric][0], prev: by[metric][1] };
+		return { label: bucketLabel(s.start + i * s.step, s.step), note: notes.get(i), value: by[metric][0], prev: by[metric][1] };
 	});
 	const format: Record<Metric, (v: number) => string> = {
 		visitors: (v) => compact(v),
@@ -133,49 +232,63 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 		conversion: (v) => `${v.toFixed(2)}%`,
 	};
 
-	// Insights, computed from the same data
-	const bySrc = d.allSources.filter((x) => x.visitors > 0);
-	const best = [...bySrc].sort((a, b) => b.revenue / b.visitors - a.revenue / a.visitors)[0]!;
-	const biggest = [...bySrc].sort((a, b) => b.visitors - a.visitors)[0]!;
-	const ai = bySrc.filter((x) => x.cat === 'AI search');
-	const aiVisitShare = ai.reduce((a, x) => a + x.visitors, 0) / bySrc.reduce((a, x) => a + x.visitors, 0);
-	const aiRevShare = ai.reduce((a, x) => a + x.revenue, 0) / Math.max(1, bySrc.reduce((a, x) => a + x.revenue, 0));
+	// Insights, computed from the same data; each is skipped when the data can't support it
+	const short = (k: string) => k.replace(/ \(.*\)$/, '');
+	const bySrc = d.sources.filter((x) => x.visitors >= 10);
+	const best = [...bySrc].sort((a, b) => b.revenue / b.visitors - a.revenue / a.visitors)[0];
+	const biggest = [...bySrc].sort((a, b) => b.visitors - a.visitors)[0];
+	const ai = d.sources.filter((x) => x.cat === 'AI Search' || x.cat === 'AI search');
+	const allVisits = d.sources.reduce((a, x) => a + x.visitors, 0);
+	const allRevenue = d.sources.reduce((a, x) => a + Math.max(0, x.revenue), 0);
+	const pricingRow = d.behaviour.find((b) => b.label === 'Read /pricing');
 	const insights = [
-		{
+		best && biggest && best.key !== biggest.key && biggest.revenue > 0 && {
 			text: (
 				<>
-					Visitors from <b>{best.key.replace(/ \(.*\)$/, '')}</b> are worth {((best.revenue / best.visitors) / Math.max(0.01, biggest.revenue / biggest.visitors)).toFixed(1)}× those from <b>{biggest.key.replace(/ \(.*\)$/, '')}</b>, your biggest source.
+					Visitors from <b>{short(best.key)}</b> are worth {(best.revenue / best.visitors / (biggest.revenue / biggest.visitors)).toFixed(1)}× those from <b>{short(biggest.key)}</b>, your biggest source.
 				</>
 			),
 			action: () => pick('source')(best.key),
-			cta: `Filter to ${best.key.replace(/ \(.*\)$/, '')}`,
+			cta: `Filter to ${short(best.key)}`,
 		},
-		{
+		ai.length > 0 && allVisits > 0 && allRevenue > 0 && {
 			text: (
 				<>
-					AI search brings <b>{Math.round(aiVisitShare * 100)}%</b> of visitors but <b>{Math.round(aiRevShare * 100)}%</b> of {MODE_SHORT[mode].toLowerCase()} revenue.
+					AI search brings <b>{Math.round((ai.reduce((a, x) => a + x.visitors, 0) / allVisits) * 100)}%</b> of visitors but <b>{Math.round((ai.reduce((a, x) => a + Math.max(0, x.revenue), 0) / allRevenue) * 100)}%</b> of {MODE_SHORT[mode].toLowerCase()} revenue.
 				</>
 			),
 			action: () => setTab('sources')('channels'),
 			cta: 'See channels',
 		},
-		{
+		pricingRow && pricingRow.buyers !== '–' && {
 			text: (
 				<>
-					<b>94%</b> of buyers read /pricing before paying; only 17% of other visitors do.
+					<b>{pricingRow.buyers}</b> of buyers read /pricing before paying; {pricingRow.others} of other visitors do.
 				</>
 			),
 			action: () => pick('page')('/pricing'),
 			cta: 'Filter to /pricing',
 		},
-	];
+	].filter(Boolean) as Array<{ text: ReactNode; action: () => void; cta: string }>;
 
 	const revenueLabel = MODE_SHORT[mode];
-	const sourceRows = tabs.sources === 'channels' ? d.groups : tabs.sources === 'campaigns' ? d.campaigns : d.sources.map((x) => ({ ...x, note: x.cat }));
+	const sourceRows = tabs.sources === 'channels' ? d.groups : tabs.sources === 'campaigns' ? d.campaigns : d.sources;
 	const pageRows = tabs.pages === 'entry' ? d.entry : tabs.pages === 'exit' ? d.exit : d.pages;
 	const geoRows = tabs.geo === 'cities' ? d.cities : d.countries;
 	const techRows = tabs.tech === 'browsers' ? d.browsers : tabs.tech === 'os' ? d.oses : d.devices;
 	const full = variant === 'full';
+	const isOwner = source === 'api';
+	const showLive = source !== 'share';
+	const now = d.live ? Date.now() / 1000 : DEMO_NOW;
+	const empty = isOwner && t.visitors === 0 && d.sales.length === 0 && filters.length === 0;
+	const directMax = Math.max(0.01, ...d.direct.map((r) => r.share));
+
+	const addNote = async () => {
+		const label = window.prompt('Add a note to the chart at the current time (e.g. "Launched on Product Hunt"):');
+		if (!label?.trim() || !conn) return;
+		await apiFetch(conn, '/api/stats/annotations', { method: 'POST', body: JSON.stringify({ siteId: conn.siteId, at: Math.floor(Date.now() / 1000), label: label.trim() }) });
+		setRefresh((r) => r + 1);
+	};
 
 	return (
 		<div className="space-y-4 text-ink">
@@ -184,15 +297,24 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 				<div className="flex flex-wrap items-center gap-3">
 					<span className="flex items-center gap-2 text-[15px] font-semibold">
 						<span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent text-[12px] font-bold text-white" aria-hidden="true">{site[0]?.toUpperCase()}</span>
-						{site}
+						{isOwner && (props.sites?.length ?? 0) > 1 ? (
+							<select className="rounded-md bg-transparent font-semibold outline-none" value={conn?.siteId} onChange={(e) => props.onSite?.(e.target.value)} aria-label="Site">
+								{props.sites!.map((x) => <option key={x.id} value={x.id}>{x.domain}</option>)}
+							</select>
+						) : (
+							site
+						)}
 					</span>
-					<span className="inline-flex items-center gap-1.5 rounded-full bg-band px-2.5 py-1 text-[12px] text-ink-2" aria-live="polite">
-						<span className="relative flex h-2 w-2">
-							<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-up opacity-60" />
-							<span className="relative inline-flex h-2 w-2 rounded-full bg-up" />
+					{showLive && (
+						<span className="inline-flex items-center gap-1.5 rounded-full bg-band px-2.5 py-1 text-[12px] text-ink-2" aria-live="polite">
+							<span className="relative flex h-2 w-2">
+								{online > 0 && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-up opacity-60" />}
+								<span className={`relative inline-flex h-2 w-2 rounded-full ${online > 0 ? 'bg-up' : 'bg-ink-3'}`} />
+							</span>
+							<span className="tnum font-medium text-ink">{online}</span> online
 						</span>
-						<span className="tnum font-medium text-ink">{online}</span> online
-					</span>
+					)}
+					{source === 'share' && <span className="rounded-full bg-band px-2.5 py-1 text-[12px] text-ink-2">Verified from the payment provider</span>}
 					{filters.map((x) => (
 						<button
 							key={x.dim}
@@ -209,17 +331,26 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 					{filters.length > 1 && (
 						<button type="button" className="text-[12px] text-ink-2 hover:text-ink" onClick={() => setFilters([])}>Clear all</button>
 					)}
+					{remote.loading && remote.data && <span className="text-[12px] text-ink-3">Updating…</span>}
 				</div>
-				<div className="flex flex-wrap gap-2">
+				<div className="flex flex-wrap items-center gap-2">
 					<Segmented label="Attribution model" value={model} options={MODELS} onChange={setAttributionModel} />
 					<Segmented label="Revenue" value={mode} options={MODES} onChange={setRevenueMode} />
 					<Segmented label="Date range" value={range} options={RANGES} onChange={setDateRange} />
+					{isOwner && (
+						<button type="button" className="rounded-full p-1.5 text-ink-3 hover:bg-band hover:text-ink" onClick={props.onDisconnect} aria-label="Disconnect" title="Disconnect">
+							<LogOut size={15} />
+						</button>
+					)}
 				</div>
 			</div>
 
+			{remote.error && remote.data && <p className="px-2 text-[13px] text-down" role="alert">Showing the last loaded data: {remote.error}</p>}
+			{empty && conn && <InstallSnippet siteId={conn.siteId} api={conn.api} />}
+
 			{/* KPIs + chart + live */}
 			<div className="grid gap-4 lg:grid-cols-12">
-				<section className="rounded-[22px] bg-card ring-1 ring-line lg:col-span-8" aria-label="Overview">
+				<section className={`rounded-[22px] bg-card ring-1 ring-line ${showLive ? 'lg:col-span-8' : 'lg:col-span-12'}`} aria-label="Overview">
 					<div className="grid grid-cols-2 border-b border-line md:grid-cols-4" role="tablist" aria-label="Chart metric">
 						{kpis.map((k, i) => {
 							const on = metric === k.id;
@@ -251,36 +382,48 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 							<span className="flex items-center gap-3">
 								<span className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${metric === 'revenue' ? 'bg-net' : 'bg-accent'}`} />This period</span>
 								{compare && <span className="inline-flex items-center gap-1.5"><span className="h-0 w-3 border-t-2 border-dashed border-ink-3" />Previous period</span>}
-								<span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-ink-2" />Note</span>
+								{notes.size > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-ink-2" />Note</span>}
 							</span>
-							<label className="inline-flex cursor-pointer items-center gap-2">
-								<input type="checkbox" className="accent-[var(--accent)]" checked={compare} onChange={(e) => setCompare(e.target.checked)} />
-								Compare to previous
-							</label>
+							<span className="flex items-center gap-3">
+								{isOwner && (
+									<button type="button" className="inline-flex items-center gap-1 text-accent hover:underline" onClick={addNote}>
+										<StickyNote size={12} aria-hidden="true" />
+										Add note
+									</button>
+								)}
+								<label className="inline-flex cursor-pointer items-center gap-2">
+									<input type="checkbox" className="accent-[var(--accent)]" checked={compare} onChange={(e) => setCompare(e.target.checked)} />
+									Compare to previous
+								</label>
+							</span>
 						</div>
 						<MainChart points={points} kind={metric === 'revenue' ? 'bars' : 'line'} format={format[metric]} showPrev={compare} stacked={false} />
 					</div>
 				</section>
 
-				<Panel title="Live" icon={<Radio size={15} />} className="lg:col-span-4" action={<span className="tnum text-[12px] text-ink-3">{online} on site now</span>}>
-					<LiveFeed />
-				</Panel>
+				{showLive && (
+					<Panel title="Live" icon={<Radio size={15} />} className="lg:col-span-4" action={<span className="tnum text-[12px] text-ink-3">{online} on site now</span>}>
+						<LiveFeed entries={isOwner ? live.entries : undefined} />
+					</Panel>
+				)}
 			</div>
 
 			{/* Insights */}
-			<section className="grid gap-4 md:grid-cols-3" aria-label="Insights">
-				{insights.map((ins, i) => (
-					<div key={i} className="flex flex-col justify-between gap-3 rounded-[22px] bg-card p-5 ring-1 ring-line">
-						<p className="flex gap-3 text-[14px] leading-snug text-ink-2 [&_b]:font-semibold [&_b]:text-ink">
-							<Lightbulb size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
-							<span>{ins.text}</span>
-						</p>
-						<button type="button" onClick={ins.action} className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-accent hover:underline">
-							{ins.cta} <ArrowRight size={13} aria-hidden="true" />
-						</button>
-					</div>
-				))}
-			</section>
+			{insights.length > 0 && (
+				<section className={`grid gap-4 ${insights.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`} aria-label="Insights">
+					{insights.map((ins, i) => (
+						<div key={i} className="flex flex-col justify-between gap-3 rounded-[22px] bg-card p-5 ring-1 ring-line">
+							<p className="flex gap-3 text-[14px] leading-snug text-ink-2 [&_b]:font-semibold [&_b]:text-ink">
+								<Lightbulb size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+								<span>{ins.text}</span>
+							</p>
+							<button type="button" onClick={ins.action} className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-accent hover:underline">
+								{ins.cta} <ArrowRight size={13} aria-hidden="true" />
+							</button>
+						</div>
+					))}
+				</section>
+			)}
 
 			{/* Sources + pages */}
 			<div className="grid gap-4 lg:grid-cols-2">
@@ -314,7 +457,7 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 
 			{!full && (
 				<div className="flex justify-center pt-2">
-					<a href="/app/" className="btn btn-primary">
+					<a href="/app/demo" className="btn btn-primary">
 						Open the full dashboard
 						<ArrowRight size={15} aria-hidden="true" />
 					</a>
@@ -332,11 +475,12 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 						</Panel>
 						<Panel title="Readable Direct" icon={<Bot size={15} />}>
 							<p className="px-3 pb-3 text-[13px] text-ink-2">What other tools would have called “Direct”.</p>
+							{d.direct.length === 0 && <p className="px-3 text-[13px] text-ink-3">No direct or in-app traffic yet.</p>}
 							<ul className="space-y-2 px-3">
 								{d.direct.map((r) => (
 									<li key={r.key} className="grid grid-cols-[1fr_5rem_2.5rem] items-center gap-3 text-[13px]">
 										<span className="flex min-w-0 items-center gap-2"><SourceIcon icon={r.icon} label={r.key} /><span className="truncate">{r.key}</span></span>
-										<span className="h-2 overflow-hidden rounded-full bg-band"><span className="block h-full rounded-full bg-accent" style={{ width: `${(r.share / 0.34) * 100}%` }} /></span>
+										<span className="h-2 overflow-hidden rounded-full bg-band"><span className="block h-full rounded-full bg-accent" style={{ width: `${(r.share / directMax) * 100}%` }} /></span>
 										<span className="tnum text-right">{Math.round(r.share * 100)}%</span>
 									</li>
 								))}
@@ -345,31 +489,34 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 					</div>
 
 					<div className="grid gap-4 lg:grid-cols-12">
-						<Panel title="Recent sales" icon={<Receipt size={15} />} className="lg:col-span-7" action={<span className="text-[12px] text-ink-3">Click a sale to see its journey</span>}>
-							<ul className="tnum">
-								{SALES.map((x) => (
-									<li key={x.id}>
-										<button type="button" onClick={() => setSale(x)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] hover:bg-band">
-											<span className="text-[16px] leading-none" aria-hidden="true">{flag(x.country)}</span>
-											<span className="min-w-0 flex-1">
-												<span className="block truncate font-medium">{x.email}</span>
-												<span className="block truncate text-[12px] text-ink-3">{x.plan} · {x.gateway} · {x.ago}</span>
-											</span>
-											<span className="hidden items-center gap-1 text-ink-3 sm:flex" title={`${x.first} → ${x.last}`}>
-												<SourceIcon icon={x.firstIcon} label={x.first} size={14} />
-												<ArrowRight size={12} aria-hidden="true" />
-												<SourceIcon icon={x.lastIcon} label={x.last} size={14} />
-												<span className="sr-only">First touch {x.first}, last touch {x.last}</span>
-											</span>
-											<span className="w-20 text-right font-semibold">{usd(x.gross)}</span>
-										</button>
-									</li>
-								))}
-							</ul>
-						</Panel>
-						<div className="grid gap-4 lg:col-span-5">
-							<Panel title="Where the money goes" icon={<Receipt size={15} />}>
-								<ProfitBridge gross={t.gross} fee={t.fee} ad={t.ad} />
+						{source !== 'share' && (
+							<Panel title="Recent sales" icon={<Receipt size={15} />} className="lg:col-span-7" action={d.sales.length > 0 && <span className="text-[12px] text-ink-3">Click a sale to see its journey</span>}>
+								{d.sales.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-ink-3">No sales in this period yet.</p>}
+								<ul className="tnum">
+									{d.sales.map((x) => (
+										<li key={x.id}>
+											<button type="button" onClick={() => setSale(x)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] hover:bg-band">
+												<span className="w-[18px] text-[16px] leading-none" aria-hidden="true">{flag(x.country)}</span>
+												<span className="min-w-0 flex-1">
+													<span className="block truncate font-medium">{x.email}</span>
+													<span className="block truncate text-[12px] text-ink-3">{[x.plan, gatewayLabel(x.gateway), agoText(now - x.at)].filter(Boolean).join(' · ')}</span>
+												</span>
+												<span className="hidden items-center gap-1 text-ink-3 sm:flex" title={`${x.first} → ${x.last}`}>
+													<SourceIcon icon={sourceIcon(x.first)} label={x.first} size={14} />
+													<ArrowRight size={12} aria-hidden="true" />
+													<SourceIcon icon={sourceIcon(x.last)} label={x.last} size={14} />
+													<span className="sr-only">First touch {x.first}, last touch {x.last}</span>
+												</span>
+												<span className="w-20 text-right font-semibold">{usd(x.gross)}</span>
+											</button>
+										</li>
+									))}
+								</ul>
+							</Panel>
+						)}
+						<div className={`grid gap-4 ${source === 'share' ? 'lg:col-span-12 lg:grid-cols-2' : 'lg:col-span-5'}`}>
+							<Panel title="Where the money goes" icon={<Receipt size={15} />} action={isOwner && conn && <AdSpendButton conn={conn} sources={d.sources.map((x) => x.key)} onSaved={() => setRefresh((r) => r + 1)} />}>
+								{t.gross > 0 ? <ProfitBridge gross={t.gross} fee={t.fee} ad={t.ad} /> : <p className="px-3 py-4 text-[13px] text-ink-3">Fees and ad spend are subtracted here once sales come in.</p>}
 							</Panel>
 							<Panel title="Time to convert" icon={<Hourglass size={15} />}>
 								<MiniBars rows={d.timeToConvert} />
@@ -408,23 +555,69 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full' }: 
 							<Funnel steps={d.funnel} />
 						</Panel>
 						<Panel title="Lifetime value by first source" icon={<Trophy size={15} />}>
+							{d.ltv.length === 0 && <p className="px-3 py-4 text-[13px] text-ink-3">Appears after your first sales.</p>}
 							<ul className="tnum px-1">
 								{d.ltv.map((r) => (
 									<li key={r.key} className="flex items-center gap-2 rounded-lg px-2 py-[7px] text-[14px]">
 										<SourceIcon icon={r.icon} label={r.key} />
 										<span className="min-w-0 flex-1 truncate">{r.key}</span>
-										<span className="w-24 text-right text-[12px] text-ink-3">{num(r.customers)} customers</span>
+										<span className="w-24 text-right text-[12px] text-ink-3">{num(r.customers)} customer{r.customers === 1 ? '' : 's'}</span>
 										<span className="w-20 text-right font-semibold">{usd(r.ltv)}</span>
 									</li>
 								))}
 							</ul>
-							<p className="px-3 pt-2 text-[12px] text-ink-3">Average revenue per customer, renewals included.</p>
+							<p className="px-3 pt-2 text-[12px] text-ink-3">Net revenue per customer, all time, renewals included.</p>
 						</Panel>
 					</div>
+
+					{isOwner && props.onShare && (
+						<label className="flex items-center justify-center gap-2 text-[13px] text-ink-2">
+							<input type="checkbox" className="accent-[var(--accent)]" checked={!!props.shared} onChange={(e) => props.onShare!(e.target.checked)} />
+							Public revenue page at <a className="text-accent hover:underline" href={`/share/${site}`}>/share/{site}</a> (no customer emails or journeys)
+						</label>
+					)}
 				</>
 			)}
 
-			<JourneyDrawer sale={sale} onClose={closeSale} />
+			<JourneyDrawer sale={sale} onClose={closeSale} loadJourney={loadJourney} />
 		</div>
+	);
+}
+
+/** Owner-only: record a day's ad spend for a source, so True profit subtracts it. */
+function AdSpendButton({ conn, sources, onSaved }: { conn: Connection; sources: string[]; onSaved: () => void }) {
+	const [open, setOpen] = useState(false);
+	const [source, setSource] = useState(sources[0] ?? '');
+	const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+	const [amount, setAmount] = useState('');
+	const [error, setError] = useState('');
+	if (!open)
+		return (
+			<button type="button" className="text-[12px] text-accent hover:underline" onClick={() => setOpen(true)}>
+				Add ad spend
+			</button>
+		);
+	const field = 'rounded-md bg-band px-2 py-1 text-[12px] ring-1 ring-line';
+	return (
+		<form
+			className="flex flex-wrap items-center gap-1.5"
+			onSubmit={async (e) => {
+				e.preventDefault();
+				try {
+					await apiFetch(conn, '/api/stats/ad-spend', { method: 'POST', body: JSON.stringify({ siteId: conn.siteId, source, date, amountCents: Math.round(Number(amount) * 100) }) });
+					setOpen(false);
+					onSaved();
+				} catch (err) {
+					setError((err as Error).message);
+				}
+			}}
+		>
+			<input className={`${field} w-32`} list="gl-ad-sources" value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source" required />
+			<datalist id="gl-ad-sources">{sources.map((x) => <option key={x} value={x} />)}</datalist>
+			<input className={field} type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date" required />
+			<input className={`${field} w-20`} type="number" min="0" step="0.01" placeholder="$" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount in dollars" required />
+			<button className="text-[12px] font-medium text-accent">Save</button>
+			{error && <span className="text-[12px] text-down">{error}</span>}
+		</form>
 	);
 }

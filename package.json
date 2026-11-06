@@ -14,7 +14,11 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "turbo typecheck",
-    "clean": "turbo clean && rm -rf node_modules"
+    "clean": "turbo clean && rm -rf node_modules",
+    "dev:api": "wrangler dev --port 8787",
+    "dev:web": "bun run --cwd apps/web dev",
+    "db:migrate:local": "bun scripts/local.ts migrate",
+    "db:seed:local": "bun scripts/local.ts seed"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

@@ -4,25 +4,18 @@
  * No Math.random here: server and client render identical markup.
  */
 
-export type Range = '24h' | '7d' | '30d' | '90d';
-export type Model = 'first' | 'last' | 'linear';
-export type Mode = 'gross' | 'net' | 'profit';
-export type Metric = 'visitors' | 'revenue' | 'rpv' | 'conversion';
-export type Dimension = 'source' | 'page' | 'country' | 'device';
-export interface Filter {
-	dim: Dimension;
-	value: string;
-}
+import type { DashboardData, DashFilter, DashMode, DashModel, DashRange, DashRow, DashSale } from '@grosslytics/shared/dashboard';
 
-export interface Row {
-	key: string;
-	label: string;
-	icon?: string; // domain for favicon, or emoji flag
-	visitors: number;
-	revenue: number; // cents, in the selected mode
-	sales: number;
-	note?: string;
-}
+export type Range = DashRange;
+export type Model = DashModel;
+export type Mode = DashMode;
+export type Filter = DashFilter;
+export type Dimension = DashFilter['dim'];
+export type Metric = 'visitors' | 'revenue' | 'rpv' | 'conversion';
+type Row = DashRow;
+
+/** The demo's fixed "now": end of 2026-03-31 UTC, so server and client render the same labels. */
+export const DEMO_NOW = Date.UTC(2026, 2, 31, 23, 30) / 1000;
 
 const RANGE_SCALE: Record<Range, number> = { '24h': 1 / 30, '7d': 7 / 30, '30d': 1, '90d': 3 };
 export const RANGE_POINTS: Record<Range, number> = { '24h': 24, '7d': 7, '30d': 30, '90d': 90 };
@@ -132,7 +125,7 @@ export const ANNOTATIONS_30D = [
 	{ at: 20, label: 'New pricing page' },
 ];
 
-export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filter[]) {
+export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filter[]): DashboardData {
 	const scale = RANGE_SCALE[range];
 	const weight = (last: number) => (model === 'first' ? 1 : model === 'last' ? last : (1 + last) / 2);
 
@@ -218,7 +211,9 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 	const grossSeries = wave(n, totals.gross, 7, 0.6);
 	const k = totals.gross ? totalRevenue / totals.gross : 0;
 	const revenueSeries = grossSeries.map((g) => g * k);
-	const feeSeries = grossSeries.map((g) => g * FEE_RATE);
+	const step = range === '24h' ? 3600 : 86400;
+	const seriesStart = Math.floor(DEMO_NOW / step) * step - (n - 1) * step;
+	const start30 = Math.floor(DEMO_NOW / 86400) * 86400 - 29 * 86400;
 	const prevVisit = wave(n, totalVisitors * 0.89, 11, 0.2);
 	const prevRevenue = wave(n, totalRevenue * 0.85, 13, 0.2);
 	const salesSeries = revenueSeries.map((r) => (totalRevenue ? (r / totalRevenue) * totals.sales : 0));
@@ -276,7 +271,6 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 	return {
 		totals,
 		sources: shown.map((s) => ({ ...s, note: s.cat })),
-		allSources: sources,
 		groups: [...groups.values()],
 		campaigns: CAMPAIGNS.map((c) => ({ key: c.key, label: c.key, visitors: Math.round(totalVisitors * c.share), revenue: totalRevenue * c.rev, sales: totals.sales * c.rev, note: c.note })),
 		pages: fromShares(PAGES),
@@ -287,7 +281,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		devices: fromShares(DEVICES, (r) => `@${r.key.toLowerCase()}`),
 		browsers: fromShares(BROWSERS, (r) => r.domain),
 		oses: fromShares(OSES, (r) => r.domain),
-		series: { n, visitors: visitSeries, revenue: revenueSeries, fee: feeSeries, sales: salesSeries, prevVisitors: prevVisit, prevRevenue, prevSales },
+		series: { n, start: seriesStart, step, visitors: visitSeries, revenue: revenueSeries, sales: salesSeries, prevVisitors: prevVisit, prevRevenue, prevSales },
 		behaviour,
 		heat,
 		funnel,
@@ -295,10 +289,12 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		ltv,
 		direct,
 		prev: { visitors: totalVisitors * 0.89, revenue: totalRevenue * 0.85, sales: totals.sales * 0.9 },
+		live: false,
+		sales: DEMO_SALES,
+		annotations: ANNOTATIONS_30D.map((a) => ({ at: start30 + a.at * 86400 + 12 * 3600, label: a.label })),
 	};
 }
 
-export type Demo = ReturnType<typeof buildDemo>;
 
 /** Recent sales with full journeys, for the sales list and journey drawer. */
 export const SALES = [
@@ -320,9 +316,36 @@ export const SALES = [
 	{ id: 's6', email: 'r***@studio.io', plan: 'Pro · yearly · renewal', gross: 990_00, gateway: 'Lemon Squeezy', country: 'US', city: 'New York', ago: '5 h ago', first: 'google.com', last: 'google.com', firstIcon: 'google.com', lastIcon: 'google.com', days: 371, journey: [] },
 ];
 
-/** Generic journey for sales without a hand-written one. */
-export function journeyFor(s: (typeof SALES)[number]) {
-	if (s.journey.length) return s.journey;
+const AGO_MIN = [4, 18, 60, 120, 180, 300];
+const DEMO_SALES: DashSale[] = SALES.map((s, i) => ({
+	id: s.id,
+	email: s.email,
+	plan: s.plan,
+	gross: s.gross,
+	fee: Math.round(s.gross * FEE_RATE),
+	gateway: s.gateway,
+	country: s.country,
+	city: s.city,
+	at: DEMO_NOW - AGO_MIN[i]! * 60,
+	first: s.first,
+	last: s.last,
+	hours: s.days * 24,
+	renewal: s.plan.includes('renewal'),
+}));
+
+export interface JourneyStep {
+	t: string;
+	kind: 'visit' | 'leave' | 'goal' | 'pay';
+	what: string;
+	src: string;
+	detail: string;
+}
+
+/** Demo journey for a sale: hand-written for the first, generic for the rest. */
+export function journeyFor(id: string): JourneyStep[] {
+	const s = SALES.find((x) => x.id === id);
+	if (!s) return [];
+	if (s.journey.length) return s.journey as JourneyStep[];
 	return [
 		{ t: `${s.days ? `${s.days} days before` : 'Same day'}`, kind: 'visit', what: 'First visit', src: s.first, detail: '1m 52s read' },
 		{ t: 'Purchase day', kind: 'visit', what: 'Read /pricing', src: s.last, detail: '1m 20s read · 88% scrolled' },
