@@ -236,6 +236,9 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		}),
 	);
 
+	// A few refunds, at the hour they happened (sample data)
+	const heatRefunds = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => (noise(d * 31 + h * 7) > 0.965 ? 1 : 0)));
+
 	const funnelBase = totalVisitors;
 	const funnel = [
 		{ label: 'Visited', count: funnelBase },
@@ -284,6 +287,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		series: { n, start: seriesStart, step, visitors: visitSeries, revenue: revenueSeries, sales: salesSeries, prevVisitors: prevVisit, prevRevenue, prevSales },
 		behaviour,
 		heat,
+		heatRefunds,
 		funnel,
 		timeToConvert,
 		ltv,

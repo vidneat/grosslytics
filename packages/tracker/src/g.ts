@@ -11,7 +11,7 @@ if (!w.__gl && !n.webdriver) {
 	const sid = s?.getAttribute('data-site-id') || s?.getAttribute('data-domain');
 
 	if (sid) {
-		const api = s?.getAttribute('data-api') || (s?.src ? new URL(s.src).origin : '') + '/api/collect';
+		const api = s?.getAttribute('data-api') || (s?.src ? new URL(s.src).origin : '') + '/api/event';
 		const id = () => Math.random().toString(36).slice(2) + (+new Date).toString(36);
 		const get = (k: string, isSes?: boolean) => {
 			const st = isSes ? sessionStorage : localStorage;
@@ -27,6 +27,11 @@ if (!w.__gl && !n.webdriver) {
 		const ua = n.userAgent || '';
 		const ref = d.referrer || '';
 		const pth = l.pathname;
+		const own = (ref + '/').startsWith(l.origin + '/');
+		const sp = new URLSearchParams(l.search);
+		const [us, um, uc] = ['source', 'medium', 'campaign'].map((k) => sp.get('utm_' + k) || void 0);
+		// A tagged link (?utm_source=, ?ref=, ?via=) names its source even when the referrer is stripped (email, ads, apps)
+		const tag = us || sp.get('ref') || sp.get('via');
 		let src = '';
 		let cat = 'Direct';
 
@@ -36,6 +41,9 @@ if (!w.__gl && !n.webdriver) {
 			const C = '.com (in-app)';
 			src = k[0] === 'i' ? 'instagram' + C : k[0] === 'f' ? 'facebook' + C : k[0] === 'l' ? 'linkedin' + C : k[0] === 'b' || k[0] === 'm' ? 'tiktok' + C : k[1] === 'e' ? 'telegram.org (in-app)' : 'x' + C;
 			cat = 'Social (Organic)';
+		} else if (tag) {
+			src = tag.slice(0, 50);
+			cat = /mail/i.test(um || '') ? 'Email' : 'Referral';
 		} else if (ref) {
 			try {
 				const h = new URL(ref).hostname.replace(/^www\./, '');
@@ -48,11 +56,16 @@ if (!w.__gl && !n.webdriver) {
 		} else {
 			src = 'Direct (' + (pth !== '/' || l.search ? 'Shared Link' : 'Typed/Bookmark') + ')';
 		}
+		// Clicking between your own pages keeps the source the visit arrived with, so your site never takes credit for itself
+		try {
+			const ss = sessionStorage;
+			own && !tag && !m ? ([src, cat] = (ss.gl_src || 'Direct (Typed/Bookmark)|Direct').split('|')) : (ss.gl_src = src + '|' + cat);
+		} catch {}
 
-		const sp = new URLSearchParams(l.search);
-		const [us, um, uc] = ['source', 'medium', 'campaign'].map((k) => sp.get('utm_' + k) || void 0);
 		const now = () => performance.now();
-		let dur = 0;
+		let ms = 0; // visible time on this page
+		let sent = 0; // seconds already reported
+		let left = 0;
 		let last = now();
 		let vis = d.visibilityState === 'visible';
 		let sd = 0;
@@ -61,13 +74,14 @@ if (!w.__gl && !n.webdriver) {
 		const tick = () => {
 			if (vis) {
 				const cur = now();
-				dur += ((cur - last) / 1000) | 0;
+				ms += cur - last;
 				last = cur;
 			}
 		};
 
 		on(d, 'visibilitychange', () => {
-			(vis = d.visibilityState === 'visible') ? last = now() : (tick(), send('leave', pth));
+			tick();
+			(vis = d.visibilityState === 'visible') ? last = now() : leave();
 		});
 
 		on(w, 'scroll', () => {
@@ -82,8 +96,7 @@ if (!w.__gl && !n.webdriver) {
 			}
 		}, { passive: 1 });
 
-		const send = (t: string, nme: string, meta?: string) => {
-			tick();
+		const send = (t: string, nme: string, dur = 0, meta?: string) => {
 			const body = JSON.stringify({
 				sid, vid, ses, t,
 				n: nme.slice(0, 100),
@@ -92,7 +105,15 @@ if (!w.__gl && !n.webdriver) {
 				sd, dur,
 				us, um, uc, meta,
 			});
-			n.sendBeacon ? n.sendBeacon(api, body) : fetch(api, { method: 'POST', body, keepalive: true, priority: 'low' } as any);
+			// fetch, not sendBeacon: EasyPrivacy blocks every third-party beacon (`*$ping,third-party`); keepalive still delivers on page close
+			fetch(api, { method: 'POST', body, keepalive: true, mode: 'no-cors' }).catch(() => {});
+		};
+
+		// Hiding the tab and closing it both fire; each leave reports only the new reading time, and empty repeats are dropped
+		const leave = () => {
+			tick();
+			const sec = (ms / 1000) | 0;
+			if (sec > sent || !left) send('leave', pth, sec - sent), (sent = sec), (left = 1);
 		};
 
 		const decor = (a: HTMLAnchorElement) => {
@@ -124,10 +145,10 @@ if (!w.__gl && !n.webdriver) {
 			}
 		}, { passive: 1 });
 
-		const fn = (ev: string, m?: any) => ev === 'pageview' ? send('pageview', pth) : send('goal', ev, m ? JSON.stringify(m) : undefined);
+		const fn = (ev: string, m?: any) => ev === 'pageview' ? send('pageview', pth) : send('goal', ev, 0, m && JSON.stringify(m));
 		w.grosslytics = w.datafast = w.databull = w.plausible = w.grosslytics || fn;
 
 		send('pageview', pth);
-		on(w, 'pagehide', () => send('leave', pth));
+		on(w, 'pagehide', leave);
 	}
 }

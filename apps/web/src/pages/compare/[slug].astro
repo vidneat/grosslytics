@@ -14,7 +14,7 @@ export function getStaticPaths() {
 	// getStaticPaths runs in isolation, so its constants live inside it
 	const VERIFIED = '2026-11-06';
 	const US = {
-		tracker: '1.3 KB',
+		tracker: '1.5 KB',
 		price: '$0 self-hosted, $5/mo hosted, or $29 lifetime',
 		gateways: 'Stripe, Razorpay, Polar, Paddle, Lemon Squeezy',
 		fees: 'Deducted automatically per gateway',
@@ -39,7 +39,7 @@ export function getStaticPaths() {
 					['Cookies', 'Cookies by default; a cookieless script is available', US.cookies],
 				],
 				theyLead: ['Shopify integration and a Payment API', 'Social mentions (X and Reddit) and link attribution on Growth', 'A mature hosted product with many users'],
-				weDiffer: ['Razorpay and Paddle support', 'Net revenue after gateway fees', 'Self-host for $0 on your own Cloudflare account', 'A smaller tracker (1.3 KB vs 4.5 KB)'],
+				weDiffer: ['Razorpay and Paddle support', 'Net revenue after gateway fees', 'Self-host for $0 on your own Cloudflare account', 'A smaller tracker (1.5 KB vs 4.5 KB)'],
 				verified: VERIFIED,
 				sources: [{ label: 'datafa.st (features, pricing, FAQ)', url: 'https://datafa.st' }, { label: 'datafa.st/js/script.js (measured)', url: 'https://datafa.st/js/script.js' }],
 			},
@@ -62,7 +62,7 @@ export function getStaticPaths() {
 					['Past payments', 'Imported on day one', 'Not yet; attribution starts when you install'],
 				],
 				theyLead: ['Dodo and Creem support', 'Imports past payments on day one', 'A more mature product with alerts and lifetime-value reports'],
-				weDiffer: ['Razorpay, Paddle and Lemon Squeezy support', 'Net revenue after gateway fees', 'A $0 self-hosted tier', 'A smaller tracker (1.3 KB vs 6.4 KB)'],
+				weDiffer: ['Razorpay, Paddle and Lemon Squeezy support', 'Net revenue after gateway fees', 'A $0 self-hosted tier', 'A smaller tracker (1.5 KB vs 6.4 KB)'],
 				verified: VERIFIED,
 				sources: [{ label: 'databull.app (features, pricing, FAQ)', url: 'https://databull.app' }, { label: 'databull.app/js/script.js (measured)', url: 'https://databull.app/js/script.js' }],
 			},
@@ -83,7 +83,7 @@ export function getStaticPaths() {
 					['Cookies', 'No cookies', US.cookies],
 					['Open source', 'Yes', 'No'],
 				],
-				theyLead: ['A smaller tracker (1.1 KB vs 1.3 KB)', 'Open source and hosted in the EU', 'Funnels, Google Analytics import and a long track record'],
+				theyLead: ['A smaller tracker (1.1 KB vs 1.5 KB)', 'Open source and hosted in the EU', 'Funnels, Google Analytics import and a long track record'],
 				weDiffer: ['Sales attributed from Stripe, Razorpay, Polar, Paddle and Lemon Squeezy', 'First-touch, last-touch and linear attribution', 'Net revenue after gateway fees'],
 				verified: VERIFIED,
 				sources: [{ label: 'plausible.io (features and pricing)', url: 'https://plausible.io' }, { label: 'plausible.io/js/script.js (measured)', url: 'https://plausible.io/js/script.js' }],
@@ -95,7 +95,7 @@ export function getStaticPaths() {
 				competitor: 'Google Analytics 4',
 				competitorDomain: 'analytics.google.com',
 				title: 'Lightweight GA4 Alternative with Revenue | Grosslytics',
-				description: 'Google Analytics 4 is free and deep, but heavy. Grosslytics is a 1.3 KB tracker that credits each payment to the channel that brought the buyer.',
+				description: 'Google Analytics 4 is free and deep, but heavy. Grosslytics is a 1.5 KB tracker that credits each payment to the channel that brought the buyer.',
 				rows: [
 					['Tracker size (Brotli)', '125 KB (gtag.js)', US.tracker],
 					['Price', 'Free', US.price],
@@ -243,7 +243,7 @@ const faqs = [
 				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">See your own numbers.</h2>
 				<p class="mt-2 text-ink-2">Free on your Cloudflare account.</p>
 				<div class="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-					<a href="/#pricing" class="btn btn-primary">Start free</a>
+					<a href="/start" class="btn btn-primary">Start free</a>
 					<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
 				</div>
 			</div>

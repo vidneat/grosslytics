@@ -110,14 +110,20 @@ statsRoute.get('/sites', async (c) => {
 });
 
 const SiteBody = v.object({
-	domain: v.pipe(v.string(), v.toLowerCase(), v.regex(/^[a-z0-9.-]+\.[a-z]{2,}$/), v.maxLength(255)),
+	// Accepts a pasted URL ("https://www.acme.io/pricing" → "acme.io"); `localhost` is for local testing
+	domain: v.pipe(
+		v.string(),
+		v.transform((d) => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[/:?#].*$/, '')),
+		v.regex(/^(localhost|[a-z0-9.-]+\.[a-z]{2,})$/),
+		v.maxLength(255),
+	),
 	name: v.optional(v.pipe(v.string(), v.maxLength(255))),
 });
 
 // POST /api/stats/sites - add a site; returns its id for the tracker's data-site-id
 statsRoute.post('/sites', async (c) => {
 	const parsed = v.safeParse(SiteBody, await c.req.json().catch(() => null));
-	if (!parsed.success) return c.json({ error: 'domain required, e.g. acme.io' }, 400);
+	if (!parsed.success) return c.json({ error: 'Enter a domain like acme.io, or localhost for testing.' }, 400);
 	const id = `gl_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
 	await c.env.DB.prepare('INSERT INTO sites (site_id, domain, name) VALUES (?, ?, ?)').bind(id, parsed.output.domain, parsed.output.name || parsed.output.domain).run();
 	return c.json({ id, domain: parsed.output.domain }, 201);

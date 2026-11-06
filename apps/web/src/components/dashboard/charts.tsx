@@ -125,29 +125,47 @@ export function MainChart(props: { points: Point[]; kind: 'bars' | 'line'; forma
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-/** 7×24 sequential heatmap (one hue). The three busiest hours get an outline. */
-export function Heatmap({ grid, total }: { grid: number[][]; total: number }) {
+/**
+ * 7×24 heatmap: green for sales, red for refunds (darker = more). An hour with both is green with a red dot.
+ * The three busiest sales hours get an outline. Hours are UTC, the same as the API's buckets.
+ */
+export function Heatmap({ grid, refunds, total }: { grid: number[][]; refunds?: number[][]; total: number }) {
 	const [hover, setHover] = useState<[number, number] | null>(null);
 	const flat = grid.flat();
 	const sum = flat.reduce((a, b) => a + b, 0) || 1;
 	const max = Math.max(...flat, 0.0001);
-	const top3 = [...flat].sort((a, b) => b - a)[2] ?? Infinity;
+	const maxR = Math.max(...(refunds?.flat() ?? []), 0.0001);
+	// Only hours that had sales can be "busiest"; with one sale only that hour is outlined
+	const top3 = [...flat].filter((v) => v > 0).sort((a, b) => b - a)[2] ?? Math.min(...flat.filter((v) => v > 0), Infinity);
 	const sales = (v: number) => (v / sum) * total;
 	const hourLabel = (hr: number) => `${hr % 12 || 12}${hr < 12 ? 'am' : 'pm'}`;
+	const tint = (color: string, share: number) => `color-mix(in srgb, ${color} ${22 + share * 70}%, var(--band))`;
+	const tip = (d: number, hr: number) => {
+		const s = sales(grid[d]![hr]!);
+		const r = refunds?.[d]?.[hr] ?? 0;
+		const sTxt = `${Number.isInteger(s) ? s : s.toFixed(1)} ${s === 1 ? 'sale' : 'sales'}`;
+		return `${DAYS[d]} ${hourLabel(hr)} UTC: ${sTxt}${r ? `, ${r} ${r === 1 ? 'refund' : 'refunds'}` : ''}`;
+	};
 	return (
 		<div className="tnum px-3">
 			<div className="grid grid-cols-[2.25rem_repeat(24,minmax(0,1fr))] gap-[3px]" onMouseLeave={() => setHover(null)}>
 				{grid.map((row, d) => (
 					<div key={d} className="contents">
 						<span className="self-center text-[11px] text-ink-3">{DAYS[d]}</span>
-						{row.map((v, hr) => (
-							<span
-								key={hr}
-								onMouseEnter={() => setHover([d, hr])}
-								className={`aspect-square rounded-[4px] ${v >= top3 ? 'ring-2 ring-ink' : ''}`}
-								style={{ background: `color-mix(in srgb, var(--accent) ${8 + (v / max) * 92}%, var(--band))` }}
-							/>
-						))}
+						{row.map((v, hr) => {
+							const r = refunds?.[d]?.[hr] ?? 0;
+							const bg = v > 0 ? tint('var(--up)', v / max) : r > 0 ? tint('var(--down)', r / maxR) : 'var(--band)';
+							return (
+								<span
+									key={hr}
+									onMouseEnter={() => setHover([d, hr])}
+									className={`relative aspect-square rounded-[4px] ${v > 0 && v >= top3 ? 'ring-2 ring-ink' : ''}`}
+									style={{ background: bg }}
+								>
+									{v > 0 && r > 0 && <span className="absolute top-[2px] right-[2px] h-1.5 w-1.5 rounded-full bg-down" aria-hidden="true" />}
+								</span>
+							);
+						})}
 					</div>
 				))}
 				<span />
@@ -155,8 +173,16 @@ export function Heatmap({ grid, total }: { grid: number[][]; total: number }) {
 					<span key={hr} className="text-center text-[10px] text-ink-3">{hr % 6 === 0 ? hourLabel(hr) : ''}</span>
 				))}
 			</div>
-			<p className="mt-2 h-4 text-[12px] text-ink-2" role="status">
-				{hover ? `${DAYS[hover[0]]} ${hourLabel(hover[1])}: ${sales(grid[hover[0]]![hover[1]]!).toFixed(1)} sales` : 'Outlined: the three busiest hours. Visitor local time.'}
+			<p className="mt-2 flex h-4 flex-wrap items-center gap-x-3 text-[12px] text-ink-2" role="status">
+				{hover ? (
+					tip(hover[0], hover[1])
+				) : (
+					<>
+						<span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-up" />Sales</span>
+						<span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-down" />Refunds</span>
+						<span>Outlined: busiest hours. Times in UTC.</span>
+					</>
+				)}
 			</p>
 		</div>
 	);
@@ -178,7 +204,7 @@ export function Funnel({ steps }: { steps: Array<{ label: string; count: number 
 							</span>
 						</div>
 						<div className="h-2.5 overflow-hidden rounded-full bg-band">
-							<div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(1, (s.count / first) * 100)}%` }} />
+							<div className="h-full rounded-full bg-ink-2" style={{ width: `${Math.max(1, (s.count / first) * 100)}%` }} />
 						</div>
 						{prev !== undefined && <div className="mt-1 text-[11px] text-ink-3">{((1 - s.count / prev) * 100).toFixed(0)}% drop from the step before</div>}
 					</li>
@@ -214,13 +240,13 @@ export function ProfitBridge({ gross, fee, ad }: { gross: number; fee: number; a
 }
 
 export function MiniBars({ rows }: { rows: Array<{ label: string; share: number }> }) {
-	const max = Math.max(...rows.map((r) => r.share));
+	const max = Math.max(0.0001, ...rows.map((r) => r.share)); // all-zero rows draw empty bars, not NaN-wide ones
 	return (
 		<ul className="tnum space-y-2 px-3">
 			{rows.map((r) => (
 				<li key={r.label} className="grid grid-cols-[5.5rem_1fr_2.75rem] items-center gap-3 text-[13px]">
 					<span className="text-ink-2">{r.label}</span>
-					<span className="h-2 overflow-hidden rounded-full bg-band"><span className="block h-full rounded-full bg-accent" style={{ width: `${(r.share / max) * 100}%` }} /></span>
+					<span className="h-2 overflow-hidden rounded-full bg-band"><span className="block h-full rounded-full bg-ink-2" style={{ width: `${(r.share / max) * 100}%` }} /></span>
 					<span className="text-right">{Math.round(r.share * 100)}%</span>
 				</li>
 			))}

@@ -159,6 +159,23 @@ webhooksRoute.post('/:gateway', async (c) => {
 		return c.text('Invalid JSON', 400);
 	}
 
+	// Stripe full refund: the payment stops counting as revenue and shows as a refund on the dashboard.
+	// shortcut: full Stripe refunds only, matched on payment_intent or invoice; partial refunds and other gateways' refund events are ignored until needed.
+	if (gateway === 'stripe' && event.type === 'charge.refunded') {
+		const ch = event.data?.object ?? {};
+		if (!ch.refunded) return c.json({ received: true, ignored: true });
+		if (!(await adapter.markWebhookProcessed(event.id, siteId))) return c.json({ received: true, deduplicated: true });
+		const ids = [ch.payment_intent, ch.invoice].filter((x): x is string => typeof x === 'string');
+		const now = Math.floor(Date.now() / 1000);
+		const hits = await c.env.DB.batch(
+			ids.flatMap((id) => [
+				c.env.DB.prepare("INSERT INTO refunds (payment_id, site_id, refunded_at) SELECT payment_id, site_id, ? FROM payments WHERE site_id = ? AND payment_id = ? ON CONFLICT DO NOTHING").bind(now, siteId, id),
+				c.env.DB.prepare("UPDATE payments SET status = 'refunded' WHERE site_id = ? AND payment_id = ?").bind(siteId, id),
+			]),
+		);
+		return c.json({ received: true, refunded: hits.some((h) => (h.meta?.changes ?? 0) > 0) });
+	}
+
 	const p = extract(event, c.req.raw.headers);
 	if (!p) return c.json({ received: true, ignored: true });
 	if (!p.eventId || !p.paymentId) return c.text('Missing event or payment id', 400);

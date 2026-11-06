@@ -48,6 +48,8 @@ export interface DashSale {
 	/** Hours from first visit to payment */
 	hours: number;
 	renewal: boolean;
+	/** Fully refunded: listed in recent sales, excluded from revenue */
+	refunded?: boolean;
 }
 
 export interface DashboardData {
@@ -80,6 +82,8 @@ export interface DashboardData {
 	behaviour: Array<{ label: string; buyers: string; others: string }>;
 	/** 7 x 24 sales counts, Monday first, UTC hours */
 	heat: number[][];
+	/** Same grid for refunds, at the hour the refund happened. */
+	heatRefunds: number[][];
 	funnel: Array<{ label: string; count: number }>;
 	timeToConvert: Array<{ label: string; share: number }>;
 	ltv: Array<{ key: string; icon: string; ltv: number; customers: number }>;

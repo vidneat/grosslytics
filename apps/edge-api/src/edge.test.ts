@@ -1,19 +1,20 @@
 import { test, expect } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { Hono } from 'hono';
-import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS } from '@grosslytics/db-d1/migrations';
+import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS, MIGRATION_003_WAITLIST, MIGRATION_004_REFUNDS } from '@grosslytics/db-d1/migrations';
 import { requireToken } from './auth.js';
 import { mcpRoute } from './mcp.js';
 import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
 import { shareRoute } from './routes/share.js';
+import { waitlistRoute } from './routes/waitlist.js';
 import { queryDashboard } from '@grosslytics/db-d1';
 import { verifyWebhook } from './verify.js';
 
 // Minimal D1 shim over bun:sqlite — enough for drizzle's d1 driver
 function fakeD1() {
 	const db = new Database(':memory:');
-	db.exec(MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS);
+	db.exec(MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS);
 	// D1 binds every JS number as REAL; mimic that so integer-math bugs show up here too
 	const asD1 = (sql: string, p: any[]) => sql.replace(/\?(\d+)/g, (m, n) => (typeof p[n - 1] === 'number' ? `CAST(${m} AS REAL)` : m));
 	const stmt = (sql: string, params: any[] = []): any => ({
@@ -53,6 +54,7 @@ function makeApp() {
 	app.route('/api/webhooks', webhooksRoute);
 	app.route('/api/mcp', mcpRoute);
 	app.route('/api/share', shareRoute);
+	app.route('/api/waitlist', waitlistRoute);
 	const env = { DB: d1, STRIPE_WEBHOOK_SECRET: SECRET, API_TOKEN: 'tok' };
 	return { fetch: (url: string, init?: RequestInit) => app.fetch(new Request(`http://x${url}`, init), env), sqlite, d1 };
 }
@@ -148,7 +150,9 @@ function seedDashboard(sqlite: Database, NOW = FIXED_NOW) {
 	// v1: found us on X three days ago, came back from ChatGPT, read pricing, paid
 	vis.run('v1', NOW - 3 * 86400, 'x.com (in-app)', NOW - 7200, 'chatgpt.com (AI)', 'US', 'desktop', 'launch', 300, 90);
 	ev.run('s1', 'v1', 'a', 'pageview', '/', 'x.com (in-app)', 0, NOW - 3 * 86400);
-	ev.run('s1', 'v1', 'a', 'leave', '/', 'x.com (in-app)', 120, NOW - 3 * 86400 + 120);
+	// read 90s, switched tabs, came back for 30s more: the tracker reports each piece once
+	ev.run('s1', 'v1', 'a', 'leave', '/', 'x.com (in-app)', 90, NOW - 3 * 86400 + 90);
+	ev.run('s1', 'v1', 'a', 'leave', '/', 'x.com (in-app)', 30, NOW - 3 * 86400 + 300);
 	ev.run('s1', 'v1', 'b', 'pageview', '/pricing', 'chatgpt.com (AI)', 0, NOW - 7200);
 	ev.run('s1', 'v1', 'b', 'goal', 'checkout', 'chatgpt.com (AI)', 0, NOW - 7100);
 	// v2: one look from Google on a phone, no purchase
@@ -159,6 +163,7 @@ function seedDashboard(sqlite: Database, NOW = FIXED_NOW) {
 	sqlite.exec(`INSERT INTO payments (payment_id, site_id, gateway, visitor_id, customer_email_masked, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, country, time_to_convert_hours, created_at)
 		VALUES ('p1', 's1', 'stripe', 'v1', 'm***@hey.com', 10000, 320, 9680, 'succeeded', 'x.com (in-app)', 'chatgpt.com (AI)', 'US', 70, ${NOW - 3600}),
 		       ('p0', 's1', 'stripe', 'v1', 'm***@hey.com', 5000, 175, 4825, 'refunded', 'x.com (in-app)', 'chatgpt.com (AI)', 'US', 70, ${NOW - 3600})`);
+	sqlite.exec(`INSERT INTO refunds (payment_id, site_id, refunded_at) VALUES ('p0', 's1', ${NOW - 1800})`);
 	sqlite.exec("INSERT INTO ad_spend (site_id, source, spend_date, amount_cents) VALUES ('s1', 'x.com (in-app)', '2026-03-30', 2000)");
 	sqlite.exec(`INSERT INTO annotations (site_id, at, label) VALUES ('s1', ${NOW - 86400}, 'Launched')`);
 }
@@ -189,11 +194,14 @@ test('dashboard: totals, attribution models, filters, pages, funnel and profit a
 	expect(d.entry.find((p) => p.key === '/')?.visitors).toBe(2);
 	expect(d.countries.map((c) => [c.key, c.label, c.revenue])).toEqual([['IN', 'India', 0], ['US', 'United States', 9680]].sort((a, b) => (a[0]! < b[0]! ? 1 : -1)) as any);
 	expect(d.funnel.map((f) => f.count)).toEqual([2, 1, 1, 1]);
+	const cells = (g: number[][]) => g.flat().reduce((x, y) => x + y, 0);
+	expect([cells(d.heat), cells(d.heatRefunds)]).toEqual([1, 1]); // the sale is green, the refund red
 	expect(d.campaigns[0]).toMatchObject({ key: 'launch', revenue: 9680 });
 	expect(d.timeToConvert[1]!.share).toBe(1); // 70 hours = 1-3 days
 	expect(d.heat[1]![11]).toBe(1); // Tuesday 11:00 UTC
 	expect(d.behaviour[3]).toEqual({ label: 'Read /pricing', buyers: '100%', others: '0%' });
-	expect(d.sales[0]).toMatchObject({ id: 'p1', email: 'm***@hey.com', first: 'x.com (in-app)', visitorId: 'v1' });
+	expect(d.sales.find((x) => x.id === 'p1')).toMatchObject({ email: 'm***@hey.com', first: 'x.com (in-app)', visitorId: 'v1', refunded: false });
+	expect(d.sales.find((x) => x.id === 'p0')?.refunded).toBe(true); // listed, while totals above exclude it
 	expect(d.annotations).toEqual([{ at: NOW - 86400, label: 'Launched' }]);
 	expect(d.ltv[0]).toMatchObject({ key: 'x.com (in-app)', ltv: 9680, customers: 1 });
 
@@ -243,7 +251,40 @@ test('dashboard routes: token required, params validated, share page public but 
 	const site = (await (await post('/api/stats/sites', { domain: 'New.io' })).json()) as any;
 	expect(site.domain).toBe('new.io');
 	expect((await post('/api/stats/sites', { domain: 'not a domain' })).status).toBe(400);
+	expect(((await (await post('/api/stats/sites', { domain: 'https://www.Shop.dev/pricing?x=1' })).json()) as any).domain).toBe('shop.dev');
+	expect(((await (await post('/api/stats/sites', { domain: 'localhost' })).json()) as any).domain).toBe('localhost');
+	expect((await post('/api/stats/sites', { domain: 'localhostx' })).status).toBe(400);
 	expect((await post('/api/stats/ad-spend', { siteId: 's1', source: 'x.com (in-app)', date: '2026-03-30', amountCents: 500 })).status).toBe(200);
 	expect(sqlite.query("SELECT amount_cents FROM ad_spend WHERE site_id = 's1'").get()).toEqual({ amount_cents: 500 }); // replaced, not added
 	expect((await post('/api/stats/annotations', { siteId: 's1', at: NOW, label: '  ' })).status).toBe(400);
+});
+
+test('waitlist: validates, normalizes and dedupes without a token', async () => {
+	const { fetch, sqlite } = makeApp();
+	const join = (body: unknown) => fetch('/api/waitlist', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+	expect((await join({ email: '  Maya@Example.com ', plan: 'cloud' })).status).toBe(201);
+	expect((await join({ email: 'maya@example.com', plan: 'cloud' })).status).toBe(201); // repeat is a no-op
+	expect((await join({ email: 'maya@example.com', plan: 'lifetime' })).status).toBe(201);
+	expect((await join({ email: 'not-an-email', plan: 'cloud' })).status).toBe(400);
+	expect((await join({ email: 'a@b.co', plan: 'enterprise' })).status).toBe(400);
+	expect(sqlite.query('SELECT email, plan FROM waitlist ORDER BY plan').all()).toEqual([
+		{ email: 'maya@example.com', plan: 'cloud' },
+		{ email: 'maya@example.com', plan: 'lifetime' },
+	]);
+});
+
+test('webhooks: a full Stripe refund marks the payment refunded once; partial refunds are ignored', async () => {
+	const app = makeApp();
+	const send = async (body: object) => {
+		const raw = JSON.stringify(body);
+		return (await app.fetch('/api/webhooks/stripe?siteId=s1', { method: 'POST', body: raw, headers: await stripeHeaders(raw) })).json();
+	};
+	await send({ id: 'evt_pay', type: 'checkout.session.completed', data: { object: { id: 'cs_9', payment_intent: 'pi_9', payment_status: 'paid', amount_total: 900, currency: 'usd' } } });
+	expect(await send({ id: 'evt_part', type: 'charge.refunded', data: { object: { payment_intent: 'pi_9', refunded: false } } })).toEqual({ received: true, ignored: true });
+	expect((app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'pi_9'").get() as any).status).toBe('succeeded');
+	const refund = { id: 'evt_ref', type: 'charge.refunded', data: { object: { payment_intent: 'pi_9', refunded: true } } };
+	expect((await send(refund)) as any).toMatchObject({ received: true });
+	expect(await send(refund)).toEqual({ received: true, deduplicated: true });
+	expect((app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'pi_9'").get() as any).status).toBe('refunded');
+	expect(app.sqlite.query('SELECT payment_id FROM refunds').all()).toEqual([{ payment_id: 'pi_9' }]);
 });

@@ -43,7 +43,7 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 			return new Response(null, { status: 101, webSocket: client });
 		}
 
-		// 2. Internal presence ping from POST /api/collect
+		// 2. Internal presence ping from POST /api/event
 		if (url.pathname === '/internal/presence' && request.method === 'POST') {
 			const data = (await request.json()) as VisitorPresence;
 			this.visitors.set(data.visitorId, data);

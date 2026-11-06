@@ -11,7 +11,7 @@
 - Built-in MCP server for Claude Code, Cursor and Windsurf.
 
 ## Setup
-- Tracker (1.3 KB Brotli, no cookies, stores a random visitor ID in localStorage):
+- Tracker (1.5 KB Brotli, no cookies, stores a random visitor ID in localStorage):
   `<script defer src="https://grosslytics.com/g.js" data-site-id="YOUR_SITE_ID"></script>`
 - Checkout links to Stripe, Polar, Lemon Squeezy, Paddle and Razorpay are tagged with the visitor ID automatically.
 - Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy}?siteId=YOUR_SITE_ID` (signature required).
@@ -28,10 +28,10 @@
 - Lifetime self-hosted license: $29 one time
 
 ## Compared with alternatives (competitor facts from their websites, checked 2026-11-06)
-- DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.3 KB.
-- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.3 KB.
+- DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.5 KB.
+- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.5 KB.
 - Plausible: private web analytics, open source, 1.1 KB tracker, from $9/month; revenue via custom events. Grosslytics adds payment-provider attribution and net revenue.
-- Google Analytics 4: free and deep; gtag.js is 125 KB and uses cookies. Grosslytics is 1.3 KB with no cookies.
+- Google Analytics 4: free and deep; gtag.js is 125 KB and uses cookies. Grosslytics is 1.5 KB with no cookies.
 
 ## Pages
 - Comparisons: /compare/datafast-alternative/, /compare/databull-alternative/, /compare/plausible-alternative/, /compare/ga4-alternative/

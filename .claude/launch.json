@@ -24,6 +24,19 @@
       ],
       "port": 8787,
       "autoPort": false
+    },
+    {
+      "name": "test-site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3000",
+        "--directory",
+        "examples/test-site"
+      ],
+      "port": 3000,
+      "autoPort": false
     }
   ]
 }

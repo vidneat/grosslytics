@@ -1,12 +1,13 @@
 /**
- * Local development database.
- *   bun scripts/local.ts migrate   create tables in the local D1 (.wrangler/state)
- *   bun scripts/local.ts seed      replace site `gl_local_acme` (acme.io) with 180 days of realistic sample data
- * Never touches the remote database: every command passes --local.
+ * Database setup.
+ *   bun scripts/db.ts migrate          create or update tables in the local D1 (.wrangler/state)
+ *   bun scripts/db.ts seed             replace local site `gl_local_acme` (acme.io) with 180 days of sample data
+ *   bun scripts/db.ts migrate-remote   create or update tables in your Cloudflare D1 (needs `wrangler login`)
+ * Only migrate-remote touches Cloudflare, and migrations only ever CREATE ... IF NOT EXISTS.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS } from '../packages/db-d1/src/migrations.ts';
+import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS, MIGRATION_003_WAITLIST, MIGRATION_004_REFUNDS } from '../packages/db-d1/src/migrations.ts';
 import { classifySourceCategory } from '../packages/shared/src/attribution.ts';
 import { calculateNetRevenue } from '../packages/shared/src/fees.ts';
 import type { PaymentGateway } from '../packages/shared/src/types.ts';
@@ -15,8 +16,8 @@ const SITE = 'gl_local_acme';
 const DOMAIN = 'acme.io';
 const DAYS = 180;
 
-function d1(file: string) {
-	execFileSync('bunx', ['wrangler', 'd1', 'execute', 'grosslytics-db', '--local', `--file=${file}`], { stdio: 'inherit' });
+function d1(file: string, where: '--local' | '--remote' = '--local') {
+	execFileSync('bunx', ['wrangler', 'd1', 'execute', 'grosslytics-db', where, `--file=${file}`], { stdio: 'inherit' });
 }
 
 function write(name: string, sql: string) {
@@ -27,7 +28,7 @@ function write(name: string, sql: string) {
 }
 
 // D1 manages journal mode itself and rejects these pragmas
-const migrations = () => (MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS).replace(/^PRAGMA .*$/gm, '');
+const migrations = () => (MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS).replace(/^PRAGMA .*$/gm, '');
 
 // Deterministic randomness, so every seed produces the same dataset shape
 let state = 42;
@@ -217,11 +218,12 @@ function seed(): string {
 
 const cmd = process.argv[2];
 if (cmd === 'migrate') d1(write('migrate.sql', migrations()));
+else if (cmd === 'migrate-remote') d1(write('migrate.sql', migrations()), '--remote');
 else if (cmd === 'seed') {
 	d1(write('migrate.sql', migrations()));
 	d1(write('seed.sql', seed()));
 	console.log(`\nSeeded. Site id: ${SITE}  (public page: /share/${DOMAIN})`);
 } else {
-	console.log('Usage: bun scripts/local.ts migrate | seed');
+	console.log('Usage: bun scripts/db.ts migrate | seed | migrate-remote');
 	process.exit(1);
 }

@@ -5,6 +5,7 @@ import { collectRoute } from './routes/collect.js';
 import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
 import { shareRoute } from './routes/share.js';
+import { waitlistRoute } from './routes/waitlist.js';
 import { mcpRoute } from './mcp.js';
 import { handleQueueBatch } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
@@ -33,10 +34,13 @@ app.use('/api/stats/*', requireToken);
 app.use('/api/mcp/*', requireToken);
 
 // Mount routes
+// /api/event: EasyPrivacy blocks URLs ending in /api/collect. The old path stays for snippets already installed.
+app.route('/api/event', collectRoute);
 app.route('/api/collect', collectRoute);
 app.route('/api/stats', statsRoute);
 app.route('/api/webhooks', webhooksRoute);
 app.route('/api/share', shareRoute);
+app.route('/api/waitlist', waitlistRoute);
 app.route('/api/mcp', mcpRoute);
 
 // Export worker handler with fetch and queue consumer

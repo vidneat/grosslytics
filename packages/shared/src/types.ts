@@ -18,7 +18,7 @@ export type DeviceType = 'desktop' | 'mobile' | 'tablet';
 /** Payment status */
 export type PaymentStatus = 'succeeded' | 'refunded';
 
-/** Beacon payload sent from the tracker (g.js) to POST /api/collect */
+/** Beacon payload sent from the tracker (g.js) to POST /api/event */
 export interface BeaconPayload {
 	/** Site identifier */
 	sid: string;

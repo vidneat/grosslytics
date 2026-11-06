@@ -17,8 +17,10 @@
     "clean": "turbo clean && rm -rf node_modules",
     "dev:api": "wrangler dev --port 8787",
     "dev:web": "bun run --cwd apps/web dev",
-    "db:migrate:local": "bun scripts/local.ts migrate",
-    "db:seed:local": "bun scripts/local.ts seed"
+    "dev:test-site": "python3 -m http.server 3000 --directory examples/test-site",
+    "db:migrate:local": "bun scripts/db.ts migrate",
+    "db:seed:local": "bun scripts/db.ts seed",
+    "db:migrate:remote": "bun scripts/db.ts migrate-remote"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

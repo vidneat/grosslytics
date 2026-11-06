@@ -77,7 +77,7 @@ const SQL = {
 			FROM pay p JOIN events e ON e.site_id = ?1 AND e.visitor_id = p.visitor_id AND e.created_at >= ?2 AND e.created_at < ?3 AND e.event_type = 'pageview'
 		) GROUP BY k
 	) r ON r.k = pv.k
-	LEFT JOIN (SELECT event_name AS k, AVG(duration_sec) AS x FROM ev WHERE event_type = 'leave' AND duration_sec > 0 GROUP BY event_name) rd ON rd.k = pv.k
+	LEFT JOIN (SELECT k, AVG(t) AS x FROM (SELECT session_id, event_name AS k, SUM(duration_sec) AS t FROM ev WHERE event_type = 'leave' GROUP BY session_id, event_name) WHERE t > 0 GROUP BY k) rd ON rd.k = pv.k
 	ORDER BY pv.v DESC LIMIT 50`,
 	entry: `${CTE} SELECT e.k, COUNT(DISTINCT e.visitor_id) AS v, COALESCE(SUM(r.g), 0) AS g, COALESCE(SUM(r.f), 0) AS f, COALESCE(SUM(r.s), 0) AS s FROM (
 		SELECT visitor_id, event_name AS k, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at, id) AS rn FROM ev WHERE event_type = 'pageview'
@@ -101,6 +101,9 @@ const SQL = {
 			MAX(event_type = 'pageview' AND event_name LIKE '/pricing%') AS pricing FROM ev GROUP BY visitor_id
 		) a ON a.visitor_id = vv.visitor_id GROUP BY buyer`,
 	heat: `${CTE} SELECT (CAST(strftime('%w', created_at, 'unixepoch') AS INTEGER) + 6) % 7 AS d, CAST(strftime('%H', created_at, 'unixepoch') AS INTEGER) AS h, COUNT(*) AS s FROM pay WHERE is_renewal = 0 GROUP BY d, h`,
+	heatRefunds: `${CTE} SELECT (CAST(strftime('%w', r.refunded_at, 'unixepoch') AS INTEGER) + 6) % 7 AS d, CAST(strftime('%H', r.refunded_at, 'unixepoch') AS INTEGER) AS h, COUNT(*) AS s
+		FROM refunds r JOIN payments p ON p.payment_id = r.payment_id
+		WHERE r.site_id = ?1 AND r.refunded_at >= ?2 AND r.refunded_at < ?3 AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR p.visitor_id IN fv) GROUP BY d, h`,
 	funnel: `${CTE} SELECT (SELECT COUNT(*) FROM fv) AS visited,
 		(SELECT COUNT(DISTINCT visitor_id) FROM ev WHERE event_type = 'pageview' AND event_name LIKE '/pricing%') AS pricing,
 		(SELECT COUNT(DISTINCT visitor_id) FROM ev WHERE event_type = 'goal') AS goal,
@@ -109,7 +112,10 @@ const SQL = {
 	// Lifetime value is all-time by design: a range would cut renewals off
 	ltv: `${CTE} SELECT first_touch_source AS k, SUM(net_amount_cents) AS net, COUNT(DISTINCT COALESCE(customer_email_hash, visitor_id, payment_id)) AS c
 		FROM payments WHERE site_id = ?1 AND status = 'succeeded' GROUP BY first_touch_source HAVING c > 0 ORDER BY net * 1.0 / c DESC LIMIT 6`,
-	sales: `${CTE} SELECT payment_id, customer_email_masked, plan_name, gross_amount_cents, fee_amount_cents, gateway, country, city, created_at, first_touch_source, last_touch_source, visitor_id, time_to_convert_hours, is_renewal FROM pay ORDER BY created_at DESC LIMIT 8`,
+	// Recent sales include refunded ones (labelled in the UI); revenue never does
+	sales: `${CTE} SELECT payment_id, customer_email_masked, plan_name, gross_amount_cents, fee_amount_cents, gateway, country, city, created_at, first_touch_source, last_touch_source, visitor_id, time_to_convert_hours, is_renewal, status
+		FROM payments WHERE site_id = ?1 AND status IN ('succeeded', 'refunded') AND created_at >= ?2 AND created_at < ?3
+		AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR visitor_id IN fv) ORDER BY created_at DESC LIMIT 8`,
 	adSpend: `${CTE} SELECT source AS k, spend_date AS d, SUM(amount_cents) AS a FROM ad_spend WHERE site_id = ?1 AND spend_date >= date(?2, 'unixepoch') AND spend_date < date(?3, 'unixepoch', '+1 day') GROUP BY source, spend_date`,
 	annotations: `${CTE} SELECT at, label FROM annotations WHERE site_id = ?1 AND at >= ?2 AND at < ?3 ORDER BY at`,
 } as const;
@@ -228,8 +234,13 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 	for (const x of r.timeToConvert) ttc[x.b] = x.s;
 	const ttcSum = ttc.reduce((a, b) => a + b, 0) || 1;
 
-	const heat = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
-	for (const x of r.heat) heat[x.d]![x.h] = x.s;
+	const grid = (rows: Rec[]) => {
+		const g = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+		for (const x of rows) g[x.d]![x.h] = x.s;
+		return g;
+	};
+	const heat = grid(r.heat);
+	const heatRefunds = grid(r.heatRefunds);
 
 	const fu = r.funnel[0] ?? {};
 	const geo = (x: Rec) => row(x, { label: countryName(String(x.k)), icon: flagOf(String(x.k)) });
@@ -267,6 +278,7 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 			{ label: 'Read /pricing', buyers: pct(b1 && b1.pr * 100), others: pct(b0 && b0.pr * 100) },
 		],
 		heat,
+		heatRefunds,
 		funnel: [
 			{ label: 'Visited', count: Number(fu.visited ?? 0) },
 			{ label: 'Viewed /pricing', count: Number(fu.pricing ?? 0) },
@@ -297,6 +309,7 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 						visitorId: x.visitor_id ?? undefined,
 						hours: Number(x.time_to_convert_hours ?? 0),
 						renewal: !!x.is_renewal,
+						refunded: x.status === 'refunded',
 					}),
 				),
 		annotations: r.annotations.map((x) => ({ at: Number(x.at), label: String(x.label) })),

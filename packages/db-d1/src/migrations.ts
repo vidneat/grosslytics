@@ -155,3 +155,23 @@ CREATE TABLE IF NOT EXISTS annotations (
 
 CREATE INDEX IF NOT EXISTS idx_annotations_site_at ON annotations(site_id, at);
 `;
+
+/** Interest in plans that aren't self-serve yet (Indie Cloud, Lifetime). One row per email and plan. */
+export const MIGRATION_003_WAITLIST = `
+CREATE TABLE IF NOT EXISTS waitlist (
+    email TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    created_at INTEGER DEFAULT (unixepoch()),
+    PRIMARY KEY (email, plan)
+) STRICT, WITHOUT ROWID;
+`;
+
+/** One row per fully refunded payment; the payment itself flips to status 'refunded'. */
+export const MIGRATION_004_REFUNDS = `
+CREATE TABLE IF NOT EXISTS refunds (
+    payment_id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL,
+    refunded_at INTEGER NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_refunds_site_at ON refunds(site_id, refunded_at);
+`;

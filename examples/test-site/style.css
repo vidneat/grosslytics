@@ -1,0 +1,13 @@
+body { font: 17px/1.6 system-ui, sans-serif; color: #1d1d1f; max-width: 680px; margin: 0 auto; padding: 0 20px 40px; }
+nav { display: flex; gap: 20px; padding: 20px 0; border-bottom: 1px solid #e5e5e7; margin-bottom: 32px; }
+nav a { color: #1d1d1f; text-decoration: none; }
+.logo { font-weight: 700; margin-right: auto; }
+h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
+.lede { font-size: 20px; color: #515154; }
+.btn { display: inline-block; background: #0071e3; color: #fff; padding: 10px 20px; border-radius: 999px; text-decoration: none; margin-right: 12px; }
+.help, .plan { background: #f5f5f7; border-radius: 18px; padding: 8px 24px 16px; margin-top: 40px; }
+.price { font-size: 20px; font-weight: 600; }
+.meta { color: #86868b; font-size: 14px; }
+.warn { background: #fff4e5; border: 1px solid #f5c26b; border-radius: 12px; padding: 10px 14px; margin-top: 16px; }
+code { background: #f0f0f2; padding: 1px 5px; border-radius: 5px; font-size: 15px; }
+footer { margin-top: 64px; color: #86868b; font-size: 13px; }

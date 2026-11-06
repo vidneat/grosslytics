@@ -7,7 +7,7 @@ You deploy two Workers:
 | `grosslytics-edge-api` | `wrangler.toml` (repo root) | `/api/*`: collect, stats, webhooks, MCP, plus the queue consumer and Durable Object |
 | `grosslytics-web` | `apps/web/wrangler.toml` | The Astro site, `g.js`, `robots.txt`, `llms.txt` |
 
-Both must sit on **one domain**. The tracker sends beacons to `<origin of g.js>/api/collect`, so `/api/*` on the site's domain has to reach the edge API. The examples below use `grosslytics.com`. Replace it with your own domain.
+Both must sit on **one domain**. The tracker sends beacons to `<origin of g.js>/api/event`, so `/api/*` on the site's domain has to reach the edge API. The examples below use `grosslytics.com`. Replace it with your own domain.
 
 ---
 
@@ -42,7 +42,31 @@ Then:
 - http://localhost:4321/share/acme.io is the public revenue page. No token is needed, and it shows no customer emails.
 - http://localhost:4321/app/demo is the sample workspace used on the homepage.
 
-To send your own traffic, add `data-api="http://localhost:8787/api/collect"` to the tracker tag on a test page. For a test sale, sign a Stripe `checkout.session.completed` event (with `payment_status: "paid"` and `client_reference_id` set to the visitor id) using `STRIPE_WEBHOOK_SECRET`, and POST it to `http://localhost:8787/api/webhooks/stripe?siteId=gl_local_acme`. Locally, every visitor's country shows as Unknown, because only Cloudflare's edge adds geo data.
+### Test the whole flow with a real browser and real Stripe test payments
+
+`examples/test-site` is a three-page site (home, blog, pricing) that loads your local tracker. Its Buy button opens a Stripe test-mode checkout. Nothing is simulated: the visits come from your browser and the payment comes from Stripe, signed, with no real money.
+
+You need a free Stripe account and the Stripe CLI (`brew install stripe/stripe-cli/stripe`).
+
+1. In http://localhost:4321/app/ connect, then **Add site** with the domain `localhost`. Copy its site id (`gl_…`).
+2. In Stripe, switch to **Test mode** and create a **Payment Link** for any product and price.
+3. Put both values in `examples/test-site/config.js`.
+4. Forward Stripe's test webhooks to your local API. Use your site id:
+   ```bash
+   stripe login
+   ```
+   ```bash
+   stripe listen --events checkout.session.completed --forward-to "localhost:8787/api/webhooks/stripe?siteId=gl_YOUR_SITE_ID"
+   ```
+   It prints a signing secret (`whsec_…`). Set it as `STRIPE_WEBHOOK_SECRET` in `.dev.vars` and restart `bun run dev:api`.
+5. Serve the test site:
+   ```bash
+   bun run dev:test-site
+   ```
+6. Open a private window at http://localhost:3000/index.html?utm_source=twitter. Read the blog, go to Pricing, click **Buy** and pay with `4242 4242 4242 4242`, any future date, any CVC.
+7. The visit appears in the live panel straight away. The sale appears once `stripe listen` shows the webhook as `200`, credited to `twitter`. Click it to see the journey.
+
+Each private window is a new visitor. Locally every country shows as Unknown, because only Cloudflare's edge adds geo data.
 
 ---
 
@@ -100,19 +124,11 @@ Copy the `database_id` it prints into `wrangler.toml`, replacing `database_id = 
 
 ## 5. Create the database tables
 
-The schema lives in `packages/db-d1/src/migrations.ts`. This writes it out as a `.sql` file and drops the two `PRAGMA` lines, because D1 runs in WAL mode already and doesn't allow changing it:
-
 ```bash
-bun -e "import {MIGRATION_001_INIT as a, MIGRATION_002_ANNOTATIONS as b} from './packages/db-d1/src/migrations.ts'; await Bun.write('migration_001.sql', (a + b).replace(/^PRAGMA.*$/gm, ''))"
+bun run db:migrate:remote
 ```
 
-```bash
-bunx wrangler d1 execute grosslytics-db --remote --file=migration_001.sql
-```
-
-```bash
-rm migration_001.sql
-```
+This applies every migration in `packages/db-d1/src/migrations.ts` to your Cloudflare D1. It's safe to re-run after updates, because each table is created only if it doesn't already exist.
 
 ## 6. Create the queues
 
@@ -184,6 +200,17 @@ Also set `TRACKER_ORIGIN` under `[vars]` to your domain.
 
 The dashboard calls the API on its own origin (`/api/*`), so on one domain nothing else is needed. If the API lives on a different host, build the website with `PUBLIC_API_URL=https://api.yourdomain.com`.
 
+Optional website build settings, set when running `bun run build` in `apps/web`:
+
+| Variable | Effect |
+|---|---|
+| `PUBLIC_API_URL` | API on a different host than the website |
+| `PUBLIC_CHECKOUT_CLOUD_URL` | Stripe Payment Link for Indie Cloud. Unset, `/start?plan=cloud` shows a waitlist instead |
+| `PUBLIC_CHECKOUT_LIFETIME_URL` | Same, for Lifetime |
+| `PUBLIC_REPO_URL` | Repository that `/start` tells people to clone. Defaults to `https://github.com/vidneat/grosslytics` |
+
+Waitlist signups are stored in the `waitlist` table: `bunx wrangler d1 execute grosslytics-db --remote --command "SELECT * FROM waitlist"`.
+
 ## 10. Deploy
 
 The edge API (from the repo root):
@@ -231,14 +258,14 @@ Read the ID with `localStorage.getItem('gl_vid')`. Renewals with no visitor ID a
 <script defer src="https://grosslytics.com/g.js" data-site-id="gl_live_abc123"></script>
 ```
 
-If `g.js` is served from a different origin than the API, add `data-api="https://<api-host>/api/collect"`.
+If `g.js` is served from a different origin than the API, add `data-api="https://<api-host>/api/event"`.
 
 ## 13. Check that it works
 
 Send a test beacon. It should return `202`:
 
 ```bash
-curl -i -X POST https://grosslytics.com/api/collect -d '{"sid":"gl_live_abc123","vid":"test","ses":"test","t":"pageview","n":"/","src":"Direct (Typed/Bookmark)","cat":"Direct","ref":"","sd":0,"dur":0}'
+curl -i -X POST https://grosslytics.com/api/event -d '{"sid":"gl_live_abc123","vid":"test","ses":"test","t":"pageview","n":"/","src":"Direct (Typed/Bookmark)","cat":"Direct","ref":"","sd":0,"dur":0}'
 ```
 
 Within a few seconds, the queue consumer should have written it:
@@ -281,5 +308,7 @@ For stdio-only clients, run `GROSSLYTICS_API_TOKEN=... npx grosslytics mcp --sit
 - **Ad spend is entered by hand** (the dashboard's "Add ad spend" button, or `POST /api/stats/ad-spend`). There's no Google or Meta Ads import.
 - **No historical Stripe import, and no Telegram/Discord alerts.**
 - **The Paddle, Polar and LemonSqueezy field mapping is untested against real payloads.** Send a real test event and check the `payments` row (amount, currency, `visitor_id`) before you rely on those numbers.
+- **Indie Cloud doesn't exist yet.** `/start?plan=cloud` collects a waitlist until you set a checkout link, and taking payment still needs the hosted multi-tenant service behind it.
+- **The repository is private**, so the clone command on `/start` only works for you until you make it public.
 - **OG images are SVG, not PNG.**
-- **The tracker is 1.32KB Brotli**, against the spec's 1.2KB target.
+- **The tracker is 1.46KB Brotli**, against the spec's 1.2KB target.

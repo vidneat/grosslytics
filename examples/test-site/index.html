@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Inkwell (local test site)</title>
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<p id="setup-warning" class="warn" hidden></p>
+<nav><a href="index.html" class="logo">Inkwell</a><a href="blog.html">Blog</a><a href="pricing.html">Pricing</a></nav>
+<main>
+<h1>Notes that write themselves.</h1>
+<p class="lede">Inkwell turns your meeting recordings into tidy notes. This product isn't real. The site exists so you can test Grosslytics end to end on your laptop.</p>
+<p><a class="btn" href="pricing.html">See pricing</a> <a href="blog.html">Read the blog</a></p>
+<section class="help">
+<h2>How to test</h2>
+<ol>
+<li>Open this site in a private window using a tagged link, so it has a traffic source. For example: <a href="index.html?utm_source=twitter">?utm_source=twitter</a>, <a href="index.html?ref=producthunt">?ref=producthunt</a> or <a href="index.html?utm_source=newsletter&amp;utm_medium=email">a newsletter link</a>.</li>
+<li>Read the blog post, then go to Pricing and click <b>Buy</b>.</li>
+<li>Pay with Stripe's test card <code>4242 4242 4242 4242</code>, any future date, any CVC.</li>
+<li>Watch the visit and the sale arrive in <a href="http://localhost:4321/app">your dashboard</a>.</li>
+</ol>
+<p>Each private window is a new visitor. A normal window remembers you, so later visits count as the same person.</p>
+</section>
+</main>
+<footer>A local test site for Grosslytics. Real tracker, real Stripe test-mode checkout, no real money.</footer>
+</body>
+</html>

@@ -1,0 +1,313 @@
+import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowRight, Check, Copy, Loader2 } from 'lucide-react';
+import { DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection } from '../dashboard/api';
+import { Connect } from '../dashboard/connect';
+
+type Plan = 'self' | 'cloud' | 'lifetime';
+
+const PLANS: Array<{ id: Plan; name: string; price: string; unit: string; note: string }> = [
+	{ id: 'self', name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.' },
+	{ id: 'cloud', name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. You just add the script.' },
+	{ id: 'lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'A self-hosted license you own.' },
+];
+
+// Stripe Payment Links for the paid plans. Unset = the plan isn't on sale yet and shows a waitlist.
+const CHECKOUT: Record<Exclude<Plan, 'self'>, string | undefined> = {
+	cloud: import.meta.env.PUBLIC_CHECKOUT_CLOUD_URL,
+	lifetime: import.meta.env.PUBLIC_CHECKOUT_LIFETIME_URL,
+};
+const REPO = (import.meta.env.PUBLIC_REPO_URL as string | undefined) || 'https://github.com/vidneat/grosslytics';
+
+export default function Onboarding() {
+	const [plan, setPlan] = useState<Plan>('self');
+	useEffect(() => {
+		const p = new URLSearchParams(location.search).get('plan');
+		if (p === 'cloud' || p === 'lifetime' || p === 'self') setPlan(p);
+	}, []);
+	const choose = (p: Plan) => {
+		setPlan(p);
+		history.replaceState(null, '', `?plan=${p}`);
+	};
+
+	return (
+		<div className="space-y-10">
+			<div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Plan">
+				{PLANS.map((p) => (
+					<button
+						key={p.id}
+						type="button"
+						role="radio"
+						aria-checked={plan === p.id}
+						onClick={() => choose(p.id)}
+						className={`rounded-[22px] p-5 text-left transition-shadow ${plan === p.id ? 'bg-card ring-2 ring-accent' : 'bg-band ring-1 ring-line hover:ring-ink-3'}`}
+					>
+						<span className="block text-[15px] font-semibold">{p.name}</span>
+						<span className="mt-1 block"><span className="font-display text-[28px] font-semibold tracking-[-0.02em]">{p.price}</span> <span className="text-[13px] text-ink-2">{p.unit}</span></span>
+						<span className="mt-1 block text-[13px] text-ink-2">{p.note}</span>
+					</button>
+				))}
+			</div>
+			{plan === 'self' ? <SelfHost /> : <Paid plan={plan} />}
+		</div>
+	);
+}
+
+function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
+	const url = CHECKOUT[plan];
+	const [email, setEmail] = useState('');
+	const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+	const name = PLANS.find((p) => p.id === plan)!.name;
+
+	if (url)
+		return (
+			<div className="rounded-[22px] bg-card p-7 text-center ring-1 ring-line">
+				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once, then follow the self-host setup with your license.' : 'Pay, then add one script tag. We host everything else.'}</p>
+				<a className="btn btn-primary mt-5" href={url}>Continue to checkout <ArrowRight size={15} aria-hidden="true" /></a>
+			</div>
+		);
+
+	return (
+		<div className="rounded-[22px] bg-card p-7 ring-1 ring-line">
+			<h2 className="text-[19px] font-semibold tracking-[-0.02em]">{name} isn't open yet.</h2>
+			<p className="mt-1 text-ink-2">
+				Leave your email and we'll write once, when it opens. Want it running today? <a className="text-accent hover:underline" href="?plan=self">Self-host is free</a> and has every feature.
+			</p>
+			{state === 'done' ? (
+				<p className="mt-5 flex items-center gap-2 font-medium text-up" role="status"><Check size={16} aria-hidden="true" />You're on the list.</p>
+			) : (
+				<form
+					className="mt-5 flex flex-col gap-2 sm:flex-row"
+					onSubmit={async (e) => {
+						e.preventDefault();
+						setState('busy');
+						try {
+							const res = await fetch(`${DEFAULT_API}/api/waitlist`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, plan }) });
+							setState(res.ok ? 'done' : 'error');
+						} catch {
+							setState('error');
+						}
+					}}
+				>
+					<input
+						type="email"
+						required
+						autoComplete="email"
+						placeholder="you@startup.com"
+						aria-label="Email"
+						value={email}
+						onChange={(e) => setEmail(e.target.value)}
+						className="w-full rounded-xl bg-band px-3.5 py-2.5 text-[15px] ring-1 ring-line outline-none focus:ring-2 focus:ring-accent"
+					/>
+					<button className="btn btn-primary shrink-0" disabled={state === 'busy'}>{state === 'busy' ? 'Joining…' : 'Join the waitlist'}</button>
+				</form>
+			)}
+			{state === 'error' && <p className="mt-2 text-[13px] text-down" role="alert">That didn't go through. Check the email and try again.</p>}
+		</div>
+	);
+}
+
+function CopyBlock({ code, label }: { code: string; label?: string }) {
+	const [copied, setCopied] = useState(false);
+	return (
+		<div className="group relative mt-2 rounded-xl bg-band ring-1 ring-line">
+			{label && <div className="px-3.5 pt-2.5 text-[11px] text-ink-3">{label}</div>}
+			<pre className="overflow-x-auto px-3.5 py-2.5 pr-20 font-mono text-[12.5px] leading-relaxed text-ink"><code>{code}</code></pre>
+			<button
+				type="button"
+				onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true))}
+				className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-card px-2 py-1 text-[12px] text-ink-2 ring-1 ring-line hover:text-ink"
+				aria-label={`Copy ${label ?? 'command'}`}
+			>
+				{copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+				{copied ? 'Copied' : 'Copy'}
+			</button>
+		</div>
+	);
+}
+
+type Status = 'done' | 'current' | 'waiting' | 'todo';
+
+function Step(props: { n: number; title: string; status: Status; summary?: ReactNode; children: ReactNode; open: boolean; onToggle: () => void }) {
+	const { status } = props;
+	return (
+		<li className="relative pl-12">
+			<span
+				className={`absolute top-0 left-0 flex h-8 w-8 items-center justify-center rounded-full text-[14px] font-semibold ${
+					status === 'done' ? 'bg-up text-white' : status === 'todo' ? 'bg-band text-ink-3 ring-1 ring-line' : 'bg-accent text-white'
+				}`}
+				aria-hidden="true"
+			>
+				{status === 'done' ? <Check size={16} strokeWidth={3} /> : props.n}
+			</span>
+			<button type="button" onClick={props.onToggle} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={props.open}>
+				<span className="text-[17px] font-semibold tracking-[-0.01em]">{props.title}</span>
+				<span className="text-[13px] text-ink-3">
+					{status === 'done' ? 'Done' : status === 'waiting' ? (
+						<span className="inline-flex items-center gap-1.5 text-accent"><Loader2 size={13} className="animate-spin" aria-hidden="true" />Waiting</span>
+					) : null}
+				</span>
+			</button>
+			{!props.open && props.summary && <div className="mt-1 text-[13px] text-ink-2">{props.summary}</div>}
+			{props.open && <div className="mt-3 space-y-3 text-[15px] text-ink-2">{props.children}</div>}
+		</li>
+	);
+}
+
+const GATEWAYS = {
+	stripe: {
+		label: 'Stripe',
+		where: 'Dashboard → Developers → Webhooks → Add endpoint',
+		events: 'checkout.session.completed, invoice.paid',
+		secret: 'STRIPE_WEBHOOK_SECRET',
+		link: 'Checkout and Payment Links on your site get client_reference_id added automatically. For Checkout Sessions created on your server, pass client_reference_id: the visitor id from localStorage.gl_vid.',
+	},
+	paddle: {
+		label: 'Paddle',
+		where: 'Developer tools → Notifications → New destination',
+		events: 'transaction.completed',
+		secret: 'PADDLE_WEBHOOK_SECRET',
+		link: 'Pass customData: { visitor_id: localStorage.gl_vid } when you open Paddle Checkout.',
+	},
+	lemonsqueezy: {
+		label: 'Lemon Squeezy',
+		where: 'Settings → Webhooks → +',
+		events: 'order_created, subscription_payment_success',
+		secret: 'LEMONSQUEEZY_WEBHOOK_SECRET',
+		link: 'Checkout links on your site get checkout[custom][visitor_id] added automatically.',
+	},
+	polar: {
+		label: 'Polar',
+		where: 'Settings → Webhooks → Add endpoint (format: Raw)',
+		events: 'order.paid',
+		secret: 'POLAR_WEBHOOK_SECRET',
+		link: 'Set metadata.visitor_id to localStorage.gl_vid when you create the checkout.',
+	},
+	razorpay: {
+		label: 'Razorpay',
+		where: 'Account & Settings → Webhooks → Add new webhook',
+		events: 'payment.captured',
+		secret: 'RAZORPAY_WEBHOOK_SECRET',
+		link: 'Pass notes: { visitor_id: localStorage.gl_vid } in your Razorpay order or checkout options.',
+	},
+} as const;
+type Gateway = keyof typeof GATEWAYS;
+
+function SelfHost() {
+	const [conn, setConn] = useState<Connection | null>(null);
+	const [deployed, setDeployed] = useState(false);
+	const [where, setWhere] = useState<'cloudflare' | 'local'>('cloudflare');
+	const [gateway, setGateway] = useState<Gateway>('stripe');
+	const [open, setOpen] = useState<number | null>(null);
+	const [tick, setTick] = useState(0);
+
+	useEffect(() => {
+		const c = loadConnection();
+		if (c) {
+			setConn(c);
+			setDeployed(true);
+		}
+	}, []);
+
+	// Real checks: poll the site's own data until a visit and a sale have arrived
+	const { data } = useRemoteDashboard(conn ? { conn } : null, { range: '30d', model: 'first', mode: 'gross', filters: [] }, tick);
+	const live = useLiveSocket(conn);
+	const hasVisit = (data?.totals.visitors ?? 0) > 0 || (live.online ?? 0) > 0;
+	const hasSale = (data?.sales.length ?? 0) > 0 || (data?.ltv.length ?? 0) > 0 || live.entries.some((e) => e.sale);
+	const waiting = !!conn && (!hasVisit || !hasSale);
+	useEffect(() => {
+		if (!waiting) return;
+		const t = setInterval(() => setTick((x) => x + 1), 5000);
+		return () => clearInterval(t);
+	}, [waiting]);
+
+	const statuses: Status[] = [
+		deployed ? 'done' : 'current',
+		conn ? 'done' : deployed ? 'current' : 'todo',
+		!conn ? 'todo' : hasVisit ? 'done' : 'waiting',
+		!conn ? 'todo' : hasSale ? 'done' : 'waiting',
+	];
+	const firstOpen = statuses.findIndex((s) => s !== 'done');
+	const isOpen = (i: number) => (open === null ? i === firstOpen : open === i);
+	const toggle = (i: number) => () => setOpen(isOpen(i) ? -1 : i);
+
+	const api = (conn?.api || DEFAULT_API || (typeof location === 'undefined' ? '' : location.origin)).replace(/\/$/, '');
+	const origin = typeof location === 'undefined' ? '' : location.origin;
+	const siteId = conn?.siteId ?? 'YOUR_SITE_ID';
+	const g = GATEWAYS[gateway];
+	const allDone = statuses.every((s) => s === 'done');
+
+	return (
+		<div>
+			<ol className="space-y-8">
+				<Step n={1} title="Deploy the API to your Cloudflare account" status={statuses[0]!} open={isOpen(0)} onToggle={toggle(0)} summary={deployed && 'Your API is running.'}>
+					<div className="seg" role="group" aria-label="Where to run it">
+						<button type="button" aria-pressed={where === 'cloudflare'} onClick={() => setWhere('cloudflare')}>Cloudflare</button>
+						<button type="button" aria-pressed={where === 'local'} onClick={() => setWhere('local')}>Try it locally</button>
+					</div>
+					{where === 'cloudflare' ? (
+						<>
+							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a> and a free Cloudflare account. About five minutes.</p>
+							<CopyBlock label="1. Get the code" code={`git clone ${REPO}.git\ncd grosslytics && bun install`} />
+							<CopyBlock label="2. Create the database and queues" code={'bunx wrangler login\nbunx wrangler d1 create grosslytics-db\nbunx wrangler queues create grosslytics-ingest\nbunx wrangler queues create grosslytics-ingest-dlq'} />
+							<p className="text-[13px]">Paste the <code className="font-mono">database_id</code> that <code className="font-mono">d1 create</code> prints into <code className="font-mono">wrangler.toml</code>. On the Workers Free plan, switch the Durable Object migration to <code className="font-mono">new_sqlite_classes</code> first (<a className="text-accent hover:underline" href={`${REPO}/blob/main/DEPLOY.md`}>DEPLOY.md</a>, step 3).</p>
+							<CopyBlock label="3. Create tables, set your API token, deploy" code={'bun run db:migrate:remote\nopenssl rand -hex 32   # copy this; it is your API token\nbunx wrangler secret put API_TOKEN\nbunx wrangler deploy --env=""'} />
+						</>
+					) : (
+						<>
+							<p>Runs the whole stack on your machine with 180 days of sample data, so you can explore before deploying.</p>
+							<CopyBlock label="In the repo" code={`printf 'API_TOKEN=%s\\n' "$(openssl rand -hex 16)" > .dev.vars\nbun run db:seed:local\nbun run dev:api`} />
+							<p className="text-[13px]">Your token is in <code className="font-mono">.dev.vars</code>. The API listens on <code className="font-mono">http://localhost:8787</code>.</p>
+						</>
+					)}
+					<button type="button" className="btn btn-primary" onClick={() => (setDeployed(true), setOpen(1))}>It's running</button>
+				</Step>
+
+				<Step n={2} title="Connect this dashboard and add your site" status={statuses[1]!} open={isOpen(1)} onToggle={toggle(1)} summary={conn && <>Connected to <code className="font-mono text-[12px]">{conn.api}</code>, site <code className="font-mono text-[12px]">{conn.siteId}</code>. <button type="button" className="text-accent hover:underline" onClick={() => (saveConnection(null), setConn(null), setOpen(1))}>Change</button></>}>
+					<p>Use the API URL from step 1 and the token you set. Then add your site's domain.</p>
+					<div className="-mx-2">
+						<Connect
+							onConnect={(c) => {
+								saveConnection(c);
+								setConn(c);
+								setOpen(null);
+							}}
+						/>
+					</div>
+				</Step>
+
+				<Step n={3} title="Add the tracker to your site" status={statuses[2]!} open={isOpen(2)} onToggle={toggle(2)} summary={hasVisit && 'Visits are arriving.'}>
+					<p>Paste this into the <code className="font-mono text-[13px]">&lt;head&gt;</code> of every page. It's about 1.5 KB compressed and sets no cookies.</p>
+					<CopyBlock label="HTML" code={`<script defer src="${origin}/g.js" data-site-id="${siteId}" data-api="${api}/api/event"></script>`} />
+					<p className="text-[13px]">Then open your site in a new tab. This step turns green as soon as the visit arrives.</p>
+				</Step>
+
+				<Step n={4} title="Connect payments" status={statuses[3]!} open={isOpen(3)} onToggle={toggle(3)} summary={hasSale && 'Sales are being attributed.'}>
+					<div className="flex flex-wrap gap-1.5" role="group" aria-label="Payment provider">
+						{(Object.keys(GATEWAYS) as Gateway[]).map((k) => (
+							<button
+								key={k}
+								type="button"
+								aria-pressed={gateway === k}
+								onClick={() => setGateway(k)}
+								className={`rounded-full px-3 py-1 text-[13px] ring-1 ${gateway === k ? 'bg-accent text-white ring-accent' : 'ring-line hover:ring-ink-3'}`}
+							>
+								{GATEWAYS[k].label}
+							</button>
+						))}
+					</div>
+					<p>In {g.label}: <span className="text-ink">{g.where}</span>. Use this URL and subscribe to <span className="font-mono text-[13px] text-ink">{g.events}</span>:</p>
+					<CopyBlock label="Webhook URL" code={`${api}/api/webhooks/${gateway}?siteId=${siteId}`} />
+					<p>Copy the signing secret {g.label} shows you, then store it on your API:</p>
+					<CopyBlock label="In the repo" code={`bunx wrangler secret put ${g.secret}`} />
+					<p className="text-[13px]">{g.link} Unsigned or wrongly signed webhooks are rejected, and retries are never counted twice.</p>
+					<p className="text-[13px]">This step turns green when the first payment arrives. A test-mode payment works.</p>
+				</Step>
+			</ol>
+
+			<div className={`mt-10 flex flex-col items-center gap-2 rounded-[22px] p-7 text-center ${allDone ? 'bg-card ring-2 ring-up' : 'bg-band'}`}>
+				<p className="text-[17px] font-semibold">{allDone ? "You're live. Every sale now shows where it came from." : 'You can open the dashboard at any point.'}</p>
+				<a className="btn btn-primary mt-2" href="/app/">Open the dashboard <ArrowRight size={15} aria-hidden="true" /></a>
+			</div>
+		</div>
+	);
+}

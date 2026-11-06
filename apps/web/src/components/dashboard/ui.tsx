@@ -61,7 +61,7 @@ export function Sparkline({ values, active }: { values: number[]; active?: boole
 	const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * w},${flat ? h / 2 : h - 2 - ((v - min) / (max - min)) * (h - 4)}`).join(' ');
 	return (
 		<svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="overflow-visible">
-			<polyline points={pts} fill="none" stroke={active ? 'var(--accent)' : 'var(--ink-3)'} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+			<polyline points={pts} fill="none" stroke={active ? 'var(--ink)' : 'var(--ink-3)'} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
 		</svg>
 	);
 }
@@ -77,9 +77,9 @@ export function Panel(props: {
 	children: ReactNode;
 }) {
 	return (
-		<section className={`flex min-w-0 flex-col rounded-[22px] bg-card ring-1 ring-line ${props.className ?? ''}`} aria-label={props.title}>
-			<header className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-3">
-				<h3 className="flex items-center gap-2 text-[15px] font-semibold">
+		<section className={`flex min-w-0 flex-col rounded-xl bg-card ring-1 ring-line ${props.className ?? ''}`} aria-label={props.title}>
+			<header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
+				<h3 className="flex items-center gap-2 text-[14px] font-semibold">
 					{props.icon && <span className="text-ink-3" aria-hidden="true">{props.icon}</span>}
 					{props.title}
 				</h3>
@@ -103,7 +103,7 @@ export function Panel(props: {
 					{props.action}
 				</div>
 			</header>
-			<div className="flex-1 px-2 pb-3">{props.children}</div>
+			<div className="flex-1 px-2 pt-2 pb-3">{props.children}</div>
 		</section>
 	);
 }
@@ -156,7 +156,7 @@ export function BarList(props: {
 								title={props.onPick ? `Filter by ${r.label}` : undefined}
 								className={`group relative flex w-full items-center gap-2 rounded-lg px-3 py-[7px] text-left transition-opacity enabled:hover:bg-band ${dim ? 'opacity-45' : ''}`}
 							>
-								<span className="absolute inset-y-1 left-1 rounded-md bg-accent/10" style={{ width: `calc(${(r[props.sortBy] / max) * 100}% * 0.62)` }} aria-hidden="true" />
+								<span className="absolute inset-y-1 left-1 rounded-md bg-ink/[0.05]" style={{ width: `calc(${(r[props.sortBy] / max) * 100}% * 0.62)` }} aria-hidden="true" />
 								<span className="relative flex min-w-0 flex-1 items-center gap-2">
 									{props.showIcons !== false && <SourceIcon icon={r.icon} label={r.label} />}
 									<span className="truncate">{r.label}</span>

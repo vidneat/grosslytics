@@ -78,9 +78,12 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full', so
 }
 
 /** /app: connect once (API URL + token + site), then the live workspace. */
+const ADD_SITE = '__add_site';
+
 function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 	const [conn, setConn] = useState<Connection | null | undefined>(undefined);
 	const [sites, setSites] = useState<SiteInfo[]>([]);
+	const [picking, setPicking] = useState(false);
 	useEffect(() => setConn(loadConnection()), []);
 	useEffect(() => {
 		if (conn) apiFetch<{ sites: SiteInfo[] }>(conn, '/api/stats/sites').then((r) => setSites(r.sites), () => {});
@@ -89,9 +92,11 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 	const connect = (c: Connection | null) => {
 		saveConnection(c);
 		setConn(c);
+		setPicking(false);
 	};
 	if (conn === undefined) return null;
-	if (!conn) return <Connect onConnect={connect} />;
+	if (!conn) return <div className="px-5 pt-10"><Connect onConnect={connect} /></div>;
+	if (picking) return <div className="px-5 pt-10"><Connect start={conn} onConnect={connect} onCancel={() => setPicking(false)} onSignOut={() => connect(null)} /></div>;
 	const current = sites.find((s) => s.id === conn.siteId);
 	return (
 		<Workspace
@@ -100,7 +105,7 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 			source="api"
 			conn={conn}
 			sites={sites}
-			onSite={(siteId) => connect({ ...conn, siteId })}
+			onSite={(siteId) => (siteId === ADD_SITE ? setPicking(true) : connect({ ...conn, siteId }))}
 			onDisconnect={() => connect(null)}
 			shared={!!current?.shared}
 			onShare={async (enabled) => {
@@ -123,6 +128,8 @@ function Workspace(props: {
 	onShare?: (enabled: boolean) => Promise<void>;
 }) {
 	const { site, variant, source, conn } = props;
+	// The /app page gets a full-width sticky toolbar; share pages and the homepage preview sit inside their own box
+	const page = variant === 'full' && source !== 'share';
 	const f = useStore($dashboardFilters);
 	const range = (f.dateRange === 'custom' ? '30d' : f.dateRange) as Range;
 	const model = f.attributionModel as Model;
@@ -170,7 +177,8 @@ function Workspace(props: {
 
 	if (!d) {
 		return (
-			<div className="rounded-[22px] bg-card p-10 text-center ring-1 ring-line">
+			<div className={page ? 'mx-auto mt-6 max-w-7xl px-5' : ''}>
+			<div className="rounded-xl bg-card p-10 text-center ring-1 ring-line">
 				{remote.error ? (
 					<>
 						<p className="text-[15px] text-ink-2" role="alert">{remote.error}</p>
@@ -182,6 +190,7 @@ function Workspace(props: {
 				) : (
 					<p className="text-[15px] text-ink-3">Loading {site}…</p>
 				)}
+			</div>
 			</div>
 		);
 	}
@@ -291,15 +300,17 @@ function Workspace(props: {
 	};
 
 	return (
-		<div className="space-y-4 text-ink">
-			{/* Toolbar */}
-			<div className="flex flex-col gap-3 rounded-[22px] bg-card px-4 py-3 ring-1 ring-line xl:flex-row xl:items-center xl:justify-between">
+		<div className="text-ink">
+			{/* Toolbar: sticks under the site header */}
+			<div className={page ? 'sticky top-12 z-40 border-b border-line bg-canvas/85 backdrop-blur-xl backdrop-saturate-150' : ''}>
+			<div className={`flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between ${page ? 'mx-auto max-w-7xl px-5 py-3' : 'rounded-xl bg-card px-4 py-3 ring-1 ring-line'}`}>
 				<div className="flex flex-wrap items-center gap-3">
 					<span className="flex items-center gap-2 text-[15px] font-semibold">
-						<span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent text-[12px] font-bold text-white" aria-hidden="true">{site[0]?.toUpperCase()}</span>
-						{isOwner && (props.sites?.length ?? 0) > 1 ? (
-							<select className="rounded-md bg-transparent font-semibold outline-none" value={conn?.siteId} onChange={(e) => props.onSite?.(e.target.value)} aria-label="Site">
+						<span className="flex h-6 w-6 items-center justify-center rounded-md bg-ink text-[12px] font-bold text-canvas" aria-hidden="true">{site[0]?.toUpperCase()}</span>
+						{isOwner && props.sites?.length ? (
+							<select className="cursor-pointer rounded-lg bg-transparent py-1 pr-1 font-semibold outline-none hover:bg-band" value={conn?.siteId} onChange={(e) => props.onSite?.(e.target.value)} aria-label="Site">
 								{props.sites!.map((x) => <option key={x.id} value={x.id}>{x.domain}</option>)}
+								<option value={ADD_SITE}>Add another site…</option>
 							</select>
 						) : (
 							site
@@ -338,19 +349,23 @@ function Workspace(props: {
 					<Segmented label="Revenue" value={mode} options={MODES} onChange={setRevenueMode} />
 					<Segmented label="Date range" value={range} options={RANGES} onChange={setDateRange} />
 					{isOwner && (
-						<button type="button" className="rounded-full p-1.5 text-ink-3 hover:bg-band hover:text-ink" onClick={props.onDisconnect} aria-label="Disconnect" title="Disconnect">
-							<LogOut size={15} />
+						<button type="button" className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] text-ink-2 hover:bg-band hover:text-ink" onClick={props.onDisconnect}>
+							<LogOut size={14} aria-hidden="true" />
+							Sign out
 						</button>
 					)}
 				</div>
 			</div>
 
+			</div>
+
+			<div className={page ? 'mx-auto max-w-7xl space-y-5 px-5 pt-6' : 'space-y-5 pt-5'}>
 			{remote.error && remote.data && <p className="px-2 text-[13px] text-down" role="alert">Showing the last loaded data: {remote.error}</p>}
 			{empty && conn && <InstallSnippet siteId={conn.siteId} api={conn.api} />}
 
 			{/* KPIs + chart + live */}
-			<div className="grid gap-4 lg:grid-cols-12">
-				<section className={`rounded-[22px] bg-card ring-1 ring-line ${showLive ? 'lg:col-span-8' : 'lg:col-span-12'}`} aria-label="Overview">
+			<div className="grid gap-5 lg:grid-cols-12">
+				<section className={`rounded-xl bg-card ring-1 ring-line ${showLive ? 'lg:col-span-8' : 'lg:col-span-12'}`} aria-label="Overview">
 					<div className="grid grid-cols-2 border-b border-line md:grid-cols-4" role="tablist" aria-label="Chart metric">
 						{kpis.map((k, i) => {
 							const on = metric === k.id;
@@ -361,14 +376,14 @@ function Workspace(props: {
 									role="tab"
 									aria-selected={on}
 									onClick={() => setMetric(k.id)}
-									className={`relative px-5 py-4 text-left transition-colors hover:bg-band/60 ${i ? 'border-l border-line' : ''} ${i === 2 ? 'max-md:border-l-0 max-md:border-t' : ''} ${i === 3 ? 'max-md:border-t' : ''} ${i === 0 ? 'rounded-tl-[22px]' : ''} ${i === 3 ? 'md:rounded-tr-[22px]' : ''}`}
+									className={`relative px-5 py-5 text-left transition-colors ${on ? 'bg-band/70' : 'hover:bg-band/50'} ${i ? 'border-l border-line' : ''} ${i === 2 ? 'max-md:border-l-0 max-md:border-t' : ''} ${i === 3 ? 'max-md:border-t' : ''} ${i === 0 ? 'rounded-tl-xl' : ''} ${i === 3 ? 'md:rounded-tr-xl' : ''}`}
 								>
-									{on && <span className="absolute inset-x-5 top-0 h-[2px] rounded-full bg-accent" aria-hidden="true" />}
-									<span className="flex items-center gap-1.5 text-[12px] text-ink-2">
-										<k.icon size={13} aria-hidden="true" />
+									{on && <span className="absolute inset-x-0 bottom-[-1px] h-[2px] bg-ink" aria-hidden="true" />}
+									<span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.04em] text-ink-3">
+										<k.icon size={12} aria-hidden="true" />
 										{k.label}
 									</span>
-									<span className="tnum mt-1 block font-display text-[24px] font-semibold tracking-[-0.02em]">{k.value}</span>
+									<span className="tnum mt-1.5 block font-display text-[30px] font-semibold leading-tight tracking-[-0.03em]">{k.value}</span>
 									<span className="mt-1 flex items-end justify-between gap-2">
 										<Delta now={k.now} before={k.before} />
 										<Sparkline values={k.spark} active={on} />
@@ -410,11 +425,11 @@ function Workspace(props: {
 
 			{/* Insights */}
 			{insights.length > 0 && (
-				<section className={`grid gap-4 ${insights.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`} aria-label="Insights">
+				<section className={`grid divide-line rounded-xl bg-card ring-1 ring-line max-md:divide-y md:divide-x ${insights.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`} aria-label="Insights">
 					{insights.map((ins, i) => (
-						<div key={i} className="flex flex-col justify-between gap-3 rounded-[22px] bg-card p-5 ring-1 ring-line">
+						<div key={i} className="flex flex-col justify-between gap-3 p-5">
 							<p className="flex gap-3 text-[14px] leading-snug text-ink-2 [&_b]:font-semibold [&_b]:text-ink">
-								<Lightbulb size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+								<Lightbulb size={16} className="mt-0.5 shrink-0 text-ink-3" aria-hidden="true" />
 								<span>{ins.text}</span>
 							</p>
 							<button type="button" onClick={ins.action} className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-accent hover:underline">
@@ -426,7 +441,7 @@ function Workspace(props: {
 			)}
 
 			{/* Sources + pages */}
-			<div className="grid gap-4 lg:grid-cols-2">
+			<div className="grid gap-5 lg:grid-cols-2">
 				<Panel
 					title="Sources"
 					icon={<Share2 size={15} />}
@@ -480,7 +495,7 @@ function Workspace(props: {
 								{d.direct.map((r) => (
 									<li key={r.key} className="grid grid-cols-[1fr_5rem_2.5rem] items-center gap-3 text-[13px]">
 										<span className="flex min-w-0 items-center gap-2"><SourceIcon icon={r.icon} label={r.key} /><span className="truncate">{r.key}</span></span>
-										<span className="h-2 overflow-hidden rounded-full bg-band"><span className="block h-full rounded-full bg-accent" style={{ width: `${(r.share / directMax) * 100}%` }} /></span>
+										<span className="h-2 overflow-hidden rounded-full bg-band"><span className="block h-full rounded-full bg-ink-2" style={{ width: `${(r.share / directMax) * 100}%` }} /></span>
 										<span className="tnum text-right">{Math.round(r.share * 100)}%</span>
 									</li>
 								))}
@@ -488,7 +503,7 @@ function Workspace(props: {
 						</Panel>
 					</div>
 
-					<div className="grid gap-4 lg:grid-cols-12">
+					<div className="grid gap-5 lg:grid-cols-12">
 						{source !== 'share' && (
 							<Panel title="Recent sales" icon={<Receipt size={15} />} className="lg:col-span-7" action={d.sales.length > 0 && <span className="text-[12px] text-ink-3">Click a sale to see its journey</span>}>
 								{d.sales.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-ink-3">No sales in this period yet.</p>}
@@ -507,7 +522,8 @@ function Workspace(props: {
 													<SourceIcon icon={sourceIcon(x.last)} label={x.last} size={14} />
 													<span className="sr-only">First touch {x.first}, last touch {x.last}</span>
 												</span>
-												<span className="w-20 text-right font-semibold">{usd(x.gross)}</span>
+												{x.refunded && <span className="rounded-full bg-down/10 px-2 py-0.5 text-[11px] font-medium text-down">Refunded</span>}
+												<span className={`w-20 text-right font-semibold ${x.refunded ? 'text-ink-3 line-through' : ''}`}>{usd(x.gross)}</span>
 											</button>
 										</li>
 									))}
@@ -524,9 +540,9 @@ function Workspace(props: {
 						</div>
 					</div>
 
-					<div className="grid gap-4 lg:grid-cols-12">
+					<div className="grid gap-5 lg:grid-cols-12">
 						<Panel title="When buyers buy" icon={<CalendarDays size={15} />} className="lg:col-span-7">
-							<Heatmap grid={d.heat} total={t.sales} />
+							<Heatmap grid={d.heat} refunds={d.heatRefunds} total={t.sales} />
 						</Panel>
 						<Panel title="Buyers vs everyone else" icon={<BookOpen size={15} />} className="lg:col-span-5">
 							<table className="tnum w-full text-[13px]">
@@ -550,7 +566,7 @@ function Workspace(props: {
 						</Panel>
 					</div>
 
-					<div className="grid gap-4 lg:grid-cols-2">
+					<div className="grid gap-5 lg:grid-cols-2">
 						<Panel title="Path to purchase" icon={<Route size={15} />}>
 							<Funnel steps={d.funnel} />
 						</Panel>
@@ -578,6 +594,7 @@ function Workspace(props: {
 					)}
 				</>
 			)}
+			</div>
 
 			<JourneyDrawer sale={sale} onClose={closeSale} loadJourney={loadJourney} />
 		</div>

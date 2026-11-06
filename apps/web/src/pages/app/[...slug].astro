@@ -9,13 +9,11 @@ const demo = Astro.params.slug === 'demo';
 ---
 
 <Page title={demo ? 'Grosslytics Demo Workspace' : 'Grosslytics Workspace'} description="Real-time revenue attribution workspace." noindex app>
-	<main class="min-h-[calc(100vh-3rem)] bg-band px-5 py-8">
-		<div class="mx-auto max-w-7xl">
-			<div class="mb-6 flex items-baseline justify-between gap-4">
-				<h1 class="text-[28px] font-semibold tracking-[-0.025em]">Overview</h1>
-				{demo ? <a href="/app/" class="text-[13px] text-accent hover:underline">Connect your own data ›</a> : <a href="/app/demo" class="text-[13px] text-ink-2 hover:underline">View sample data</a>}
-			</div>
-			{demo ? <DashboardIsland client:only="react" source="demo" /> : <DashboardIsland client:only="react" source="api" />}
-		</div>
+	<main class="min-h-[calc(100vh-3rem)] bg-canvas pb-12">
+		<h1 class="sr-only">{demo ? 'Demo workspace' : 'Workspace'}</h1>
+		{demo ? <DashboardIsland client:only="react" source="demo" /> : <DashboardIsland client:only="react" source="api" />}
+		<p class="mx-auto mt-10 max-w-7xl px-5 text-center text-[13px]">
+			{demo ? <a href="/app/" class="text-accent hover:underline">This is sample data. Connect your own ›</a> : <a href="/app/demo" class="text-ink-2 hover:underline">View sample data</a>}
+		</p>
 	</main>
 </Page>

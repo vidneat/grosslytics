@@ -29,7 +29,15 @@ export async function apiFetch<T>(c: Pick<Connection, 'api' | 'token'>, path: st
 		...init,
 		headers: { authorization: `Bearer ${c.token}`, 'content-type': 'application/json', ...init?.headers },
 	});
-	if (!res.ok) throw new Error(res.status === 401 ? 'The API token was rejected.' : `${res.status} ${await res.text().catch(() => '')}`.trim());
+	if (!res.ok) {
+		if (res.status === 401) throw new Error('The API token was rejected.');
+		const text = await res.text().catch(() => '');
+		let msg = text;
+		try {
+			msg = JSON.parse(text).error || text;
+		} catch {}
+		throw new Error(msg || `Request failed (${res.status}).`);
+	}
 	return res.json() as Promise<T>;
 }
 

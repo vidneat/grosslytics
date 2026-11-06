@@ -136,6 +136,7 @@ export function JourneyDrawer({ sale, onClose, loadJourney }: { sale: DashSale |
 							</div>
 						))}
 						<p className="col-span-2 text-[12px] text-ink-3">
+							{sale.refunded && <span className="font-medium text-down">Refunded, so it no longer counts as revenue. </span>}
 							{sale.renewal ? 'Renewal, credited to the original sources.' : days === 0 ? 'Bought on the first day.' : `${days} day${days === 1 ? '' : 's'} from first visit to payment.`} Linear attribution credits each touch 50%.
 						</p>
 					</section>
