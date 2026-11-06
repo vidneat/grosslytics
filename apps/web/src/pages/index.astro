@@ -1,120 +1,205 @@
 ---
-import BaseHead from '../components/seo/BaseHead.astro';
+import Page from '../layouts/Page.astro';
 import SchemaJsonLd from '../components/seo/SchemaJsonLd.astro';
+import Receipt from '../components/marketing/Receipt.astro';
 import DashboardIsland from '../components/dashboard/DashboardIsland.tsx';
 import RoiCalculator from '../components/marketing/RoiCalculator.tsx';
-import '../styles/global.css';
 
 export const prerender = true;
+
+const inApp = [
+	['Instagram', 'instagram.com (in-app)'],
+	['TikTok', 'tiktok.com (in-app)'],
+	['LinkedIn', 'linkedin.com (in-app)'],
+	['X', 'x.com (in-app)'],
+];
+const aiEngines = ['ChatGPT', 'Perplexity', 'Claude', 'Gemini', 'Copilot'];
+const gateways = ['Stripe', 'Razorpay', 'Polar', 'Paddle', 'Lemon Squeezy'];
+const plans = [
+	{ name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.', items: ['Unlimited sites', 'All attribution models', 'MCP server included'] },
+	{ name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. You just add the script.', items: ['Everything in Self-host', 'Managed updates', 'Hosted dashboard'], featured: true },
+	{ name: 'Lifetime', price: '$29', unit: 'one time', note: 'A self-hosted license you own.', items: ['Everything in Self-host', 'Lifetime updates', 'Priority email support'] },
+];
 ---
 
-<html lang="en">
-	<head>
-		<BaseHead
-			title="Grosslytics — True Net Profit & Multi-Touch Revenue Attribution"
-			description="Don't settle for gross vanity metrics. Grosslytics ties every click, post, and AI search query directly to your Gross MRR, True Net Profit (after payment fees), and RPV."
-		/>
-		<SchemaJsonLd type="software" />
-	</head>
-	<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-emerald-500 selection:text-black">
-		<!-- Navigation -->
-		<header class="border-b border-zinc-800/80 sticky top-0 bg-zinc-950/80 backdrop-blur-md z-50">
-			<div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-				<div class="flex items-center gap-2">
-					<span class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center font-black text-black text-base">G</span>
-					<span class="font-bold text-lg tracking-tight text-white">Grosslytics</span>
-				</div>
-				<nav class="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-400">
-					<a href="/compare/datafast-alternative" class="hover:text-white transition-colors">vs DataFast</a>
-					<a href="/compare/databull-alternative" class="hover:text-white transition-colors">vs DataBull</a>
-					<a href="/compare/plausible-alternative" class="hover:text-white transition-colors">vs Plausible</a>
-					<a href="/llms.txt" class="hover:text-white transition-colors font-mono text-xs text-zinc-500">llms.txt</a>
-				</nav>
-				<div class="flex items-center gap-3">
-					<a
-						href="/app"
-						class="text-xs font-semibold px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"
-					>
-						Launch App
-					</a>
-				</div>
-			</div>
-		</header>
+<Page
+	title="Grosslytics — Revenue Analytics That Counts What You Keep"
+	description="Grosslytics ties every click, post, and AI search visit to the revenue you actually keep: after Stripe and Razorpay fees and ad spend."
+>
+	<SchemaJsonLd slot="head" type="software" />
 
-		<!-- Hero Section -->
-		<main class="max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-20">
-			<div class="text-center max-w-3xl mx-auto mb-14">
-				<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono mb-6">
-					<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-					Sub-10ms Edge Ingestion • 0KB Client JS by default
-				</div>
-				<h1 class="text-4xl sm:text-6xl font-black tracking-tight text-white leading-[1.1] mb-6">
-					Stop measuring gross vanity metrics. <br />
-					<span class="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
-						Track True Net Profit.
-					</span>
-				</h1>
-				<p class="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-					Grosslytics ties every click, X post, and AI search citation directly to your Gross MRR, True Net Profit (after Stripe/Razorpay processing fees & ad spend), and Revenue Per Visitor.
+	<main>
+		<!-- Hero -->
+		<section class="px-5 pt-20 pb-16 text-center sm:pt-28">
+			<p class="eyebrow mb-4">Revenue analytics for founders</p>
+			<h1 class="mx-auto max-w-[14ch] text-[clamp(44px,8vw,88px)] font-semibold leading-[1.04] tracking-[-0.04em]">
+				Gross is vanity.
+				<span class="block text-ink-3">Net is what you keep.</span>
+			</h1>
+			<p class="mx-auto mt-6 max-w-[34rem] text-[19px] leading-relaxed text-ink-2 sm:text-[21px]">
+				See which posts, searches and AI answers bring buyers, and what each one earned after fees and ad spend.
+			</p>
+			<div class="mt-9 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+				<a href="#pricing" class="btn btn-primary">Start free</a>
+				<a href="/app/" class="btn-quiet text-[17px]">Explore the live demo ›</a>
+			</div>
+			<p class="mt-5 text-[13px] text-ink-3">Free on your own Cloudflare. No cookies.</p>
+		</section>
+
+		<!-- One sale, explained -->
+		<section class="mx-auto grid max-w-[1024px] items-center gap-14 px-5 pt-8 pb-28 md:grid-cols-2">
+			<div>
+				<h2 class="text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
+					Every sale comes with its story.
+				</h2>
+				<p class="mt-5 text-[19px] leading-relaxed text-ink-2">
+					Grosslytics follows a buyer from first visit to payment, then subtracts what the gateway and your ads took. You see the money, and where it really came from.
 				</p>
+				<ul class="mt-8 space-y-5 text-[17px]">
+					<li>
+						<span class="font-semibold">First touch, last touch, or both.</span>
+						<span class="text-ink-2">Switch models instantly. Linear splits credit 50/50.</span>
+					</li>
+					<li>
+						<span class="font-semibold">Fees taken off automatically.</span>
+						<span class="text-ink-2">Stripe, Razorpay, Polar, Paddle and Lemon Squeezy.</span>
+					</li>
+					<li>
+						<span class="font-semibold">Renewals stay attributed.</span>
+						<span class="text-ink-2">Month 6 still credits the post that found the customer.</span>
+					</li>
+				</ul>
 			</div>
+			<Receipt />
+		</section>
 
-			<!-- Interactive Live Dashboard Island -->
-			<div class="mb-24">
-				<DashboardIsland client:visible />
-			</div>
-
-			<!-- ROI & Savings Calculator Island -->
-			<section class="mb-24">
-				<div class="text-center mb-10">
-					<h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-3">
-						Calculate Your Margin Advantage
+		<!-- Live demo -->
+		<section id="product" class="scroll-mt-12 bg-band px-5 py-24">
+			<div class="mx-auto max-w-[1100px]">
+				<div class="mx-auto mb-12 max-w-2xl text-center">
+					<h2 class="text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
+						Every channel, ranked by what it earned.
 					</h2>
-					<p class="text-sm text-zinc-400 max-w-xl mx-auto">
-						See exact annual infrastructure savings and recovered fee accuracy on Grosslytics vs. legacy analytics.
-					</p>
+					<p class="mt-4 text-[19px] text-ink-2">Try it. Switch the model, the range, or gross and net.</p>
 				</div>
-				<RoiCalculator client:visible />
-			</section>
+				<DashboardIsland client:visible variant="preview" />
+				<p class="mt-4 text-center text-[13px] text-ink-3">Sample data from a fictional SaaS.</p>
+			</div>
+		</section>
 
-			<!-- Feature Grid -->
-			<section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-24">
-				<div class="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-					<div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-mono font-bold mb-4">
-						&lt;8ms
+		<!-- Feature tiles -->
+		<section class="mx-auto max-w-[1024px] px-5 py-28">
+			<h2 class="mx-auto mb-14 max-w-2xl text-center text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
+				A tiny tracker. <span class="text-ink-3">Sharper answers.</span>
+			</h2>
+
+			<div class="grid gap-4 md:grid-cols-3">
+				<!-- Unmasked direct -->
+				<article class="rounded-[28px] bg-band p-8 md:col-span-2">
+					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">“Direct” traffic, unmasked.</h3>
+					<p class="mt-2 max-w-md text-ink-2">In-app browsers hide where visitors came from. Grosslytics names them.</p>
+					<div class="mt-7 overflow-hidden rounded-2xl bg-card ring-1 ring-line">
+						<div class="grid grid-cols-2 border-b border-line px-5 py-2.5 text-[12px] font-medium text-ink-3">
+							<span>Most tools</span><span>Grosslytics</span>
+						</div>
+						<ul class="divide-y divide-line text-[15px]">
+							{inApp.map(([app, label]) => (
+								<li class="grid grid-cols-2 px-5 py-3">
+									<span class="text-ink-3 line-through decoration-ink-3/40">Direct</span>
+									<span><span class="sr-only">{app}: </span>{label}</span>
+								</li>
+							))}
+						</ul>
 					</div>
-					<h3 class="font-bold text-lg text-white mb-2">Write-Behind Queue Batching</h3>
-					<p class="text-sm text-zinc-400 leading-relaxed">
-						Never wait on synchronous SQLite writes. Global Cloudflare Queues batch up to 500 events per transaction, cutting database write ops by 99%.
-					</p>
-				</div>
+				</article>
 
-				<div class="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-					<div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 font-mono font-bold mb-4">
-						AI
+				<!-- Tracker size -->
+				<article class="flex flex-col justify-between rounded-[28px] bg-band p-8">
+					<h3 class="text-[17px] font-semibold text-ink-2">The whole tracker</h3>
+					<div>
+						<p class="font-display text-[72px] font-semibold leading-none tracking-[-0.04em]">1.3<span class="text-[36px] text-ink-3"> KB</span></p>
+						<p class="mt-3 text-ink-2">Compressed. No cookies and no layout shift.</p>
 					</div>
-					<h3 class="font-bold text-lg text-white mb-2">Unmasked Direct & AI Search</h3>
-					<p class="text-sm text-zinc-400 leading-relaxed">
-						Stop lumping in-app mobile WebViews (Instagram, LinkedIn, X, TikTok) and AI search engines (ChatGPT, Perplexity, Claude) into fake Direct.
-					</p>
-				</div>
+				</article>
 
-				<div class="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-					<div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-mono font-bold mb-4">
-						MCP
+				<!-- AI search -->
+				<article class="rounded-[28px] bg-band p-8">
+					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">AI answers get credit.</h3>
+					<p class="mt-2 text-ink-2">Visits from AI search are tracked as their own channel.</p>
+					<ul class="mt-6 flex flex-wrap gap-2 text-[14px]">
+						{aiEngines.map((e) => <li class="rounded-full bg-card px-3 py-1 ring-1 ring-line">{e}</li>)}
+					</ul>
+				</article>
+
+				<!-- MCP -->
+				<article class="rounded-[28px] bg-band p-8 md:col-span-2">
+					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">Ask your numbers.</h3>
+					<p class="mt-2 text-ink-2">Connect Claude Code, Cursor or Windsurf over MCP, and ask in plain English.</p>
+					<div class="mt-6 space-y-3 text-[15px]">
+						<p class="ml-auto w-fit max-w-[85%] rounded-[18px] rounded-br-md bg-accent px-4 py-2.5 text-white">
+							Which channel earned the most per visitor this month?
+						</p>
+						<p class="w-fit max-w-[85%] rounded-[18px] rounded-bl-md bg-card px-4 py-2.5 ring-1 ring-line">
+							<span class="font-semibold">chatgpt.com</span> at $1.52 per visitor, from 35 sales. X brought more visitors but earned $1.00 each.
+						</p>
 					</div>
-					<h3 class="font-bold text-lg text-white mb-2">Built-In Model Context Protocol</h3>
-					<p class="text-sm text-zinc-400 leading-relaxed">
-						Ask Claude Code, Cursor, or Windsurf directly: "Which X posts drove our top 5 Stripe buyers this week?" with zero custom script writing.
-					</p>
-				</div>
-			</section>
-		</main>
+				</article>
 
-		<!-- Footer -->
-		<footer class="border-t border-zinc-900 py-12 text-center text-xs text-zinc-500 font-mono">
-			<p>© 2025 Grosslytics (`grosslytics.com`). Sub-10ms edge-native analytics.</p>
-		</footer>
-	</body>
-</html>
+				<!-- Gateways -->
+				<article class="rounded-[28px] bg-band p-8">
+					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">Every gateway.</h3>
+					<ul class="mt-5 space-y-2 text-ink-2">
+						{gateways.map((g) => <li>{g}</li>)}
+					</ul>
+				</article>
 
+				<!-- Live -->
+				<article class="rounded-[28px] bg-band p-8">
+					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">Live, not refreshed.</h3>
+					<p class="mt-2 text-ink-2">Visitors and sales appear on your dashboard the moment they happen.</p>
+				</article>
+
+				<!-- Self-host -->
+				<article class="rounded-[28px] bg-band p-8">
+					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">Yours to run.</h3>
+					<p class="mt-2 text-ink-2">Deploy to your own Cloudflare account in one command.</p>
+					<code class="mt-5 block rounded-xl bg-card px-4 py-3 font-mono text-[13px] ring-1 ring-line">npx grosslytics init</code>
+				</article>
+			</div>
+		</section>
+
+		<!-- Calculator -->
+		<section class="bg-band px-5 py-24">
+			<div class="mx-auto mb-12 max-w-2xl text-center">
+				<h2 class="text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
+					What is your analytics costing you?
+				</h2>
+				<p class="mt-4 text-[19px] text-ink-2">Compare entry plans, and see how much of your revenue goes to fees.</p>
+			</div>
+			<RoiCalculator client:visible />
+		</section>
+
+		<!-- Pricing -->
+		<section id="pricing" class="mx-auto max-w-[1024px] scroll-mt-12 px-5 py-28">
+			<h2 class="mb-14 text-center text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
+				Simple pricing.
+			</h2>
+			<div class="grid gap-4 md:grid-cols-3">
+				{plans.map((p) => (
+					<article class={`flex flex-col rounded-[28px] p-8 ${p.featured ? 'bg-card ring-2 ring-accent' : 'bg-band'}`}>
+						<h3 class="text-[17px] font-semibold">{p.name}</h3>
+						<p class="mt-4"><span class="font-display text-[48px] font-semibold tracking-[-0.03em]">{p.price}</span> <span class="text-ink-2">{p.unit}</span></p>
+						<p class="mt-2 min-h-[3em] text-ink-2">{p.note}</p>
+						<ul class="mt-6 space-y-2 border-t border-line pt-6 text-[15px]">
+							{p.items.map((i) => <li>{i}</li>)}
+						</ul>
+					</article>
+				))}
+			</div>
+			<div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+				<a href="/llms.txt" class="btn btn-primary">Start free</a>
+				<a href="/app/" class="btn-quiet text-[17px]">Explore the live demo ›</a>
+			</div>
+		</section>
+	</main>
+</Page>

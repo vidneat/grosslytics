@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { requireToken } from './auth.js';
 import { cors } from 'hono/cors';
 import { collectRoute } from './routes/collect.js';
 import { statsRoute } from './routes/stats.js';
@@ -24,6 +25,11 @@ app.use(
 
 // Health check
 app.get('/', (c) => c.text('Grosslytics Edge API Online', 200));
+
+// Owner-only APIs. Browsers can't set headers on WebSocket upgrades, so `?token=` is also accepted.
+// shortcut: one API_TOKEN guards every site, fine for self-host; hosted multi-tenant needs per-site keys.
+app.use('/api/stats/*', requireToken);
+app.use('/api/mcp/*', requireToken);
 
 // Mount routes
 app.route('/api/collect', collectRoute);

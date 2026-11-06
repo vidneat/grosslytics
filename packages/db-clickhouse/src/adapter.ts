@@ -125,12 +125,16 @@ export class ClickHouseStorageAdapter implements AnalyticsStorageAdapter {
 		return rows.length > 0;
 	}
 
-	async markWebhookProcessed(webhookEventId: string, siteId: string): Promise<void> {
+	// shortcut: ClickHouse has no atomic insert-if-absent, so this is check-then-insert (racy under
+	// concurrent retries); upgrade by deduping in Dragonfly/Redis with SET NX before writing.
+	async markWebhookProcessed(webhookEventId: string, siteId: string): Promise<boolean> {
+		if (await this.isWebhookProcessed(webhookEventId)) return false;
 		await this.client.insert({
 			table: 'webhook_dedup_log',
 			values: [{ webhook_event_id: webhookEventId, site_id: siteId }],
 			format: 'JSONEachRow',
 		});
+		return true;
 	}
 
 	async queryChannelStats(

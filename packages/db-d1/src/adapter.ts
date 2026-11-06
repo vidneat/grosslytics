@@ -3,7 +3,6 @@ import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 import {
 	toHourBucket,
 	classifySourceCategory,
-	linearSplitPayment,
 	calculateRPV,
 	calculateTrueProfit,
 } from '@grosslytics/shared/attribution';
@@ -263,13 +262,61 @@ export class D1StorageAdapter implements AnalyticsStorageAdapter {
 	}
 
 	/**
-	 * Mark a webhook event as processed.
+	 * Atomically claims a webhook event ID. Returns false if it was already claimed,
+	 * so concurrent gateway retries can never both process (or alert on) the same event.
 	 */
-	async markWebhookProcessed(webhookEventId: string, siteId: string): Promise<void> {
-		await this.db
+	async markWebhookProcessed(webhookEventId: string, siteId: string): Promise<boolean> {
+		const rows = await this.db
 			.insert(schema.webhookDedupLog)
 			.values({ webhookEventId, siteId })
-			.onConflictDoNothing();
+			.onConflictDoNothing()
+			.returning({ id: schema.webhookDedupLog.webhookEventId });
+		return rows.length > 0;
+	}
+
+	/** Releases a claim when processing failed, so the gateway's retry is processed. */
+	async unmarkWebhookProcessed(webhookEventId: string): Promise<void> {
+		await this.db
+			.delete(schema.webhookDedupLog)
+			.where(eq(schema.webhookDedupLog.webhookEventId, webhookEventId));
+	}
+
+	/** Site row (per-site webhook secrets, share flag). */
+	async getSite(siteId: string) {
+		const rows = await this.db.select().from(schema.sites).where(eq(schema.sites.siteId, siteId)).limit(1);
+		return rows[0];
+	}
+
+	/**
+	 * Finds the buyer's visitor record by visitor ID, falling back to email hash (renewals).
+	 * When matched by visitor ID, links the email hash so future renewals attribute too.
+	 */
+	async findBuyer(siteId: string, visitorId?: string, emailHash?: string) {
+		const v = schema.visitors;
+		if (visitorId) {
+			const rows = await this.db
+				.select()
+				.from(v)
+				.where(and(eq(v.siteId, siteId), eq(v.visitorId, visitorId)))
+				.limit(1);
+			if (rows[0]) {
+				if (emailHash && rows[0].customerEmailHash !== emailHash) {
+					await this.db
+						.update(v)
+						.set({ customerEmailHash: emailHash })
+						.where(and(eq(v.siteId, siteId), eq(v.visitorId, visitorId)));
+				}
+				return rows[0];
+			}
+		}
+		if (!emailHash) return undefined;
+		const rows = await this.db
+			.select()
+			.from(v)
+			.where(and(eq(v.siteId, siteId), eq(v.customerEmailHash, emailHash)))
+			.orderBy(v.firstSeenAt)
+			.limit(1);
+		return rows[0];
 	}
 
 	/**
@@ -304,28 +351,54 @@ export class D1StorageAdapter implements AnalyticsStorageAdapter {
 			)
 			.groupBy(schema.hourlyRollups.source, schema.hourlyRollups.category);
 
-		// 2. Revenue from payments — select based on attribution model
-		const sourceCol =
-			model === 'last' ? schema.payments.lastTouchSource : schema.payments.firstTouchSource;
+		// 2. Revenue from payments, credited per attribution model.
+		// first/last: 100% to that touch; linear: 50% to each (credit, gross, fee, net).
+		const revenueBy = (
+			col: typeof schema.payments.firstTouchSource | typeof schema.payments.lastTouchSource,
+		) =>
+			this.db
+				.select({
+					source: col,
+					grossCents: sql<number>`SUM(gross_amount_cents)`.as('gross_cents'),
+					feeCents: sql<number>`SUM(fee_amount_cents)`.as('fee_cents'),
+					conversions: sql<number>`COUNT(*)`.as('conversions'),
+				})
+				.from(schema.payments)
+				.where(
+					and(
+						eq(schema.payments.siteId, siteId),
+						gte(schema.payments.createdAt, startTime),
+						lte(schema.payments.createdAt, endTime),
+						eq(schema.payments.status, 'succeeded'),
+					),
+				)
+				.groupBy(col);
 
-		const revenueRows = await this.db
-			.select({
-				source: sourceCol,
-				grossCents: sql<number>`SUM(gross_amount_cents)`.as('gross_cents'),
-				feeCents: sql<number>`SUM(fee_amount_cents)`.as('fee_cents'),
-				netCents: sql<number>`SUM(net_amount_cents)`.as('net_cents'),
-				conversions: sql<number>`COUNT(*)`.as('conversions'),
-			})
-			.from(schema.payments)
-			.where(
-				and(
-					eq(schema.payments.siteId, siteId),
-					gte(schema.payments.createdAt, startTime),
-					lte(schema.payments.createdAt, endTime),
-					eq(schema.payments.status, 'succeeded'),
-				),
-			)
-			.groupBy(sourceCol);
+		const weighted: Array<[Awaited<ReturnType<typeof revenueBy>>, number]> =
+			model === 'linear'
+				? [
+						[await revenueBy(schema.payments.firstTouchSource), 0.5],
+						[await revenueBy(schema.payments.lastTouchSource), 0.5],
+					]
+				: [
+						[
+							await revenueBy(
+								model === 'last' ? schema.payments.lastTouchSource : schema.payments.firstTouchSource,
+							),
+							1,
+						],
+					];
+
+		const revenueMap = new Map<string, { gross: number; fee: number; conversions: number }>();
+		for (const [rows, w] of weighted) {
+			for (const r of rows) {
+				const acc = revenueMap.get(r.source) ?? { gross: 0, fee: 0, conversions: 0 };
+				acc.gross += (r.grossCents ?? 0) * w;
+				acc.fee += (r.feeCents ?? 0) * w;
+				acc.conversions += (r.conversions ?? 0) * w;
+				revenueMap.set(r.source, acc);
+			}
+		}
 
 		// 3. Ad spend
 		const startDate = new Date(startTime * 1000).toISOString().slice(0, 10);
@@ -346,51 +419,39 @@ export class D1StorageAdapter implements AnalyticsStorageAdapter {
 			)
 			.groupBy(schema.adSpend.source);
 
-		// 4. Merge traffic + revenue + ad spend into ChannelStats
-		const revenueMap = new Map(revenueRows.map((r) => [r.source, r]));
+		// 4. Merge traffic + revenue + ad spend. Sources with revenue or spend but no
+		// tracked traffic (e.g. 'Unattributed') are still reported.
 		const adSpendMap = new Map(adSpendRows.map((r) => [r.source, r.totalSpend ?? 0]));
+		const trafficMap = new Map(trafficRows.map((t) => [t.source, t]));
+		const sources = new Set([...trafficMap.keys(), ...revenueMap.keys(), ...adSpendMap.keys()]);
 
-		const results: ChannelStats[] = trafficRows.map((t) => {
-			const rev = revenueMap.get(t.source);
-			const adSpendCents = adSpendMap.get(t.source) ?? 0;
-			const visitors = t.visitors ?? 0;
-			const pageviews = t.pageviews ?? 0;
-
-			let grossRevenueCents = rev?.grossCents ?? 0;
-			let feesCents = rev?.feeCents ?? 0;
-			let netRevenueCents = rev?.netCents ?? 0;
-			const conversions = rev?.conversions ?? 0;
-
-			// For linear model, split revenue 50/50
-			if (model === 'linear' && rev) {
-				const split = linearSplitPayment(grossRevenueCents, feesCents);
-				// This channel gets 50% of attributed revenue
-				grossRevenueCents = Math.round(grossRevenueCents / 2);
-				feesCents = Math.round(feesCents / 2);
-				netRevenueCents = split.firstTouchShare;
-			}
-
-			const trueProfitCents = calculateTrueProfit(netRevenueCents, adSpendCents);
+		return Array.from(sources, (source) => {
+			const t = trafficMap.get(source);
+			const rev = revenueMap.get(source);
+			const adSpendCents = adSpendMap.get(source) ?? 0;
+			const visitors = t?.visitors ?? 0;
+			const pageviews = t?.pageviews ?? 0;
+			const grossRevenueCents = Math.round(rev?.gross ?? 0);
+			const feesCents = Math.round(rev?.fee ?? 0);
+			const netRevenueCents = grossRevenueCents - feesCents;
 
 			return {
-				source: t.source,
-				category: (t.category ?? 'Referral') as ChannelStats['category'],
+				source,
+				category: (t?.category ?? classifySourceCategory(source)) as ChannelStats['category'],
 				visitors,
-				sessions: t.sessions ?? 0,
+				sessions: t?.sessions ?? 0,
 				pageviews,
-				avgReadSec: pageviews > 0 ? Math.round((t.totalReadSec ?? 0) / pageviews) : 0,
-				avgScrollPct: pageviews > 0 ? Math.round((t.totalScrollPct ?? 0) / pageviews) : 0,
+				avgReadSec: pageviews > 0 ? Math.round((t?.totalReadSec ?? 0) / pageviews) : 0,
+				avgScrollPct: pageviews > 0 ? Math.round((t?.totalScrollPct ?? 0) / pageviews) : 0,
 				grossRevenueCents,
 				feesCents,
 				netRevenueCents,
 				adSpendCents,
-				trueProfitCents,
-				conversions,
+				trueProfitCents: calculateTrueProfit(netRevenueCents, adSpendCents),
+				conversions: rev?.conversions ?? 0,
 				rpvCents: calculateRPV(netRevenueCents, visitors),
 			};
 		});
-
-		return results;
 	}
 
 	/**

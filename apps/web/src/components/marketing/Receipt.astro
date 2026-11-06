@@ -1,0 +1,57 @@
+---
+// One sale, fully explained: journey + gross-to-net ledger. Static HTML, zero JS.
+// Stripe fee on $49.00 = 2.9% + 30¢ = $1.72 (matches packages/shared fees.ts).
+const journey = [
+	{ when: 'Mar 3', what: 'Saw your post on X', source: 'x.com (in-app)' },
+	{ when: 'Mar 5', what: 'Came back from a ChatGPT answer', source: 'chatgpt.com (AI)' },
+	{ when: 'Mar 5', what: 'Read /pricing for 2m 14s', source: '92% scrolled' },
+	{ when: 'Mar 5', what: 'Paid with Stripe', source: '2 days to convert' },
+];
+---
+
+<figure class="receipt relative mx-auto w-full max-w-[380px]">
+	<div class="rounded-t-[22px] bg-card px-7 pt-7 pb-9 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_40px_-12px_rgb(0_0_0/0.18)] ring-1 ring-line">
+		<div class="flex items-baseline justify-between">
+			<span class="text-[13px] font-semibold">Sale #1042</span>
+			<span class="text-[13px] text-ink-3">Pro plan · monthly</span>
+		</div>
+
+		<ol class="mt-6 space-y-4" aria-label="Buyer journey">
+			{journey.map((j, i) => (
+				<li class="relative grid grid-cols-[3.25rem_1fr] gap-3 text-[14px] leading-snug">
+					<span class="tnum text-ink-3">{j.when}</span>
+					<span class="relative pl-4">
+						<span class={`absolute left-0 top-[0.45em] h-1.5 w-1.5 rounded-full ${i === journey.length - 1 ? 'bg-accent' : 'bg-ink-3/60'}`}></span>
+						{i < journey.length - 1 && <span class="absolute left-[2.5px] top-[1.2em] h-[calc(100%+0.6rem)] w-px bg-line"></span>}
+						<span class="block">{j.what}</span>
+						<span class="block text-[13px] text-ink-2">{j.source}</span>
+					</span>
+				</li>
+			))}
+		</ol>
+
+		<dl class="tnum mt-7 space-y-2 border-t border-dashed border-line pt-5 text-[14px]">
+			<div class="flex justify-between"><dt class="text-ink-2">Gross</dt><dd>$49.00</dd></div>
+			<div class="flex justify-between"><dt class="text-ink-2">Stripe fee</dt><dd class="text-ink-2">−$1.72</dd></div>
+			<div class="flex justify-between"><dt class="text-ink-2">Ad spend</dt><dd class="text-ink-2">−$0.00</dd></div>
+			<div class="flex items-baseline justify-between border-t border-line pt-3">
+				<dt class="font-semibold">You kept</dt>
+				<dd class="font-display text-[28px] font-semibold tracking-[-0.02em]">$47.28</dd>
+			</div>
+		</dl>
+
+		<div class="mt-5 rounded-xl bg-band px-4 py-3 text-[13px] text-ink-2">
+			Credited <span class="text-ink">50% to x.com</span> and <span class="text-ink">50% to chatgpt.com</span> under linear attribution.
+		</div>
+	</div>
+	<!-- Torn receipt edge -->
+	<div class="receipt-edge h-3 w-full" aria-hidden="true"></div>
+</figure>
+
+<style>
+	.receipt-edge {
+		background:
+			radial-gradient(circle at 8px 100%, transparent 0 6px, var(--card) 6.5px) 0 0 / 16px 12px repeat-x;
+		filter: drop-shadow(0 6px 8px rgb(0 0 0 / 0.08));
+	}
+</style>

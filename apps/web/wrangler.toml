@@ -1,0 +1,9 @@
+# Astro site (marketing, docs, share pages, dashboard). The edge API uses the root wrangler.toml.
+name = "grosslytics-web"
+main = "./dist/_worker.js/index.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+binding = "ASSETS"
+directory = "./dist"

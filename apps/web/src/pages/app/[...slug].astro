@@ -1,47 +1,15 @@
 ---
-import BaseHead from '../../components/seo/BaseHead.astro';
+import Page from '../../layouts/Page.astro';
 import DashboardIsland from '../../components/dashboard/DashboardIsland.tsx';
-import '../../styles/global.css';
 
 export const prerender = false;
 ---
 
-<html lang="en">
-	<head>
-		<BaseHead
-			title="Grosslytics Workspace — Real-Time Attribution"
-			description="Authenticated real-time revenue attribution workspace."
-			noindex={true}
-		/>
-	</head>
-	<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-emerald-500 selection:text-black">
-		<header class="border-b border-zinc-800/80 sticky top-0 bg-zinc-950/80 backdrop-blur-md z-50">
-			<div class="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-				<div class="flex items-center gap-3">
-					<a href="/" class="flex items-center gap-2">
-						<span class="w-6 h-6 rounded-md bg-emerald-500 flex items-center justify-center font-black text-black text-sm">G</span>
-						<span class="font-bold text-base tracking-tight text-white">Grosslytics</span>
-					</a>
-					<span class="text-zinc-600">/</span>
-					<span class="text-xs font-mono text-zinc-400">Workspace</span>
-				</div>
-				<div class="flex items-center gap-3">
-					<a
-						href="/compare/datafast-alternative"
-						class="text-xs text-zinc-400 hover:text-white transition-colors"
-					>
-						Docs & Comparisons
-					</a>
-					<div class="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-semibold">
-						⚡
-					</div>
-				</div>
-			</div>
-		</header>
-
-		<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+<Page title="Grosslytics Workspace" description="Real-time revenue attribution workspace." noindex app>
+	<main class="min-h-[calc(100vh-3rem)] bg-band px-5 py-8">
+		<div class="mx-auto max-w-7xl">
+			<h1 class="mb-6 text-[28px] font-semibold tracking-[-0.025em]">Overview</h1>
 			<DashboardIsland client:only="react" />
-		</main>
-	</body>
-</html>
-
+		</div>
+	</main>
+</Page>

@@ -147,8 +147,8 @@ export interface AnalyticsStorageAdapter {
 	upsertPayment(payment: PaymentRecord): Promise<boolean>;
 	/** Check webhook dedup log */
 	isWebhookProcessed(webhookEventId: string): Promise<boolean>;
-	/** Mark webhook as processed */
-	markWebhookProcessed(webhookEventId: string, siteId: string): Promise<void>;
+	/** Claim a webhook event ID; false if it was already processed */
+	markWebhookProcessed(webhookEventId: string, siteId: string): Promise<boolean>;
 	/** Query channel stats for dashboard */
 	queryChannelStats(
 		siteId: string,

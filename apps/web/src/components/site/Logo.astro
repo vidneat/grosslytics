@@ -1,0 +1,15 @@
+---
+// Mark: a long "gross" bar above a shorter "net" bar, the product's whole idea.
+interface Props {
+	class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<a href="/" class={`inline-flex items-center gap-2 text-ink ${className}`} aria-label="Grosslytics home">
+	<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+		<rect x="2" y="4.5" width="16" height="4.5" rx="2.25" fill="currentColor" opacity="0.28"></rect>
+		<rect x="2" y="11" width="11" height="4.5" rx="2.25" fill="var(--accent)"></rect>
+	</svg>
+	<span class="text-[17px] font-semibold tracking-[-0.02em]">Grosslytics</span>
+</a>

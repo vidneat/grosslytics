@@ -1,65 +1,54 @@
 ---
-import BaseHead from '../../components/seo/BaseHead.astro';
+import Page from '../../layouts/Page.astro';
 import DashboardIsland from '../../components/dashboard/DashboardIsland.tsx';
-import '../../styles/global.css';
 
 export const prerender = false;
 
 const domain = Astro.params.domain || 'shipfast.io';
-const siteTitle = `${domain} — Verified Net MRR & Attribution`;
-const description = `Live verified revenue, net profit, and attribution analytics for ${domain} powered by Grosslytics.`;
+const badgePath = `/badge/${encodeURIComponent(domain)}.svg`;
 ---
 
-<html lang="en">
-	<head>
-		<BaseHead title={siteTitle} description={description} />
-	</head>
-	<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-emerald-500 selection:text-black">
-		<header class="border-b border-zinc-800/80 sticky top-0 bg-zinc-950/80 backdrop-blur-md z-50">
-			<div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-				<a href="/" class="flex items-center gap-2">
-					<span class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center font-black text-black text-base">G</span>
-					<span class="font-bold text-lg tracking-tight text-white">Grosslytics</span>
-				</a>
-				<div class="flex items-center gap-3">
-					<span class="text-xs text-zinc-500 font-mono hidden sm:inline">Public Verified Dashboard</span>
-					<a
-						href="/app"
-						class="text-xs font-semibold px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400"
-					>
-						Track Your Startup
-					</a>
-				</div>
-			</div>
-		</header>
-
-		<main class="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-24">
-			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+<Page
+	title={`${domain} — Verified Revenue on Grosslytics`}
+	description={`Live revenue, net profit and channel attribution for ${domain}, verified by Grosslytics.`}
+>
+	<main class="bg-band px-5 pt-16 pb-24">
+		<div class="mx-auto max-w-[1100px]">
+			<header class="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
 				<div>
-					<div class="flex items-center gap-2 mb-2">
-						<span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 font-mono bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
-							Verified Revenue
-						</span>
-						<span class="text-xs text-zinc-500 font-mono">100% Stripe Verified</span>
-					</div>
-					<h1 class="text-3xl sm:text-4xl font-black text-white tracking-tight">{domain}</h1>
+					<p class="eyebrow mb-2">Public revenue page</p>
+					<h1 class="text-[clamp(36px,5vw,56px)] font-semibold leading-none tracking-[-0.035em]">{domain}</h1>
+					<p class="mt-3 text-ink-2">Revenue verified directly from the payment provider.</p>
 				</div>
 
-				<!-- Embed Badge Widget Snippet -->
-				<div class="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-					<img src={`/badge/${domain}.svg`} alt="Verified Net Profit" class="h-8" />
+				<div class="flex items-center gap-3 rounded-2xl bg-card p-3 ring-1 ring-line">
+					<img src={badgePath} alt="Verified net profit badge" width="210" height="32" class="h-8 w-auto" />
 					<button
-						class="text-xs font-mono text-zinc-400 hover:text-white px-2 py-1 bg-zinc-800 rounded border border-zinc-700 transition-colors"
-						onclick={`navigator.clipboard.writeText('<img src="https://grosslytics.com/badge/${domain}.svg" alt="Verified Net Profit"/>')`}
+						type="button"
+						class="btn btn-quiet !px-3 !py-1.5 !text-[13px]"
+						data-copy-badge={`<img src="https://grosslytics.com${badgePath}" alt="Verified Net Profit"/>`}
 					>
-						Copy Badge SVG
+						Copy embed
 					</button>
 				</div>
-			</div>
+			</header>
 
-			<!-- Server Island with Deferred Hydration -->
-			<DashboardIsland client:visible />
-		</main>
-	</body>
-</html>
+			<DashboardIsland client:visible site={domain} />
 
+			<p class="mt-6 text-center text-[13px] text-ink-3">
+				Want a page like this? <a href="/#pricing" class="text-accent hover:underline">Track your startup with Grosslytics ›</a>
+			</p>
+		</div>
+	</main>
+
+	<!-- Copy via data attribute: untrusted `domain` never reaches inline JS -->
+	<script>
+		for (const b of document.querySelectorAll<HTMLButtonElement>('[data-copy-badge]')) {
+			b.addEventListener('click', async () => {
+				await navigator.clipboard.writeText(b.dataset.copyBadge || '');
+				b.textContent = 'Copied';
+				setTimeout(() => (b.textContent = 'Copy embed'), 1500);
+			});
+		}
+	</script>
+</Page>

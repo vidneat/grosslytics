@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { D1StorageAdapter } from '@grosslytics/db-d1';
 import { dateRangeToTimestamps } from '@grosslytics/shared/attribution';
@@ -131,27 +132,15 @@ export function createMcpServer(env: Bindings, siteId: string) {
 	return server;
 }
 
-// Streamable HTTP endpoint for MCP clients
+// Streamable HTTP endpoint (stateless, JSON responses) — a fresh server+transport per request
 mcpRoute.all('/', async (c) => {
-	const siteId = c.req.query('site') || 'gl_live_default';
+	const siteId = c.req.query('site');
+	if (!siteId) return c.text('site required', 400);
 	const server = createMcpServer(c.env, siteId);
-
-	if (c.req.method === 'GET') {
-		return c.json({
-			name: 'grosslytics-mcp',
-			version: '0.1.0',
-			siteId,
-			status: 'ready',
-		});
-	}
-
-	try {
-		const body = await c.req.json();
-		// Dispatch JSON-RPC message
-		const res = await (server as any).handleMessage(body);
-		return c.json(res);
-	} catch (err: any) {
-		return c.json({ jsonrpc: '2.0', error: { code: -32603, message: err.message }, id: null }, 500);
-	}
+	const transport = new WebStandardStreamableHTTPServerTransport({
+		sessionIdGenerator: undefined,
+		enableJsonResponse: true,
+	});
+	await server.connect(transport);
+	return transport.handleRequest(c.req.raw);
 });
-

@@ -35,11 +35,6 @@ bindings = [
 tag = "v1"
 new_classes = ["SiteLiveHub"]
 
-# KV Namespace for daily rotating salt & session config
-[[kv_namespaces]]
-binding = "KV"
-id = "" # Fill after `wrangler kv namespace create GROSSLYTICS_KV`
-
 # Environment variables
 [vars]
 ENVIRONMENT = "production"

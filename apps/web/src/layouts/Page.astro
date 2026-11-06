@@ -1,0 +1,92 @@
+---
+import BaseHead from '../components/seo/BaseHead.astro';
+import Logo from '../components/site/Logo.astro';
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+	description: string;
+	noindex?: boolean;
+	/** Compact app chrome (dashboard) instead of the marketing nav and footer */
+	app?: boolean;
+}
+
+const { title, description, noindex = false, app = false } = Astro.props;
+const nav = [
+	{ href: '/#product', label: 'Product' },
+	{ href: '/#pricing', label: 'Pricing' },
+	{ href: '/compare/datafast-alternative/', label: 'Compare' },
+	{ href: '/llms.txt', label: 'Docs' },
+];
+---
+
+<html lang="en">
+	<head>
+		<BaseHead title={title} description={description} noindex={noindex} />
+		<slot name="head" />
+	</head>
+	<body class="min-h-screen bg-canvas text-ink">
+		<header class="sticky top-0 z-50 border-b border-line bg-canvas/80 backdrop-blur-xl backdrop-saturate-150">
+			<div class={`mx-auto flex h-12 items-center justify-between px-5 ${app ? 'max-w-7xl' : 'max-w-[1024px]'}`}>
+				<Logo />
+				{!app && (
+					<nav class="hidden items-center gap-7 text-[13px] text-ink-2 md:flex" aria-label="Main">
+						{nav.map((n) => (
+							<a href={n.href} class="transition-colors hover:text-ink">{n.label}</a>
+						))}
+					</nav>
+				)}
+				<div class="flex items-center gap-4 text-[13px]">
+					{app ? (
+						<span class="text-ink-2">Demo workspace</span>
+					) : (
+						<>
+							<a href="/app/" class="hidden text-ink-2 hover:text-ink sm:inline">Sign in</a>
+							<a href="/#pricing" class="btn btn-primary !px-3.5 !py-1 !text-[13px]">Get started</a>
+						</>
+					)}
+				</div>
+			</div>
+		</header>
+
+		<slot />
+
+		{!app && (
+			<footer class="border-t border-line bg-band">
+				<div class="mx-auto grid max-w-[1024px] gap-8 px-5 py-12 text-[12px] text-ink-2 sm:grid-cols-4">
+					<div class="sm:col-span-1">
+						<Logo class="mb-3" />
+						<p class="max-w-[22ch] leading-relaxed">Revenue analytics that counts what you keep.</p>
+					</div>
+					<div>
+						<h2 class="mb-2 font-semibold text-ink">Product</h2>
+						<ul class="space-y-1.5">
+							<li><a class="hover:underline" href="/#product">Overview</a></li>
+							<li><a class="hover:underline" href="/#pricing">Pricing</a></li>
+							<li><a class="hover:underline" href="/app/">Live demo</a></li>
+						</ul>
+					</div>
+					<div>
+						<h2 class="mb-2 font-semibold text-ink">Compare</h2>
+						<ul class="space-y-1.5">
+							<li><a class="hover:underline" href="/compare/datafast-alternative/">vs DataFast</a></li>
+							<li><a class="hover:underline" href="/compare/databull-alternative/">vs DataBull</a></li>
+							<li><a class="hover:underline" href="/compare/plausible-alternative/">vs Plausible</a></li>
+							<li><a class="hover:underline" href="/compare/ga4-alternative/">vs Google Analytics</a></li>
+						</ul>
+					</div>
+					<div>
+						<h2 class="mb-2 font-semibold text-ink">Developers</h2>
+						<ul class="space-y-1.5">
+							<li><a class="hover:underline" href="/llms.txt">llms.txt</a></li>
+							<li><a class="hover:underline" href="/g.js">Tracker (g.js)</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="mx-auto max-w-[1024px] border-t border-line px-5 py-5 text-[12px] text-ink-3">
+					© {new Date().getFullYear()} Grosslytics. No cookies were set on this page.
+				</div>
+			</footer>
+		)}
+	</body>
+</html>

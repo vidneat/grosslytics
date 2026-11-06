@@ -1,22 +1,38 @@
 # Grosslytics (grosslytics.com)
 
-> Privacy-first, sub-10ms edge-native multi-touch revenue attribution engine for SaaS founders and indie hackers.
+> Revenue analytics for founders: credits each payment to the channel that brought the buyer, and reports revenue after payment-provider fees and ad spend.
 
-## Core Capabilities
-- **True Net Profit Attribution:** Calculates real net profit after gateway fees (Stripe, Razorpay, Polar, Paddle, LemonSqueezy) and ad spend.
-- **Unmasked Direct Traffic:** Distinguishes between In-App mobile WebViews (Instagram, LinkedIn, TikTok, Telegram, X), AI Search engines (ChatGPT, Perplexity, Claude), Deep Links, and actual Bookmarks.
-- **Sub-10ms Global Edge Ingestion:** Cloudflare Workers + Queues batch writes behind D1 SQLite WAL.
-- **Real-Time Live Presence:** Cloudflare Durable Objects with WebSocket Hibernation (<50ms glass-to-glass).
-- **Official Model Context Protocol (MCP) Server:** Connect AI coding assistants (Claude Code, Cursor, Windsurf) directly to live analytics via `npx grosslytics mcp`.
+## What it does
+- Attributes sales from Stripe, Razorpay, Polar, Paddle and Lemon Squeezy (verified webhooks) to marketing channels.
+- Attribution models: first touch, last touch, and linear (50/50 between first and last touch).
+- Net revenue: subtracts an estimated gateway fee per payment, and ad spend per channel.
+- Names traffic that other tools call "Direct": in-app browsers (Instagram, Facebook, LinkedIn, TikTok, Telegram, X), AI search (ChatGPT, Perplexity, Claude, Gemini, Copilot), and shared links vs typed URLs.
+- Live visitors and sales over WebSockets (Cloudflare Durable Objects).
+- Built-in MCP server for Claude Code, Cursor and Windsurf.
 
-## Pricing & Tiers
-- Free / BYO-Cloud Tier: $0/mo (Cloudflare Workers + D1 + Queues free tier)
-- Indie Cloud Tier: $5/mo (Managed edge cloud, up to 100k events/mo)
-- Self-Hosted Lifetime License: $29 one-time (Docker + ClickHouse or D1 1-click installer)
+## Setup
+- Tracker (1.3 KB Brotli, no cookies, stores a random visitor ID in localStorage):
+  `<script defer src="https://grosslytics.com/g.js" data-site-id="YOUR_SITE_ID"></script>`
+- Checkout links to Stripe, Polar, Lemon Squeezy, Paddle and Razorpay are tagged with the visitor ID automatically.
+- Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy}?siteId=YOUR_SITE_ID` (signature required).
+- Self-host on Cloudflare: `npx grosslytics init`.
 
-## Comparison & Alternatives
-- vs. DataFast: Grosslytics deducts payment processing fees, tracks Razorpay/Paddle, provides sub-10ms queries and official MCP server.
-- vs. DataBull: Grosslytics is edge-native, zero-JS static comparisons, pre-aggregated hourly rollups, and verifiable RPV attribution.
-- vs. Plausible: Grosslytics ties traffic directly to Stripe MRR and LTV, not just vanity pageviews.
-- vs. Google Analytics 4: Grosslytics loads in <1.2KB Brotli with no cookie consent banners needed and instant live dashboard.
+## API (requires `Authorization: Bearer <API_TOKEN>`)
+- `GET /api/stats?siteId=…&range=24h|7d|30d|90d&model=first|last|linear`: channel stats.
+- `GET /api/stats/journey/{visitorId}?siteId=…`: one visitor's event timeline.
+- MCP (Streamable HTTP): `/api/mcp?site=YOUR_SITE_ID`. Tools: query_channel_roas, inspect_unmasked_direct, get_ai_search_citations, get_buyer_journeys, compare_buyer_reading_time.
 
+## Pricing
+- Self-host: $0 (your Cloudflare account)
+- Indie Cloud: $5/month
+- Lifetime self-hosted license: $29 one time
+
+## Compared with alternatives (competitor facts from their websites, checked 2026-11-06)
+- DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.3 KB.
+- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.3 KB.
+- Plausible: private web analytics, open source, 1.1 KB tracker, from $9/month; revenue via custom events. Grosslytics adds payment-provider attribution and net revenue.
+- Google Analytics 4: free and deep; gtag.js is 125 KB and uses cookies. Grosslytics is 1.3 KB with no cookies.
+
+## Pages
+- Comparisons: /compare/datafast-alternative/, /compare/databull-alternative/, /compare/plausible-alternative/, /compare/ga4-alternative/
+- Live demo: /app/
