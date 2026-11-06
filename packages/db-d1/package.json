@@ -1,0 +1,29 @@
+{
+  "name": "@grosslytics/db-d1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./adapter": "./src/adapter.ts",
+    "./migrations": "./src/migrations.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.0",
+    "@grosslytics/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.0",
+    "typescript": "^5.7.0",
+    "@cloudflare/workers-types": "^4.20241205.0"
+  }
+}
+

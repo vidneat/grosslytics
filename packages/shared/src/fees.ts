@@ -60,3 +60,4 @@ export function maskEmail(email: string): string {
 	if (!local || !domain) return '***@***';
 	return `${local[0]}***@${domain}`;
 }
+

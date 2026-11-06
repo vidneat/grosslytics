@@ -193,3 +193,4 @@ export interface BuyerJourneyEvent {
 	durationSec: number;
 	scrollDepth: number;
 }
+

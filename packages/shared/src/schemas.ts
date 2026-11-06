@@ -75,3 +75,4 @@ export const GoalEventSchema = v.object({
 	value: v.optional(v.number()),
 	meta: v.optional(v.record(v.string(), v.unknown())),
 });
+
