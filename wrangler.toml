@@ -1,0 +1,53 @@
+name = "grosslytics-edge-api"
+main = "apps/edge-api/src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Smart Placement for optimal latency
+[placement]
+mode = "smart"
+
+# D1 SQLite Database
+[[d1_databases]]
+binding = "DB"
+database_name = "grosslytics-db"
+database_id = "" # Fill after `wrangler d1 create grosslytics-db`
+
+# Cloudflare Queues - Ingestion Pipeline
+[[queues.producers]]
+queue = "grosslytics-ingest"
+binding = "INGEST_QUEUE"
+
+[[queues.consumers]]
+queue = "grosslytics-ingest"
+max_batch_size = 100
+max_batch_timeout = 1
+max_retries = 3
+dead_letter_queue = "grosslytics-ingest-dlq"
+
+# Durable Objects - Real-Time Presence
+[durable_objects]
+bindings = [
+  { name = "SITE_LIVE_HUB", class_name = "SiteLiveHub" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SiteLiveHub"]
+
+# KV Namespace for daily rotating salt & session config
+[[kv_namespaces]]
+binding = "KV"
+id = "" # Fill after `wrangler kv namespace create GROSSLYTICS_KV`
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+TRACKER_ORIGIN = "https://grosslytics.com"
+
+# Dev overrides
+[env.dev]
+name = "grosslytics-edge-api-dev"
+[env.dev.vars]
+ENVIRONMENT = "development"
+TRACKER_ORIGIN = "http://localhost:4321"

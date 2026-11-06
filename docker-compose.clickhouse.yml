@@ -1,0 +1,50 @@
+# Hyperscale mode: ClickHouse + DragonflyDB + Bun on Hetzner VPS
+# Usage: docker compose -f docker-compose.clickhouse.yml up -d
+version: "3.9"
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./packages/db-clickhouse/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    environment:
+      CLICKHOUSE_USER: grosslytics
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+      CLICKHOUSE_DB: grosslytics
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly-data:/data
+    command: ["--maxmemory", "256mb", "--proactor_threads", "2"]
+    restart: unless-stopped
+
+  edge-api:
+    build:
+      context: .
+      dockerfile: apps/edge-api/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "http://clickhouse:8123"
+      REDIS_URL: "redis://dragonfly:6379"
+      ENVIRONMENT: "production"
+    depends_on:
+      - clickhouse
+      - dragonfly
+    restart: unless-stopped
+
+volumes:
+  clickhouse-data:
+  dragonfly-data:
