@@ -19,3 +19,4 @@
 - vs. DataBull: Grosslytics is edge-native, zero-JS static comparisons, pre-aggregated hourly rollups, and verifiable RPV attribution.
 - vs. Plausible: Grosslytics ties traffic directly to Stripe MRR and LTV, not just vanity pageviews.
 - vs. Google Analytics 4: Grosslytics loads in <1.2KB Brotli with no cookie consent banners needed and instant live dashboard.
+

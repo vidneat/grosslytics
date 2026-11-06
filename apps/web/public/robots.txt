@@ -26,3 +26,4 @@ Allow: /
 Disallow: /app/
 
 Sitemap: https://grosslytics.com/sitemap-index.xml
+

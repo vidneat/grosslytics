@@ -72,3 +72,4 @@ statsRoute.get('/live', async (c) => {
 
 	return stub.fetch(c.req.raw);
 });
+

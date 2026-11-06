@@ -19,3 +19,4 @@ export function setAttributionModel(model: DashboardFilterState['attributionMode
 export function setRevenueMode(mode: DashboardFilterState['revenueMode']): void {
 	$dashboardFilters.set({ ...$dashboardFilters.get(), revenueMode: mode });
 }
+

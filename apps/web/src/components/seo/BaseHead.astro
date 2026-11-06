@@ -41,3 +41,4 @@ const resolvedOgImage = ogImage || new URL(`/og${cleanPath === '/' ? '/index' : 
 {schema.map((item) => (
 	<script type="application/ld+json" set:html={JSON.stringify(item)} />
 ))}
+

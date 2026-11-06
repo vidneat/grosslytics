@@ -154,3 +154,4 @@ mcpRoute.all('/', async (c) => {
 		return c.json({ jsonrpc: '2.0', error: { code: -32603, message: err.message }, id: null }, 500);
 	}
 });
+

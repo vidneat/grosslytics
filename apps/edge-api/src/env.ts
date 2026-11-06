@@ -12,3 +12,4 @@ export interface Bindings {
 	POLAR_WEBHOOK_SECRET?: string;
 	PADDLE_WEBHOOK_SECRET?: string;
 }
+
