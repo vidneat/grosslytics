@@ -845,6 +845,8 @@ test('lifetime: a paid one-time checkout mints a license, the buyer claims it, a
 	expect(await verifyPassword('correct horse', cliHashPassword('correct horse'))).toBe(true);
 	expect(await verifyPassword('wrong', cliHashPassword('correct horse'))).toBe(false);
 	expect(apiToml({ host: 'analytics.acme.io', zone: 'acme.io' }, 'db-1')).toContain('pattern = "analytics.acme.io/api/*", zone_name = "acme.io"');
+	expect(apiToml({ host: 'a.io', zone: 'a.io' }, 'db-1')).not.toContain('r2_buckets');
+	expect(apiToml({ host: 'a.io', zone: 'a.io', releasesBucket: 'rel' }, 'db-1')).toContain('[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "rel"');
 	expect([isHost('analytics.acme.io'), isHost('acme'), isHost('a.b/c')]).toEqual([true, false, false]);
 });
 

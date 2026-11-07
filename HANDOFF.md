@@ -380,7 +380,9 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - Deployed 2026-11-07 to grosslytics.com from branch `feat/dodo-billing` (commit 624d478, not pushed, not merged) with `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`; version `2026-11-07-624d478`. Migration 011 ran on the live DB (it had no legacy secrets).
   - Live secrets on `grosslytics-edge-api`: `API_TOKEN`, `DODO_BILLING_WEBHOOK_SECRET`, `LIFETIME_PRODUCT_ID` (a secret, not a `[vars]` entry: production deploys use the generated `grosslytics-install/release/api/wrangler.toml`, whose `[vars]` come from `apiToml()` and would drop a root `wrangler.toml` var).
   - Checked live: `/`, `/app`, `/g.js`, `/api/auth/status` 200; homepage shows $5.99; unsigned `POST /api/billing/dodo` → 401.
-  - **Still blocking sales:** `LICENSE_SECRET` is not set, so `/api/license/claim` answers 503 and a Dodo Lifetime payment webhook gets 503 (Dodo retries up to 8 times). No `RELEASES` R2 bucket, so a key can't download the installer yet. `CLOUD` is off, so no one can sign up for Indie Cloud and a subscription has no account to switch on.
+  - `LICENSE_SECRET` set on the live API 2026-11-07; a copy is in `.secrets/production-license-secret.txt` (mode 600, never print it, never change it or every key stops working). Live `/api/license/claim` now answers 404 "not confirmed yet" for unknown payments instead of 503.
+  - **Still blocking Lifetime downloads:** R2 is not enabled on the grosslytics.com Cloudflare account (API error 10042); the user must enable it in the dashboard (R2 → accept terms/payment method). Then: `bunx wrangler r2 bucket create grosslytics-releases`, add `"releasesBucket": "grosslytics-releases"` to `grosslytics-install/state.json` (new optional field; `apiToml()` then adds the `RELEASES` binding), `bun scripts/release.ts --upload`, and `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`.
+  - `CLOUD` is off, so no one can sign up for Indie Cloud and a subscription has no account to switch on.
   - The Dodo webhook endpoint in Dodo's dashboard: unknown whether the user has added it.
 
 ## Brand icon files (2026-11-07)

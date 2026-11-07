@@ -58,7 +58,7 @@ program
 
 		const bundle = opts.bundle && resolve(opts.bundle);
 		const version = bundle ? await step('Unpacking your build', () => unpack(bundle)) : await step('Downloading the latest release', () => download(opts.from, license));
-		saveState({ license, host, zone, version, passwordSet: prev.passwordSet });
+		saveState({ license, host, zone, version, passwordSet: prev.passwordSet, releasesBucket: prev.releasesBucket });
 
 		try {
 			wrangler(['whoami'], { quiet: true });
@@ -94,7 +94,7 @@ program
 
 		const api = join(DIR, 'release', 'api');
 		const web = join(DIR, 'release', 'web');
-		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone }, dbId));
+		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone, releasesBucket: prev.releasesBucket }, dbId));
 		writeFileSync(join(web, 'wrangler.toml'), webToml({ host }));
 		noindex(host, join(web, 'dist'));
 		await step('Deploying the API', () => wrangler(['deploy'], { cwd: api, quiet: true }));
@@ -107,7 +107,7 @@ program
 			// The hash is hex and $-separated, so it is safe inside the SQL literal
 			const sql = `INSERT INTO owner_auth (id, password_hash) VALUES (1, '${hashPassword(password)}') ON CONFLICT (id) DO UPDATE SET password_hash = excluded.password_hash, failed_count = 0, locked_until = 0, updated_at = unixepoch();`;
 			await step('Setting your dashboard password', () => wrangler(['d1', 'execute', 'grosslytics-db', '--remote', '--yes', '--command', sql], { quiet: true }));
-			saveState({ license, host, zone, version, passwordSet: true });
+			saveState({ license, host, zone, version, passwordSet: true, releasesBucket: prev.releasesBucket });
 		}
 
 		note(
