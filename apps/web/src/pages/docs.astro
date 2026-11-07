@@ -149,7 +149,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="self-host" class={h2}>7. Self-hosting</h2>
 				<p>Grosslytics runs entirely in your own Cloudflare account: Workers, D1, Queues and a Durable Object. The free Workers plan is enough for most sites.</p>
-				<p>From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
+				<p>You need Bun, Node.js 18 or newer, and a domain on Cloudflare. From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
 				<pre class={pre}><code>{`git clone https://github.com/vidneat/grosslytics.git
 cd grosslytics && bun install
 bun run setup`}</code></pre>

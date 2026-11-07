@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { intro, outro, text, spinner, note, isCancel, cancel } from '@clack/prompts';
+import { intro, outro, text, password as secret, spinner, note, isCancel, cancel } from '@clack/prompts';
 import pc from 'picocolors';
 import { Command } from 'commander';
 import { randomBytes } from 'node:crypto';
@@ -27,8 +27,9 @@ program
 		intro(pc.bgGreen(pc.black(' Grosslytics installer ')));
 		mkdirSync(DIR, { recursive: true });
 		const prev = loadState();
-		const ask = async (message: string, initial: string | undefined, validate: (v: string) => string | undefined, placeholder?: string) => {
-			const v = await text({ message, initialValue: initial, placeholder, validate: (x) => validate(String(x ?? '').trim()) });
+		const ask = async (message: string, initial: string | undefined, validate: (v: string) => string | undefined, placeholder?: string, hidden = false) => {
+			const check = (x: unknown) => validate(String(x ?? '').trim());
+			const v = hidden ? await secret({ message, validate: check }) : await text({ message, initialValue: initial, placeholder, validate: check });
 			if (isCancel(v)) {
 				cancel('Cancelled. Nothing was changed.');
 				process.exit(0);
@@ -39,7 +40,7 @@ program
 		const license = opts.bundle ? '' : process.env.GROSSLYTICS_LICENSE || prev.license || (await ask('Your license key', undefined, (v) => (v.startsWith('gl_lic_') ? undefined : 'Paste the gl_lic_… key from your purchase page'), 'gl_lic_…'));
 		const host = prev.host || (await ask('Where should Grosslytics live? A hostname on a domain you have on Cloudflare', undefined, (v) => (isHost(v.toLowerCase()) ? undefined : 'A hostname like analytics.yourstartup.com'), 'analytics.yourstartup.com')).toLowerCase();
 		const zone = prev.zone || (await ask('Its Cloudflare zone (the root domain)', guessZone(host), (v) => (host === v || host.endsWith(`.${v}`) ? undefined : `${host} must be inside this domain`))).toLowerCase();
-		const password = prev.passwordSet ? '' : await ask('Choose your dashboard password', undefined, (v) => (v.length >= 10 ? undefined : 'At least 10 characters'));
+		const password = prev.passwordSet ? '' : await ask('Choose your dashboard password', undefined, (v) => (v.length >= 10 ? undefined : 'At least 10 characters'), undefined, true);
 
 		const s = spinner();
 		const step = async <T>(label: string, fn: () => T | Promise<T>): Promise<T> => {

@@ -21,7 +21,7 @@
     "db:migrate:local": "bun scripts/db.ts migrate",
     "db:seed:local": "bun scripts/db.ts seed",
     "db:migrate:remote": "bun scripts/db.ts migrate-remote",
-    "setup": "bun scripts/release.ts --keep-env && bun packages/cli/src/index.ts install --bundle .release/grosslytics.tgz"
+    "setup": "bun scripts/release.ts --keep-env && bun run --cwd packages/cli build && node packages/cli/dist/index.js install --bundle .release/grosslytics.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
