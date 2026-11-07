@@ -23,5 +23,7 @@ export interface Bindings {
 	LIFETIME_PAYMENT_LINK_ID?: string;
 	/** R2 bucket holding the installer's release bundle, `latest.tgz` (scripts/release.ts) */
 	RELEASES?: R2Bucket;
+	/** Workers Rate Limiting binding for /api/waitlist */
+	WAITLIST_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> };
 }
 

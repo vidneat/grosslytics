@@ -1,7 +1,7 @@
 import type { PAYMENT_GATEWAYS, SOURCE_CATEGORIES } from './constants.js';
 
 /** Core event types */
-export type EventType = 'pageview' | 'leave' | 'goal' | 'ai_crawl';
+export type EventType = 'pageview' | 'leave' | 'goal' | 'ai_crawl' | 'click';
 
 /** Payment gateway identifiers */
 export type PaymentGateway = (typeof PAYMENT_GATEWAYS)[number];
@@ -173,6 +173,8 @@ export interface PaymentRecord {
 	timeToConvertHours: number;
 	buyerReadSec: number;
 	buyerScrollPct: number;
+	/** Unix seconds; omitted means now. Set by history imports. */
+	createdAt?: number;
 }
 
 /** Buyer journey event for the journey inspector */

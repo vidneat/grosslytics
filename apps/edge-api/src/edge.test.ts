@@ -8,7 +8,7 @@ import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
 import { shareRoute } from './routes/share.js';
 import { waitlistRoute } from './routes/waitlist.js';
-import { collectRoute, originAllowed } from './routes/collect.js';
+import { collectRoute, crawlRoute, originAllowed } from './routes/collect.js';
 import { authRoute } from './routes/auth.js';
 import { billingRoute } from './routes/billing.js';
 import { CLOUD_EVENT_CAP, countUsage, usageMonth } from './cloud.js';
@@ -75,6 +75,7 @@ function makeApp(extra: Record<string, unknown> = {}) {
 	app.route('/api/billing', billingRoute);
 	app.route('/api/license', licenseRoute);
 	app.route('/api/event', collectRoute);
+	app.route('/api/crawl', crawlRoute);
 	const env = { DB: d1, STRIPE_WEBHOOK_SECRET: SECRET, API_TOKEN: 'tok', ...extra };
 	const fetch = async (url: string, init?: RequestInit) => {
 		const waits: Promise<unknown>[] = [];
@@ -851,4 +852,146 @@ test('installer: self-hosted copies are noindex, grosslytics.com is not', async 
 	const ours = mkdtempSync(`${tmpdir()}/gl-noindex-`);
 	noindex('grosslytics.com', ours);
 	expect(existsSync(`${ours}/_headers`)).toBe(false);
+});
+
+const b64hmac = async (secret: string, msg: string) => {
+	const k = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+	return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(msg)))));
+};
+const bearer = { authorization: 'Bearer tok', 'content-type': 'application/json' };
+const payment = (sqlite: Database, id: string) => sqlite.query('SELECT gross_amount_cents g, fee_amount_cents f, net_amount_cents n, visitor_id v, status, created_at FROM payments WHERE payment_id = ?').get(id) as any;
+
+test('new gateways: cashfree, revenuecat and gumroad verify, record, and refuse bad secrets', async () => {
+	const { fetch, sqlite } = makeApp();
+	sqlite.exec("UPDATE sites SET currency = 'INR' WHERE site_id = 's1'");
+	sqlite.exec("INSERT INTO site_secrets VALUES ('s1', 'cashfree', 'cf_secret_123'), ('s1', 'revenuecat', 'rc_auth_header'), ('s1', 'gumroad', 'gum_key_12345')");
+
+	const cf = JSON.stringify({ type: 'PAYMENT_SUCCESS_WEBHOOK', data: { order: { order_id: 'o1', order_amount: 499, order_tags: { visitor_id: 'v9' } }, payment: { cf_payment_id: 77, payment_status: 'SUCCESS', payment_amount: 499, payment_currency: 'INR' }, customer_details: { customer_email: 'a@b.in' } } });
+	const ts = String(Date.now());
+	const cfPost = async (sig: string) => fetch('/api/webhooks/cashfree?siteId=s1', { method: 'POST', body: cf, headers: { 'x-webhook-timestamp': ts, 'x-webhook-signature': sig } });
+	expect((await cfPost('bad')).status).toBe(401);
+	expect((await cfPost(await b64hmac('cf_secret_123', ts + cf))).status).toBe(200);
+	expect(payment(sqlite, 'cf_o1')).toMatchObject({ g: 49900, f: 973, n: 48927, v: 'v9' }); // 1.95%
+
+	const rc = JSON.stringify({ event: { id: 'rce1', type: 'INITIAL_PURCHASE', transaction_id: 't1', price_in_purchased_currency: 100, currency: 'INR', commission_percentage: 0.15, tax_percentage: 0.1, product_id: 'pro_monthly', subscriber_attributes: { visitor_id: { value: 'v9' } } } });
+	expect((await fetch('/api/webhooks/revenuecat?siteId=s1', { method: 'POST', body: rc, headers: { authorization: 'nope' } })).status).toBe(401);
+	expect((await fetch('/api/webhooks/revenuecat?siteId=s1', { method: 'POST', body: rc, headers: { authorization: 'Bearer rc_auth_header' } })).status).toBe(200);
+	// ₹100 paid: ₹10 tax is not revenue, ₹15 store commission is the fee
+	expect(payment(sqlite, 'rc_t1')).toMatchObject({ g: 9000, f: 1500, n: 7500 });
+
+	const gum = new URLSearchParams({ sale_id: 'g1', price: '2900', currency: 'inr', email: 'x@y.com', product_name: 'Ebook', 'url_params[visitor_id]': 'v9', refunded: 'false' }).toString();
+	const form = { 'content-type': 'application/x-www-form-urlencoded' };
+	expect((await fetch('/api/webhooks/gumroad?siteId=s1&key=wrong', { method: 'POST', body: gum, headers: form })).status).toBe(401);
+	expect((await fetch('/api/webhooks/gumroad?siteId=s1', { method: 'POST', body: gum, headers: form })).status).toBe(401);
+	expect((await fetch('/api/webhooks/gumroad?siteId=s1&key=gum_key_12345', { method: 'POST', body: gum, headers: form })).status).toBe(200);
+	expect(payment(sqlite, 'gum_g1')).toMatchObject({ g: 2900, f: 340, v: 'v9', status: 'succeeded' });
+	const refund = gum.replace('refunded=false', 'refunded=true');
+	expect((await fetch('/api/webhooks/gumroad?siteId=s1&key=gum_key_12345', { method: 'POST', body: refund, headers: form })).status).toBe(200);
+	expect(payment(sqlite, 'gum_g1').status).toBe('refunded');
+});
+
+test('paypal: verified through PayPal’s API, real fee used; failed verification rejected', async () => {
+	const { fetch, sqlite } = makeApp();
+	sqlite.exec("INSERT INTO site_secrets VALUES ('s1', 'paypal', 'cid:csecret:WH-1:sandbox')");
+	const realFetch = globalThis.fetch;
+	let verdict = 'SUCCESS';
+	const calls: string[] = [];
+	globalThis.fetch = (async (url: string, init?: RequestInit) => {
+		calls.push(url);
+		if (url.endsWith('/v1/oauth2/token')) return Response.json({ access_token: 'at' });
+		expect(JSON.parse(String(init?.body)).webhook_id).toBe('WH-1');
+		return Response.json({ verification_status: verdict });
+	}) as any;
+	try {
+		const body = JSON.stringify({ id: 'WH-EVT-1', event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'cap1', status: 'COMPLETED', amount: { value: '20.00', currency_code: 'USD' }, custom_id: 'v7', seller_receivable_breakdown: { paypal_fee: { value: '1.19' } } } });
+		expect((await fetch('/api/webhooks/paypal?siteId=s1', { method: 'POST', body })).status).toBe(200);
+		expect(calls[0]).toStartWith('https://api-m.sandbox.paypal.com');
+		expect(payment(sqlite, 'pp_cap1')).toMatchObject({ g: 2000, f: 119, n: 1881, v: 'v7' });
+		verdict = 'FAILURE';
+		expect((await fetch('/api/webhooks/paypal?siteId=s1', { method: 'POST', body: body.replace('WH-EVT-1', 'WH-EVT-2') })).status).toBe(401);
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+});
+
+test('stripe: sales tax is not revenue; datafast_visitor_id metadata is read', async () => {
+	const { fetch, sqlite } = makeApp();
+	const body = JSON.stringify({ id: 'evt_tax', type: 'checkout.session.completed', data: { object: { id: 'cs_tax', payment_status: 'paid', payment_intent: 'pi_tax', amount_total: 1200, currency: 'usd', total_details: { amount_tax: 200 }, metadata: { datafast_visitor_id: 'vdf' } } } });
+	expect((await fetch('/api/webhooks/stripe?siteId=s1', { method: 'POST', body, headers: await stripeHeaders(body) })).status).toBe(200);
+	// fee on the full $12 charge (65¢), revenue $10 without tax
+	expect(payment(sqlite, 'pi_tax')).toMatchObject({ g: 1000, f: 65, n: 935, v: 'vdf' });
+});
+
+test('stripe import: pages through sessions then invoices, keeps real dates, skips repeats and other currencies', async () => {
+	const { fetch, sqlite } = makeApp();
+	const realFetch = globalThis.fetch;
+	const urls: string[] = [];
+	globalThis.fetch = (async (url: string, init?: RequestInit) => {
+		urls.push(url);
+		expect((init?.headers as any).authorization).toBe('Bearer rk_test_abc');
+		if (url.includes('checkout/sessions') && !url.includes('starting_after'))
+			return Response.json({ has_more: true, data: [{ id: 'cs_1', payment_status: 'paid', payment_intent: 'pi_1', amount_total: 900, currency: 'usd', created: 1700000000 }] });
+		if (url.includes('checkout/sessions')) return Response.json({ has_more: false, data: [{ id: 'cs_2', payment_status: 'paid', payment_intent: 'pi_2', amount_total: 900, currency: 'eur', created: 1700000100 }] });
+		return Response.json({ has_more: false, data: [{ id: 'in_1', amount_paid: 500, currency: 'usd', billing_reason: 'subscription_cycle', status_transitions: { paid_at: 1700000200 } }] });
+	}) as any;
+	try {
+		const run = (b: object) => fetch('/api/stats/sites/s1/import/stripe', { method: 'POST', headers: bearer, body: JSON.stringify({ key: 'rk_test_abc', ...b }) }).then((r) => r.json() as any);
+		expect((await fetch('/api/stats/sites/s1/import/stripe', { method: 'POST', headers: bearer, body: '{"key":"pk_live_x"}' })).status).toBe(400);
+		let r = await run({});
+		expect(r).toEqual({ imported: 1, skipped: 0, next: { kind: 'sessions', after: 'cs_1' } });
+		r = await run(r.next);
+		expect(r).toEqual({ imported: 0, skipped: 1, next: { kind: 'invoices' } }); // EUR on a USD site
+		r = await run(r.next);
+		expect(r).toEqual({ imported: 1, skipped: 0, next: null });
+		expect(payment(sqlite, 'pi_1').created_at).toBe(1700000000);
+		expect(payment(sqlite, 'in_1').created_at).toBe(1700000200);
+		expect((await run({})).imported).toBe(0); // running it again adds nothing
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+});
+
+test('ai crawlers: server reports counted per bot and page, never as visitors', async () => {
+	const { fetch, sqlite } = makeApp();
+	const crawl = (body: object) => fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+	const ua = 'Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)';
+	expect((await crawl({ sid: 's1', path: '/pricing?x=1', ua })).status).toBe(202);
+	expect((await crawl({ sid: 's1', path: '/pricing', ua })).status).toBe(202);
+	expect((await crawl({ sid: 's1', path: '/', ua: 'ClaudeBot/1.0' })).status).toBe(202);
+	expect((await crawl({ sid: 's1', path: '/', ua: 'Mozilla/5.0 Chrome' })).status).toBe(202); // a person: ignored
+	expect((await crawl({ sid: 'nope', path: '/', ua })).status).toBe(404);
+	expect(sqlite.query('SELECT COUNT(*) n FROM visitors').get()).toEqual({ n: 0 });
+	const r = (await (await fetch('/api/stats/ai-crawls?siteId=s1&range=24h', { headers: bearer })).json()) as any;
+	expect(r.bots).toEqual([{ k: 'GPTBot', hits: 2 }, { k: 'ClaudeBot', hits: 1 }]);
+	expect(r.pages[0]).toEqual({ k: '/pricing', hits: 2 });
+});
+
+test('clicks, bulk ad spend and the waitlist list (owner only, honeypot, rate limit)', async () => {
+	let allow = true;
+	const { fetch, sqlite } = makeApp({ WAITLIST_LIMITER: { limit: async () => ({ success: allow }) } });
+	const now = Math.floor(Date.now() / 1000);
+	const ins = sqlite.prepare("INSERT INTO events (site_id, visitor_id, session_id, event_type, event_name, source, meta_json, created_at) VALUES ('s1', ?, 'x', 'click', '/pricing', 'x', ?, ?)");
+	const meta = (el: string, dead = 0, rage = 0) => JSON.stringify({ custom: JSON.stringify({ el, dead, rage }) });
+	ins.run('vb', meta('Pro plan'), now);
+	ins.run('vo', meta('Pro plan', 0, 1), now);
+	ins.run('vo', meta('Price table', 1), now);
+	sqlite.exec(`INSERT INTO payments (payment_id, site_id, gateway, visitor_id, gross_amount_cents, net_amount_cents, status) VALUES ('p1', 's1', 'stripe', 'vb', 900, 800, 'succeeded')`);
+	const clicks = ((await (await fetch('/api/stats/clicks?siteId=s1&range=24h', { headers: bearer })).json()) as any).clicks;
+	expect(clicks[0]).toMatchObject({ page: '/pricing', el: 'Pro plan', clicks: 2, visitors: 2, buyers: 1, rage: 1, dead: 0 });
+	expect(clicks[1]).toMatchObject({ el: 'Price table', dead: 1, buyers: 0 });
+
+	const bulk = (rows: unknown) => fetch('/api/stats/ad-spend/bulk', { method: 'POST', headers: bearer, body: JSON.stringify({ siteId: 's1', rows }) });
+	expect((await bulk([{ source: 'twitter', date: '2026-11-01', amountCents: 4250 }, { source: 'twitter', date: '2026-11-02', amountCents: 100 }])).status).toBe(200);
+	expect((await bulk([{ source: 'twitter', date: '2026-11-01', amountCents: 50 }])).status).toBe(200); // replaces
+	expect((await bulk([{ source: 'x', date: 'yesterday', amountCents: 1 }])).status).toBe(400);
+	expect(sqlite.query("SELECT spend_date d, amount_cents a FROM ad_spend ORDER BY d").all()).toEqual([{ d: '2026-11-01', a: 50 }, { d: '2026-11-02', a: 100 }]);
+
+	const join = (body: object) => fetch('/api/waitlist', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+	expect((await join({ email: 'bot@spam.io', plan: 'cloud', website: 'http://spam' })).status).toBe(201);
+	expect((await join({ email: 'maya@example.com', plan: 'cloud' })).status).toBe(201);
+	allow = false;
+	expect((await join({ email: 'late@example.com', plan: 'cloud' })).status).toBe(429);
+	const list = ((await (await fetch('/api/stats/waitlist', { headers: bearer })).json()) as any).signups;
+	expect(list.map((x: any) => x.email)).toEqual(['maya@example.com']); // honeypot and rate-limited ones not stored
+	expect((await fetch('/api/stats/waitlist')).status).toBe(401);
 });

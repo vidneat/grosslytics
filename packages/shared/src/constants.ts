@@ -30,6 +30,9 @@ export const AI_CRAWLER_AGENTS = [
 	'anthropic-ai',
 	'Google-Extended',
 	'Bytespider',
+	'Applebot-Extended',
+	'meta-externalagent',
+	'CCBot',
 ] as const;
 
 /** Source categories for analytics grouping */
@@ -47,7 +50,7 @@ export const SOURCE_CATEGORIES = {
 } as const;
 
 /** Payment gateway identifiers */
-export const PAYMENT_GATEWAYS = ['stripe', 'razorpay', 'polar', 'paddle', 'lemonsqueezy'] as const;
+export const PAYMENT_GATEWAYS = ['stripe', 'razorpay', 'polar', 'paddle', 'lemonsqueezy', 'gumroad', 'paypal', 'cashfree', 'revenuecat'] as const;
 
 /** Default tracker script filename */
 export const TRACKER_FILENAME = 'g.js';

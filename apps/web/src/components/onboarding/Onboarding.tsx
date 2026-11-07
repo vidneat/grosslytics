@@ -98,7 +98,7 @@ function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
 						e.preventDefault();
 						setState('busy');
 						try {
-							const res = await fetch(`${DEFAULT_API}/api/waitlist`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, plan }) });
+							const res = await fetch(`${DEFAULT_API}/api/waitlist`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, plan, website: (e.currentTarget.elements.namedItem('website') as HTMLInputElement | null)?.value }) });
 							setState(res.ok ? 'done' : 'error');
 						} catch {
 							setState('error');
@@ -115,10 +115,13 @@ function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
 						onChange={(e) => setEmail(e.target.value)}
 						className="w-full rounded-xl bg-band px-3.5 py-2.5 text-[15px] ring-1 ring-line outline-none focus:ring-2 focus:ring-accent"
 					/>
+					{/* Honeypot: hidden from people and screen readers; bots that fill every field are ignored */}
+					<input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
 					<button className="btn btn-primary shrink-0" disabled={state === 'busy'}>{state === 'busy' ? 'Joining…' : 'Join the waitlist'}</button>
 				</form>
 			)}
-			{state === 'error' && <p className="mt-2 text-[13px] text-down" role="alert">That didn't go through. Check the email and try again.</p>}
+			{state !== 'done' && <p className="mt-2 text-[12px] text-ink-3">We use your email only to tell you when it opens. <a className="hover:underline" href="/privacy/">Privacy policy</a></p>}
+			{state === 'error' && <p className="mt-2 text-[13px] text-down" role="alert">That didn't go through. Check the email, wait a minute, and try again.</p>}
 		</div>
 	);
 }

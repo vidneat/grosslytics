@@ -21,6 +21,7 @@ const PAYMENT_FIELDS = {
 	time_to_convert_hours: 'timeToConvertHours',
 	buyer_read_sec: 'buyerReadSec',
 	buyer_scroll_pct: 'buyerScrollPct',
+	created_at: 'createdAt',
 } as const satisfies Record<string, keyof PaymentRecord>;
 
 /** A receipt is committed with the payment/refund, never before it. */
@@ -58,7 +59,7 @@ export async function applyPaymentEvent(
 		statements.push(
 			`INSERT INTO payments (${Object.keys(PAYMENT_FIELDS).join(', ')})
 			 SELECT ${Object.values(PAYMENT_FIELDS)
-					.map((key) => `json_extract(?1, '$.payment.${key}')`)
+					.map((key) => key === 'createdAt' ? `COALESCE(json_extract(?1, '$.payment.createdAt'), unixepoch())` : `json_extract(?1, '$.payment.${key}')`)
 					.join(', ')} WHERE ${fresh}
 			 ON CONFLICT (payment_id) DO UPDATE SET
 			 visitor_id = COALESCE(payments.visitor_id, excluded.visitor_id),

@@ -124,7 +124,8 @@ if (!w.__gl && !n.webdriver) {
 				const V = 'visitor_id';
 				const p = s.includes('stripe') ? 'client_reference_id' :
 					s.includes('polar') ? 'reference_id' :
-					s.includes('lemons') ? `checkout[custom][${V}]` : 0;
+					s.includes('lemons') ? `checkout[custom][${V}]` :
+					s.includes('gum') ? V : 0;
 				if (p && !u.searchParams.has(p)) {
 					u.searchParams.set(p, vid);
 					a.href = u.href;
@@ -138,15 +139,19 @@ if (!w.__gl && !n.webdriver) {
 		if (w.MutationObserver) new MutationObserver(scan).observe(d.body || d.documentElement, { childList: true, subtree: true });
 
 		on(d, 'click', (e: any) => {
-			const el = e.target?.closest?.('[data-gl-goal],[data-fast-goal],[data-goal]');
+			// Goal attributes from Grosslytics, DataFast, Umami and Plausible (class="plausible-event-name=Signup") all work unchanged
+			const el = e.target?.closest?.('[data-gl-goal],[data-fast-goal],[data-goal],[data-umami-event],[class*=plausible-event-name]');
 			if (el) {
 				const ds = el.dataset;
-				send('goal', ds.glGoal || ds.fastGoal || ds.goal);
+				const pl = /plausible-event-name=(\S+)/.exec(el.className);
+				send('goal', ds.glGoal || ds.fastGoal || ds.goal || ds.umamiEvent || pl![1]!.replace(/\+/g, ' '));
 			}
 		}, { passive: 1 });
 
-		const fn = (ev: string, m?: any) => ev === 'pageview' ? send('pageview', pth) : send('goal', ev, 0, m && JSON.stringify(m));
+		// No name, or 'pageview', is a page view (umami.track() with no arguments)
+		const fn = (ev?: string, m?: any) => !ev || ev === 'pageview' ? send('pageview', pth) : send('goal', ev, 0, m && JSON.stringify(m));
 		w.grosslytics = w.datafast = w.databull = w.plausible = w.grosslytics || fn;
+		w.umami = w.umami || { track: fn };
 
 		send('pageview', pth);
 		on(w, 'pagehide', leave);

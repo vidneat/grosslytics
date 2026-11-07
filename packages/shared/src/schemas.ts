@@ -5,7 +5,7 @@ export const BeaconSchema = v.object({
 	sid: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 	vid: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 	ses: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-	t: v.picklist(['pageview', 'leave', 'goal', 'ai_crawl']),
+	t: v.picklist(['pageview', 'leave', 'goal', 'ai_crawl', 'click']),
 	n: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
 	src: v.pipe(v.string(), v.maxLength(512)),
 	cat: v.pipe(v.string(), v.maxLength(128)),

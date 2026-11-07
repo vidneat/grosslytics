@@ -106,7 +106,7 @@ export function useRemoteDashboard(
 }
 
 interface JourneyEvent {
-	eventType: 'pageview' | 'leave' | 'goal' | 'ai_crawl';
+	eventType: 'pageview' | 'leave' | 'goal' | 'ai_crawl' | 'click';
 	eventName: string;
 	source: string;
 	timestamp: number;
@@ -123,7 +123,7 @@ export async function fetchJourney(conn: Connection, sale: DashSale): Promise<Jo
 	const { events } = await apiFetch<{ events: JourneyEvent[] }>(conn, `/api/stats/journey/${encodeURIComponent(sale.visitorId)}?siteId=${encodeURIComponent(conn.siteId)}`);
 	let lastSource = '';
 	const steps: JourneyStep[] = events
-		.filter((e) => e.timestamp <= sale.at + 60)
+		.filter((e) => e.timestamp <= sale.at + 60 && e.eventType !== 'click')
 		.map((e) => {
 			const newSource = e.source !== lastSource;
 			lastSource = e.source;

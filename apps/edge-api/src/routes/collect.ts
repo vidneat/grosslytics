@@ -98,6 +98,38 @@ async function siteGate(env: Bindings, siteId: string): Promise<SiteGate> {
 
 const MAX_BODY_BYTES = 8 * 1024;
 
+const crawlerOf = (ua: string) => AI_CRAWLER_AGENTS.find((agent) => ua.includes(agent));
+
+/** One more hit for this bot on this page today (UTC). Kept apart from events so bots never count as visitors. */
+export function recordCrawl(db: D1Database, siteId: string, bot: string, path: string) {
+	return db
+		.prepare("INSERT INTO ai_crawls (site_id, day, bot, path, hits) VALUES (?, date('now'), ?, ?, 1) ON CONFLICT (site_id, day, bot, path) DO UPDATE SET hits = hits + 1")
+		.bind(siteId, bot, path.split(/[?#]/)[0]!.slice(0, 300) || '/')
+		.run();
+}
+
+/**
+ * POST /api/crawl {sid, path, ua}: the owner's server reports an AI crawler's page request.
+ * Crawlers don't run JavaScript, so g.js never sees them; a few lines of middleware on the site do (see /docs).
+ * Like page views, these counts are unauthenticated: anyone who knows the site ID could inflate them.
+ */
+export const crawlRoute = new Hono<{ Bindings: Bindings }>();
+const CrawlBody = v.object({
+	sid: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+	path: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
+	ua: v.pipe(v.string(), v.maxLength(1024)),
+});
+crawlRoute.post('/', async (c) => {
+	const parsed = v.safeParse(CrawlBody, await c.req.json().catch(() => null));
+	if (!parsed.success) return c.text('Bad Request', 400);
+	const bot = crawlerOf(parsed.output.ua);
+	if (!bot) return c.text('Accepted', 202); // not an AI crawler: nothing to count
+	const { domain, open } = await siteGate(c.env, parsed.output.sid);
+	if (!domain) return c.text('Unknown site', 404);
+	if (open) c.executionCtx.waitUntil(recordCrawl(c.env.DB, parsed.output.sid, bot, parsed.output.path).then(() => {}, () => {}));
+	return c.text('Accepted', 202);
+});
+
 collectRoute.post('/', async (c) => {
 	const startTime = Date.now();
 	let rawBody: unknown;
@@ -123,19 +155,20 @@ collectRoute.post('/', async (c) => {
 	const cf = (req as any).cf || {};
 	const accepted = () => c.text('Accepted', 202, { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
 
-	// 1. AI Crawler detection, then drop every other bot so visitor counts and attribution stay human
-	let eventType = beacon.t;
-	if (AI_CRAWLER_AGENTS.some((agent) => ua.includes(agent))) {
-		eventType = 'ai_crawl';
-	} else if (isBotRequest(ua, cf)) {
-		return accepted();
-	}
+	// 1. AI crawlers that do run JavaScript are counted as crawls, never as visitors; every other bot is dropped so counts stay human
+	const eventType = beacon.t;
+	const bot = crawlerOf(ua);
+	if (!bot && isBotRequest(ua, cf)) return accepted();
 
 	const { domain, open } = await siteGate(c.env, beacon.sid);
 	if (!domain) return c.text('Unknown site', 404);
 	if (!originAllowed(req.headers.get('origin') || '', domain)) return c.text('Forbidden', 403);
 	// Trial over or plan cap reached: the visitor's page must not notice, so this answers like a recorded event
 	if (!open) return accepted();
+	if (bot) {
+		if (eventType === 'pageview') c.executionCtx.waitUntil(recordCrawl(c.env.DB, beacon.sid, bot, beacon.n).then(() => {}, () => {}));
+		return accepted();
+	}
 
 	// 2. Privacy-preserving visitor ID fallback if vid missing or empty
 	let vid = beacon.vid;

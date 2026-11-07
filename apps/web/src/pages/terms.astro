@@ -1,0 +1,51 @@
+---
+import Page from '../layouts/Page.astro';
+
+const UPDATED = '7 November 2026';
+const CONTACT = 'support@grosslytics.com';
+const h2 = 'mt-12 text-[22px] font-semibold tracking-[-0.02em] text-ink';
+---
+
+<Page title="Terms of service — Grosslytics" description="The terms for using Grosslytics: self-hosting, Hosted Cloud, Lifetime licenses, payments, refunds and responsibilities.">
+	<main>
+		<article class="prose-g mx-auto max-w-[720px] px-5 pt-14 pb-24 text-[17px] leading-relaxed text-ink-2">
+			<p class="eyebrow mb-3">Legal</p>
+			<h1 class="text-[clamp(34px,5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em] text-ink">Terms of service</h1>
+			<p class="mt-4 text-[15px] text-ink-3">Last updated {UPDATED}</p>
+
+			<p class="mt-8">These terms are between you and David Mill, who runs Grosslytics (“we”). By using grosslytics.com, Hosted Cloud, a Lifetime license or the Grosslytics software, you agree to them. Contact: <a class="text-accent hover:underline" href={`mailto:${CONTACT}`}>{CONTACT}</a>.</p>
+
+			<h2 class={h2}>The plans</h2>
+			<ul class="mt-4 list-disc space-y-2 pl-6">
+				<li><strong class="text-ink">Self-host:</strong> free. You run the software in your own Cloudflare account and are responsible for that account, its costs and its data.</li>
+				<li><strong class="text-ink">Indie Cloud:</strong> we host it for you, $5 a month for up to 100,000 events, after a 14-day trial with no card. When a month’s events reach the limit, or a trial or subscription ends, new events stop being recorded until the next month or until you subscribe. Existing data stays.</li>
+				<li><strong class="text-ink">Lifetime:</strong> a one-time payment for a license key and the installer, which sets Grosslytics up in your own Cloudflare account. It includes the updates we publish; it does not include hosting.</li>
+			</ul>
+
+			<h2 class={h2}>Payments and refunds</h2>
+			<p>Payments are processed by Stripe. Indie Cloud renews monthly until you cancel in the billing portal; cancelling stops the next renewal. If something is wrong with a charge, write to us and we will look at it; refunds are made through Stripe to the original payment method.</p>
+
+			<h2 class={h2}>Your responsibilities</h2>
+			<ul class="mt-4 list-disc space-y-2 pl-6">
+				<li>Only add the tracker to sites you control, and tell your visitors about it where the law requires (for example in your own privacy policy).</li>
+				<li>Keep your password, API token and webhook secrets private.</li>
+				<li>Do not use Grosslytics to break the law, to attack or overload our service, or to track people across sites you do not own.</li>
+			</ul>
+
+			<h2 class={h2}>Your data</h2>
+			<p>Data your sites send belongs to you. We process Hosted Cloud data only to provide the service, as described in the <a class="text-accent hover:underline" href="/privacy/">privacy policy</a>. If you close your account, write to us and we delete its data within 30 days.</p>
+
+			<h2 class={h2}>Accuracy</h2>
+			<p>Grosslytics reports what it receives. Attribution depends on the visitor ID reaching your payment provider; payment fees are estimates unless the provider reports them; ad blockers, private browsing and bots can make numbers incomplete. Check important figures against your payment provider before acting on them.</p>
+
+			<h2 class={h2}>Availability and changes</h2>
+			<p>We work to keep Hosted Cloud running but do not guarantee uninterrupted service. We may change these terms or the service; we will update the date above, and for paid plans give notice before a change that affects what you pay.</p>
+
+			<h2 class={h2}>Liability</h2>
+			<p>The software and service are provided “as is”. To the extent the law allows, we are not liable for indirect or lost-profit damages, and our total liability is limited to what you paid us in the 12 months before the claim. Nothing here limits rights you have by law as a consumer.</p>
+
+			<h2 class={h2}>Ending</h2>
+			<p>You can stop using Grosslytics at any time. We may suspend an account that breaks these terms, after telling you why where we can.</p>
+		</article>
+	</main>
+</Page>

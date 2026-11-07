@@ -12,6 +12,10 @@ import type { PaymentGateway } from './types.js';
  * - Polar: 5.0% + 0¢ (platform fee only)
  * - Paddle: 5.0% + 50¢ (includes tax remittance)
  * - LemonSqueezy: 5.0% + 50¢ (includes tax remittance)
+ * - Gumroad: 10% + 50¢ (direct sales)
+ * - PayPal: 3.49% + 49¢ (US checkout)
+ * - Cashfree: 1.95% + 0¢ (India domestic)
+ * - RevenueCat: the store's cut comes with each event (takehome_percentage), so this default is unused
  */
 const GATEWAY_FEES: Record<PaymentGateway, { fixedCents: number; percentBps: number }> = {
 	stripe: { fixedCents: 30, percentBps: 290 },
@@ -19,6 +23,10 @@ const GATEWAY_FEES: Record<PaymentGateway, { fixedCents: number; percentBps: num
 	polar: { fixedCents: 0, percentBps: 500 },
 	paddle: { fixedCents: 50, percentBps: 500 },
 	lemonsqueezy: { fixedCents: 50, percentBps: 500 },
+	gumroad: { fixedCents: 50, percentBps: 1000 },
+	paypal: { fixedCents: 49, percentBps: 349 },
+	cashfree: { fixedCents: 0, percentBps: 195 },
+	revenuecat: { fixedCents: 0, percentBps: 0 },
 };
 
 /**

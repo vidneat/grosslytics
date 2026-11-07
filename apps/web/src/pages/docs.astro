@@ -8,7 +8,10 @@ const toc = [
 	['install', 'Install the tracker'],
 	['goals', 'Track goals'],
 	['payments', 'Connect payments'],
+	['switch', 'Switch from another tool'],
 	['dashboard', 'Read the dashboard'],
+	['ai-crawlers', 'AI crawlers'],
+	['clicks', 'Click map'],
 	['api', 'API'],
 	['mcp', 'AI agents (MCP)'],
 	['self-host', 'Self-hosting'],
@@ -20,12 +23,16 @@ const gateways = [
 		name: 'Stripe',
 		id: 'stripe',
 		events: 'checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded',
-		visitor: 'Payment Links and Checkout links on your page are tagged automatically (client_reference_id). With the Checkout API, pass client_reference_id or metadata.visitor_id. For renewals, put visitor_id in the subscription’s metadata.',
+		visitor: 'Payment Links and Checkout links on your page are tagged automatically (client_reference_id). With the Checkout API, pass client_reference_id or metadata.visitor_id (metadata.datafast_visitor_id also works). For renewals, put visitor_id in the subscription’s metadata.',
 	},
 	{ name: 'Polar', id: 'polar', events: 'order.paid', visitor: 'Checkout links on your page are tagged automatically (reference_id). Or pass metadata.visitor_id.' },
 	{ name: 'Lemon Squeezy', id: 'lemonsqueezy', events: 'order_created, subscription_payment_success', visitor: 'Checkout links on your page are tagged automatically (checkout[custom][visitor_id]).' },
 	{ name: 'Paddle', id: 'paddle', events: 'transaction.completed', visitor: 'Pass customData: { visitor_id } when you open Paddle Checkout.' },
 	{ name: 'Razorpay', id: 'razorpay', events: 'payment.captured', visitor: 'Pass notes: { visitor_id } when you create the order or payment.' },
+	{ name: 'Cashfree', id: 'cashfree', events: 'PAYMENT_SUCCESS_WEBHOOK', visitor: 'Pass order_tags: { visitor_id } when you create the order. The signing secret is your Cashfree client secret.' },
+	{ name: 'Gumroad', id: 'gumroad', events: 'Ping (sales) and refunds', visitor: 'Product links on your page are tagged automatically (?visitor_id=, delivered as url_params). Gumroad pings are unsigned, so choose a long random key and add &key=YOUR_KEY to the ping URL.' },
+	{ name: 'PayPal', id: 'paypal', events: 'PAYMENT.CAPTURE.COMPLETED', visitor: 'Set purchase_units[].custom_id to the visitor ID when you create the order. The secret is client_id:client_secret:webhook_id (add :sandbox for a sandbox app); each webhook is checked with PayPal’s verification API. PayPal’s real fee is used, not an estimate.' },
+	{ name: 'RevenueCat', id: 'revenuecat', events: 'INITIAL_PURCHASE, RENEWAL, NON_RENEWING_PURCHASE', visitor: 'In your app, set the subscriber attribute visitor_id to the ID from the web visit (for example, passed through your web-to-app link). The secret is the Authorization header value you set on the webhook. Store commission and tax come from each event.' },
 ];
 
 const endpoints = [
@@ -34,6 +41,11 @@ const endpoints = [
 	['GET', '/api/stats?siteId=…&range=30d&model=first', 'Visitors, sales and revenue per channel'],
 	['GET', '/api/stats/journey/{visitorId}?siteId=…', 'One visitor’s pages, goals and payments in order'],
 	['POST', '/api/stats/ad-spend', '{ siteId, source, date: "YYYY-MM-DD", amountCents } sets one day’s spend for a source'],
+	['POST', '/api/stats/ad-spend/bulk', '{ siteId, rows: [{ source, date, amountCents }] } up to 2,000 days at once (the dashboard’s CSV import)'],
+	['POST', '/api/stats/sites/{siteId}/import/stripe', '{ key, kind?, after? } imports one page of past Stripe payments; call again with the returned next until it is null. The key is not stored.'],
+	['GET', '/api/stats/ai-crawls?siteId=…&range=30d', 'AI crawler requests by bot and by page'],
+	['GET', '/api/stats/clicks?siteId=…&range=30d', 'Clicks per page and element from the click map, with buyers, dead and rage clicks'],
+	['POST', '/api/crawl', '{ sid, path, ua } from your server: counts one AI crawler request (no token; see AI crawlers)'],
 	['POST', '/api/stats/annotations', '{ siteId, at: unix seconds, label } adds a marker to the chart'],
 ];
 
@@ -51,7 +63,7 @@ const pre = 'mt-4 overflow-x-auto rounded-xl bg-band p-4 font-mono text-[13.5px]
 const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 ---
 
-<Page title="Docs — Grosslytics" description="Install the Grosslytics tracker, track goals, connect Stripe, Polar, Lemon Squeezy, Paddle or Razorpay, and use the API and MCP server.">
+<Page title="Docs — Grosslytics" description="Install the Grosslytics tracker, track goals, connect Stripe, Polar, Lemon Squeezy, Paddle, Razorpay, Cashfree, Gumroad, PayPal or RevenueCat, and use the API and MCP server.">
 	<main>
 		<article class="mx-auto max-w-[760px] px-5 pt-14 pb-24">
 			<header>
@@ -68,7 +80,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 			</nav>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="install" class={h2}>1. Install the tracker</h2>
+				<h2 id="install" class={h2}>Install the tracker</h2>
 				<p>Sign in at <a class="text-accent hover:underline" href="/app">/app</a> and add your site. You get a site ID such as <code class={code}>gl_8b5e717a83ac</code>. Paste this into the <code class={code}>&lt;head&gt;</code> of every page:</p>
 				<pre class={pre}><code>{`<script defer src="${ORIGIN}/g.js" data-site-id="YOUR_SITE_ID"></script>`}</code></pre>
 				<p>Self-hosting? Use your own domain in <code class={code}>src</code>. The tracker sends events to the same domain it was loaded from, at <code class={code}>/api/event</code>. To send them somewhere else, add <code class={code}>data-api="https://your-api/api/event"</code>.</p>
@@ -80,16 +92,16 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="goals" class={h2}>2. Track goals</h2>
+				<h2 id="goals" class={h2}>Track goals</h2>
 				<p>Add an attribute to any button or link. A click records the goal:</p>
 				<pre class={pre}><code>{`<button data-gl-goal="signup">Create account</button>`}</code></pre>
 				<p><code class={code}>data-fast-goal</code> and <code class={code}>data-goal</code> work too, so buttons already tagged for DataFast keep working. From JavaScript:</p>
 				<pre class={pre}><code>{`window.grosslytics('signup', { plan: 'pro' });`}</code></pre>
-				<p><code class={code}>window.datafast</code>, <code class={code}>window.databull</code> and <code class={code}>window.plausible</code> point to the same function, so existing calls keep working after you swap the script.</p>
+				<p><code class={code}>window.datafast</code>, <code class={code}>window.databull</code>, <code class={code}>window.plausible</code> and <code class={code}>umami.track</code> point to the same function, so existing calls keep working after you swap the script. Umami’s <code class={code}>data-umami-event</code> and Plausible’s <code class={code}>class="plausible-event-name=Signup"</code> are read too.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="payments" class={h2}>3. Connect payments</h2>
+				<h2 id="payments" class={h2}>Connect payments</h2>
 				<p>In your payment provider, add a webhook pointing at the URL below. Then, in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>Payments</strong>, paste the webhook’s signing secret. Unsigned webhooks, or ones with the wrong signature, are rejected.</p>
 				<pre class={pre}><code>{`${ORIGIN}/api/webhooks/{provider}?siteId=YOUR_SITE_ID`}</code></pre>
 				<p>To credit a sale to a channel, the payment has to carry the buyer’s visitor ID. On checkout links in your page, the tracker adds it for you. Anywhere else, read it in the browser and pass it to your checkout:</p>
@@ -106,21 +118,72 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 					))}
 				</div>
 
-				<h3 class={h3}>Currencies and refunds</h3>
-				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. A full Stripe refund removes the sale from revenue; partial refunds are not handled yet.</p>
-				<p>Net revenue subtracts each provider’s standard published fee, which is an estimate; your actual fee can differ.</p>
+				<h3 class={h3}>Currencies, tax and refunds</h3>
+				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. A full Stripe refund or a Gumroad refund removes the sale from revenue; partial refunds and other providers’ refunds are not handled yet.</p>
+				<p>Sales tax or VAT that the provider reports (Stripe, Paddle, Polar, Lemon Squeezy, RevenueCat) is taken out of revenue, because it is not yours to keep. Net revenue then subtracts the payment fee: PayPal’s and RevenueCat’s real fee from the event, and each other provider’s standard published fee, which is an estimate.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="dashboard" class={h2}>4. Read the dashboard</h2>
+				<h2 id="switch" class={h2}>Switch from DataFast, DataBull, Plausible or Umami</h2>
+				<p>Replace the old script tag with the Grosslytics one. Your existing goal attributes and JavaScript calls keep working (see <a class="text-accent hover:underline" href="#goals">Track goals</a>), and Stripe metadata named <code class={code}>datafast_visitor_id</code> or <code class={code}>databull_visitor_id</code> is read like <code class={code}>visitor_id</code>.</p>
+				<p>One change: those tools keep the visitor ID in a cookie, and Grosslytics sets no cookies. If your server reads the <code class={code}>datafast_visitor_id</code> cookie to fill Stripe metadata, send <code class={code}>localStorage.getItem('gl_vid')</code> from the browser instead.</p>
+				<p><strong>Bring your history:</strong> in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>Import past Stripe payments</strong>, paste a restricted key with read access to Checkout Sessions and Invoices. Past sales arrive with their real dates. They show as Unattributed, because no visits were recorded for them.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="dashboard" class={h2}>Read the dashboard</h2>
 				<p><strong>Attribution:</strong> first touch credits the source that first brought the buyer, last touch the one right before they paid, and linear splits each sale 50/50 between the two.</p>
 				<p><strong>Revenue:</strong> gross is what the buyer paid, net subtracts payment fees, and profit also subtracts the ad spend you enter for each source and day.</p>
 				<p><strong>Sources:</strong> visits that other tools call “Direct” are named where possible: in-app browsers (Instagram, Facebook, LinkedIn, TikTok, Telegram, X), AI search, links with <code class={code}>?utm_source=</code>, <code class={code}>?ref=</code> or <code class={code}>?via=</code>, and shared links versus typed addresses.</p>
+				<p><strong>Ad spend:</strong> add one day at a time, or import a CSV of <code class={code}>date,source,amount</code> exported from Meta, Google, X or LinkedIn Ads. The overview shows MER: revenue divided by ad spend.</p>
 				<p><strong>Also on the dashboard:</strong> live visitors and sales, each buyer’s journey, lifetime value by first source, sales by day and hour in your site’s timezone, chart annotations, and an optional public revenue page at <code class={code}>/share/your-domain</code> that never shows customer emails or journeys.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="api" class={h2}>5. API</h2>
+				<h2 id="ai-crawlers" class={h2}>AI crawlers</h2>
+				<p>GPTBot, ClaudeBot, PerplexityBot and other AI crawlers fetch your pages without running JavaScript, so no tracking script can see them. To count them, your server tells Grosslytics when one asks for a page. Only requests from known AI crawlers are counted, and they never count as visitors. This is unauthenticated, like page views: someone who knows your site ID could add fake counts.</p>
+				<p><strong>Next.js</strong> (<code class={code}>middleware.ts</code>):</p>
+				<pre class={pre}><code>{`import { NextResponse, type NextRequest } from 'next/server';
+
+const AI = /GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|PerplexityBot|anthropic-ai|Google-Extended|Bytespider|Applebot-Extended|meta-externalagent|CCBot/;
+
+export function middleware(req: NextRequest) {
+  const ua = req.headers.get('user-agent') || '';
+  if (AI.test(ua)) {
+    fetch('${ORIGIN}/api/crawl', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sid: 'YOUR_SITE_ID', path: req.nextUrl.pathname, ua }),
+    }).catch(() => {});
+  }
+  return NextResponse.next();
+}`}</code></pre>
+				<p><strong>Cloudflare Worker</strong> in front of your site:</p>
+				<pre class={pre}><code>{`export default {
+  async fetch(req, env, ctx) {
+    const ua = req.headers.get('user-agent') || '';
+    if (/GPTBot|ClaudeBot|PerplexityBot|OAI-SearchBot|ChatGPT-User|Google-Extended/.test(ua)) {
+      ctx.waitUntil(fetch('${ORIGIN}/api/crawl', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sid: 'YOUR_SITE_ID', path: new URL(req.url).pathname, ua }),
+      }));
+    }
+    return fetch(req);
+  },
+};`}</code></pre>
+				<p>Any other server works the same way: one POST of <code class={code}>{'{ sid, path, ua }'}</code> to <code class={code}>/api/crawl</code>. Visitors who arrive from ChatGPT, Perplexity, Claude, Gemini or Copilot answers are tracked separately, as the “AI Search” source, with their revenue.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="clicks" class={h2}>Click map</h2>
+				<p>An optional second script shows what people click on the pages you choose, such as pricing and checkout: which plan or FAQ, which clicks hit something that does nothing (dead clicks), and three fast clicks on the same thing (rage clicks). It also shows how many of the people who clicked each thing later paid. Add it after the main script, only on those pages:</p>
+				<pre class={pre}><code>{`<script defer src="${ORIGIN}/c.js" data-site-id="YOUR_SITE_ID"></script>`}</code></pre>
+				<p>It records the clicked element’s label (its text, aria-label or field name), never what someone typed. It is kept separate so the main script stays small. Each click is one event, which counts toward Hosted Cloud’s monthly limit.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="api" class={h2}>API</h2>
 				<p>Create a read-only token in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>API tokens</strong>. Each token reads one site and is shown once. Send it as a bearer token:</p>
 				<pre class={pre}><code>{`curl -H "Authorization: Bearer gl_pat_…" \\
   "${ORIGIN}/api/stats/dashboard?siteId=YOUR_SITE_ID&range=30d"`}</code></pre>
@@ -138,7 +201,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="mcp" class={h2}>6. AI agents (MCP)</h2>
+				<h2 id="mcp" class={h2}>AI agents (MCP)</h2>
 				<p>Grosslytics includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?” Use a read-only API token. In Claude Code:</p>
 				<pre class={pre}><code>{`claude mcp add --transport http grosslytics \\
   "${ORIGIN}/api/mcp?site=YOUR_SITE_ID" \\
@@ -150,7 +213,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="self-host" class={h2}>7. Self-hosting</h2>
+				<h2 id="self-host" class={h2}>Self-hosting</h2>
 				<p>Grosslytics runs entirely in your own Cloudflare account: Workers, D1, Queues and a Durable Object. The free Workers plan is enough for most sites.</p>
 				<p>You need Bun, Node.js 18 or newer, and a domain on Cloudflare. From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
 				<pre class={pre}><code>{`git clone https://github.com/vidneat/grosslytics.git
@@ -161,9 +224,9 @@ bun run setup`}</code></pre>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
-				<h2 id="privacy" class={h2}>8. Privacy and bots</h2>
+				<h2 id="privacy" class={h2}>Privacy and bots</h2>
 				<p>The tracker sets no cookies. It keeps a random visitor ID in the browser’s local storage and a session ID in session storage. Buyer emails are never stored in full: only a hash (to recognize repeat buyers) and a masked form such as j***@gmail.com for the dashboard.</p>
-				<p>Known bots, headless browsers and traffic from cloud data centers are dropped before they are counted. A visit whose browser identifies as an AI crawler, such as GPTBot, is recorded as an AI crawl instead of a visitor.</p>
+				<p>Known bots, headless browsers and traffic from cloud data centers are dropped before they are counted. AI crawlers, such as GPTBot, are counted separately as crawls (see <a class="text-accent hover:underline" href="#ai-crawlers">AI crawlers</a>), never as visitors.</p>
 				<p class="!mt-10 text-[15px] text-ink-3">For AI assistants, a plain-text summary of this product is at <a class="text-accent hover:underline" href="/llms.txt">/llms.txt</a>.</p>
 			</section>
 		</article>

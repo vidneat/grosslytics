@@ -3,7 +3,10 @@
 > Revenue analytics for founders: credits each payment to the channel that brought the buyer, and reports revenue after payment-provider fees and ad spend.
 
 ## What it does
-- Attributes sales from Stripe, Razorpay, Polar, Paddle and Lemon Squeezy (verified webhooks) to marketing channels.
+- Attributes sales from Stripe, Razorpay, Polar, Paddle, Lemon Squeezy, Cashfree, Gumroad, PayPal and RevenueCat (verified webhooks) to marketing channels. Sales tax is excluded from revenue.
+- Counts AI crawler requests (GPTBot, ClaudeBot, PerplexityBot…) per page, reported server-side to `POST /api/crawl`.
+- Optional click map script (`/c.js`) for pricing and checkout pages: clicks, dead clicks, rage clicks, and buyers per element.
+- Reads DataFast, Plausible and Umami goal syntax; imports past Stripe payments; imports ad spend from CSV.
 - Attribution models: first touch, last touch, and linear (50/50 between first and last touch).
 - Net revenue: subtracts an estimated gateway fee per payment, and ad spend per channel.
 - Names traffic that other tools call "Direct": in-app browsers (Instagram, Facebook, LinkedIn, TikTok, Telegram, X), AI search (ChatGPT, Perplexity, Claude, Gemini, Copilot), and shared links vs typed URLs.
@@ -13,10 +16,10 @@
 ## Setup
 - Tracker (1.5 KB Brotli, no cookies, stores a random visitor ID in localStorage):
   `<script defer src="https://grosslytics.com/g.js" data-site-id="YOUR_SITE_ID"></script>`
-- Stripe, Polar and Lemon Squeezy checkout links are tagged automatically. Paddle requires custom_data.visitor_id via its checkout integration; Razorpay requires notes.visitor_id.
+- Stripe, Polar, Lemon Squeezy and Gumroad checkout links are tagged automatically. PayPal uses custom_id, Cashfree order_tags.visitor_id, RevenueCat the subscriber attribute visitor_id. Paddle requires custom_data.visitor_id via its checkout integration; Razorpay requires notes.visitor_id.
 - Stripe events: checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded (full refunds).
 - One reporting currency per site: USD, EUR, GBP or INR; different currencies are never summed.
-- Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy}?siteId=YOUR_SITE_ID` (signature required).
+- Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy|cashfree|gumroad|paypal|revenuecat}?siteId=YOUR_SITE_ID` (signature required; Gumroad uses a key in the URL).
 - Self-host on Cloudflare: step-by-step at /start/. Full docs: /docs/.
 
 ## API (requires `Authorization: Bearer <API_TOKEN>`)

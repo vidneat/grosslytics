@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { requireToken } from './auth.js';
 import { cors } from 'hono/cors';
-import { collectRoute } from './routes/collect.js';
+import { collectRoute, crawlRoute } from './routes/collect.js';
 import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
 import { shareRoute } from './routes/share.js';
@@ -40,6 +40,7 @@ app.use('/api/mcp/*', requireToken);
 // /api/event: EasyPrivacy blocks URLs ending in /api/collect. The old path stays for snippets already installed.
 app.route('/api/event', collectRoute);
 app.route('/api/collect', collectRoute);
+app.route('/api/crawl', crawlRoute);
 app.route('/api/stats', statsRoute);
 app.route('/api/webhooks', webhooksRoute);
 app.route('/api/share', shareRoute);

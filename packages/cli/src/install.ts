@@ -67,6 +67,11 @@ bindings = [{ name = "SITE_LIVE_HUB", class_name = "SiteLiveHub" }]
 tag = "v1"
 new_sqlite_classes = ["SiteLiveHub"]
 
+[[ratelimits]]
+name = "WAITLIST_LIMITER"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
 [vars]
 ENVIRONMENT = "production"
 TRACKER_ORIGIN = "https://${s.host}"

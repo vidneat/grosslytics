@@ -232,7 +232,10 @@ export function ProfitBridge({ gross, fee, ad }: { gross: number; fee: number; a
 					<span className={`text-right ${s.bold ? 'font-semibold' : ''}`}>{s.value}</span>
 				</li>
 			))}
-			<li className="pt-1 text-[12px] text-ink-3">You keep {((profit / gross) * 100).toFixed(1)}% of gross after fees and ads.</li>
+			<li className="pt-1 text-[12px] text-ink-3">
+				You keep {((profit / gross) * 100).toFixed(1)}% of gross after fees and ads.
+				{ad > 0 && <> MER {(gross / ad).toFixed(2)}× (revenue ÷ ad spend).</>} Sales tax is never counted as revenue.
+			</li>
 		</ul>
 	);
 }

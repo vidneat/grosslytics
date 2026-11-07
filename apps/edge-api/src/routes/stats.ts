@@ -10,6 +10,8 @@ import { hashToken, newTokenSecret } from '../auth.js';
 import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
 import { PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
 import { accountActive, isCloud, sessionAccount } from '../cloud.js';
+import { extractPayment, recordPayment } from './webhooks.js';
+import { reportingCurrency } from '@grosslytics/shared/money';
 
 export const statsRoute = new Hono<{ Bindings: Bindings }>();
 
@@ -196,6 +198,21 @@ statsRoute.post('/ad-spend', async (c) => {
 	return c.json({ ok: true });
 });
 
+const AdSpendRows = v.object({
+	siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+	rows: v.pipe(v.array(v.object({ source: AdSpendBody.entries.source, date: AdSpendBody.entries.date, amountCents: AdSpendBody.entries.amountCents })), v.minLength(1), v.maxLength(2000)),
+});
+
+// POST /api/stats/ad-spend/bulk - a CSV import (date, source, amount); same set-not-add rule, one transaction
+statsRoute.post('/ad-spend/bulk', async (c) => {
+	const parsed = v.safeParse(AdSpendRows, await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: 'Each row needs a date (YYYY-MM-DD), a source and an amount of 0 or more. Up to 2,000 rows.' }, 400);
+	const { siteId, rows } = parsed.output;
+	const stmt = c.env.DB.prepare('INSERT INTO ad_spend (site_id, source, spend_date, amount_cents) VALUES (?, ?, ?, ?) ON CONFLICT (site_id, source, spend_date) DO UPDATE SET amount_cents = excluded.amount_cents');
+	await c.env.DB.batch(rows.map((r) => stmt.bind(siteId, r.source, r.date, r.amountCents)));
+	return c.json({ ok: true, saved: rows.length });
+});
+
 const AnnotationBody = v.object({
 	siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 	at: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -243,4 +260,80 @@ statsRoute.post('/tokens', async (c) => {
 statsRoute.post('/tokens/:id/revoke', async (c) => {
 	await c.env.DB.prepare('DELETE FROM api_tokens WHERE id = ?').bind(c.req.param('id')).run();
 	return c.json({ ok: true });
+});
+
+// GET /api/stats/waitlist - interest in plans that aren't open yet. Owner only: Cloud customers and site tokens name no site, so requireToken refuses them.
+statsRoute.get('/waitlist', async (c) => {
+	const { results } = await c.env.DB.prepare('SELECT email, plan, created_at AS createdAt FROM waitlist ORDER BY created_at DESC LIMIT 5000').all();
+	return c.json({ signups: results }, 200, { 'Cache-Control': 'private, no-store' });
+});
+
+const RangeQuery = v.object({ siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)), range: v.optional(v.picklist(['24h', '7d', '30d', '90d']), '30d') });
+
+// GET /api/stats/ai-crawls - which AI bots read which pages (reported server-side, see /docs)
+statsRoute.get('/ai-crawls', async (c) => {
+	const q = v.safeParse(RangeQuery, c.req.query());
+	if (!q.success) return c.json({ error: 'siteId required' }, 400);
+	const { start, end } = await siteRange(c.env.DB, q.output.siteId, q.output.range);
+	const where = "FROM ai_crawls WHERE site_id = ?1 AND day >= date(?2, 'unixepoch') AND day <= date(?3, 'unixepoch')";
+	const [bots, pages] = await c.env.DB.batch<{ k: string; hits: number }>([
+		c.env.DB.prepare(`SELECT bot AS k, SUM(hits) AS hits ${where} GROUP BY bot ORDER BY hits DESC LIMIT 20`).bind(q.output.siteId, start, end),
+		c.env.DB.prepare(`SELECT path AS k, SUM(hits) AS hits ${where} GROUP BY path ORDER BY hits DESC LIMIT 20`).bind(q.output.siteId, start, end),
+	]);
+	return c.json({ bots: bots!.results, pages: pages!.results });
+});
+
+// GET /api/stats/clicks - what people click on pages running the opt-in click script (c.js)
+statsRoute.get('/clicks', async (c) => {
+	const q = v.safeParse(RangeQuery, c.req.query());
+	if (!q.success) return c.json({ error: 'siteId required' }, 400);
+	const { start, end } = await siteRange(c.env.DB, q.output.siteId, q.output.range);
+	const m = (k: string) => `json_extract(json_extract(meta_json, '$.custom'), '$.${k}')`;
+	const { results } = await c.env.DB.prepare(
+		`SELECT event_name AS page, ${m('el')} AS el, COUNT(*) AS clicks, COUNT(DISTINCT visitor_id) AS visitors,
+		 COALESCE(SUM(${m('dead')}), 0) AS dead, COALESCE(SUM(${m('rage')}), 0) AS rage,
+		 COUNT(DISTINCT CASE WHEN visitor_id IN (SELECT visitor_id FROM payments WHERE site_id = ?1 AND status = 'succeeded' AND visitor_id IS NOT NULL) THEN visitor_id END) AS buyers
+		 FROM events WHERE site_id = ?1 AND event_type = 'click' AND created_at >= ?2 AND created_at < ?3
+		 GROUP BY page, el ORDER BY clicks DESC LIMIT 100`,
+	).bind(q.output.siteId, start, end).all();
+	return c.json({ clicks: results });
+});
+
+const ImportBody = v.object({
+	key: v.pipe(v.string(), v.trim(), v.regex(/^(sk|rk)_(live|test)_[A-Za-z0-9]+$/)),
+	kind: v.optional(v.picklist(['sessions', 'invoices']), 'sessions'),
+	after: v.optional(v.pipe(v.string(), v.regex(/^[A-Za-z0-9_]+$/), v.maxLength(255))),
+});
+// Small pages: each payment costs ~3 D1 queries and the Workers Free plan allows 50 per request. The dashboard calls again with `next`.
+const IMPORT_PAGE = 10;
+
+// POST /api/stats/sites/:id/import/stripe {key, kind?, after?} - past Stripe payments, one page per call. The key is used for this call only and never stored.
+statsRoute.post('/sites/:id/import/stripe', async (c) => {
+	const parsed = v.safeParse(ImportBody, await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: 'Paste a Stripe secret or restricted key (sk_… or rk_…).' }, 400);
+	const siteId = c.req.param('id');
+	const site = await c.env.DB.prepare('SELECT currency FROM sites WHERE site_id = ?').bind(siteId).first<{ currency: string }>();
+	if (!site) return c.json({ error: 'Unknown site.' }, 404);
+	const { key, kind, after } = parsed.output;
+	const path = kind === 'sessions' ? 'checkout/sessions?status=complete' : 'invoices?status=paid';
+	const res = await fetch(`https://api.stripe.com/v1/${path}&limit=${IMPORT_PAGE}${after ? `&starting_after=${after}` : ''}`, { headers: { authorization: `Bearer ${key}` } });
+	const page = (await res.json().catch(() => null)) as { data?: any[]; has_more?: boolean; error?: { message?: string } } | null;
+	if (!res.ok || !page?.data) return c.json({ error: `Stripe said: ${page?.error?.message || res.statusText}` }, 400);
+
+	const currency = reportingCurrency(site.currency ?? 'USD');
+	let imported = 0;
+	let skipped = 0;
+	for (const obj of page.data) {
+		const type = kind === 'sessions' ? 'checkout.session.completed' : 'invoice.paid';
+		const p = extractPayment('stripe', { id: `import:${obj.id}`, type, data: { object: obj } }, new Headers());
+		if (!p || p.currency.toUpperCase() !== currency) {
+			skipped++;
+			continue;
+		}
+		if ((await recordPayment(c.env, siteId, 'stripe', p, false)) === 'recorded') imported++;
+		else skipped++;
+	}
+	const last = page.data.at(-1)?.id as string | undefined;
+	const next = page.has_more && last ? { kind, after: last } : kind === 'sessions' ? { kind: 'invoices' as const } : null;
+	return c.json({ imported, skipped, next });
 });

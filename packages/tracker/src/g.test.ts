@@ -34,6 +34,8 @@ function load(search = '', referrer = '', anchors: Array<{ href: string }> = [])
 	new Function(...Object.keys(g), readFileSync(new URL('../dist/g.js', import.meta.url), 'utf8'))(...Object.values(g));
 	return {
 		sent,
+		g,
+		click: (el: any) => handlers.click!({ target: { closest: () => ({ dataset: {}, className: '', ...el }) } } as any),
 		wait: (sec: number) => (clock += sec * 1000),
 		hide: () => ((doc.visibilityState = 'hidden'), handlers.visibilitychange!()),
 		show: () => ((doc.visibilityState = 'visible'), handlers.visibilitychange!()),
@@ -91,4 +93,16 @@ test('checkout links use gateway-specific parameters and preserve an existing re
 	expect(new URL(links[3]!.href).searchParams.get('checkout[custom][visitor_id]')).toBe(visitorId);
 	expect(new URL(links[4]!.href).search).toBe('');
 	expect(new URL(links[5]!.href).search).toBe('');
+});
+
+test('goal syntax from DataFast, Umami and Plausible works unchanged', () => {
+	const p = load();
+	p.click({ dataset: { fastGoal: 'fast' } });
+	p.click({ dataset: { umamiEvent: 'umami' } });
+	p.click({ className: 'btn plausible-event-name=Sign+up' });
+	p.g.umami.track('signup', { plan: 'pro' });
+	p.g.umami.track();
+	const goals = p.sent.filter((b) => b.t === 'goal').map((b) => b.n);
+	expect(goals).toEqual(['fast', 'umami', 'Sign up', 'signup']);
+	expect(p.sent.filter((b) => b.t === 'pageview').length).toBe(2);
 });

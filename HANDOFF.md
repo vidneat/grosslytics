@@ -23,8 +23,8 @@ Three connections, each pointing at the owner's own API (a Cloudflare Worker):
   - `/share/<domain>`: public revenue page.
   - `/compare/<slug>`: comparison pages.
   - `/badge`, `/og`: badge and social-card images.
-- `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,500 bytes Brotli; it is currently 1,479 (1.44 KB, quoted on the site as 1.5 KB). It has tests in `src/g.test.ts`, which run the built file, so build before testing.
-- `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–005.
+- `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,587 bytes Brotli (the most that rounds to the site's "1.5 KB"); it is currently 1,562. The same build makes the opt-in click script `dist/c.js`; copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
+- `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–010.
 - `packages/shared`: types and the dashboard contract (`dashboard.ts`).
 - `scripts/db.ts`: local migrate and seed; also migrates the remote database.
 - `examples/test-site`: a three-page local site for end-to-end testing (see below).
@@ -42,7 +42,7 @@ bun run dev:test-site   # port 3000, after filling examples/test-site/config.js
 `.dev.vars` (gitignored) holds `API_TOKEN` and `STRIPE_WEBHOOK_SECRET`. **Never read or print it**; the user pastes the token into `/app` themselves.
 
 Checks:
-- `bun test packages apps`: 32 tests pass (20 API/database, 5 tracker, 4 shared, 1 UI rendering).
+- `bun test packages apps`: 45 tests pass.
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
 
@@ -221,7 +221,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 - Branch `fix/live-csp-noindex` (not merged to main, not pushed) holds the live-presence fix, the CSP note and noindex. Deployed to grosslytics.com with `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup` (version `2026-11-07-5c4f419`).
 - Checked live: `/`, `/app`, `/g.js`, `/api/auth/status` return 200; the /docs CSP note is up; grosslytics.com sends no `X-Robots-Tag` and keeps its sitemap (no `_headers` written for that host).
 - analytics.vidneat.app updated too: `/Users/raviair/grosslytics` fast-forwarded to `80e5fde` (from this repo's branch), then `CLOUDFLARE_ACCOUNT_ID=a54e52e1a0c582eafa8841eaba88a2fc bun run setup` there (version `2026-11-07-80e5fde`). Checked: every page sends `X-Robots-Tag: noindex, nofollow`, robots.txt has no sitemap, and an event from vidneat.app returns 202.
-- Two Cloudflare accounts: grosslytics.com is **ravi88927615@gmail.com** (`f6883459…`); vidneat.app and analytics.vidneat.app are **ravi923615@gmail.com** (`a54e52e1…`). Wrangler is currently signed in to **ravi923615**. To switch: `npx wrangler logout`, sign the browser in to the other Cloudflare account, then `npx wrangler login`. Always pass `CLOUDFLARE_ACCOUNT_ID` to `bun run setup`.
+- Two Cloudflare accounts: grosslytics.com is **ravi88927615@gmail.com** (`f6883459…`); vidneat.app and analytics.vidneat.app are **ravi923615@gmail.com** (`a54e52e1…`). Wrangler is currently signed in to **ravi88927615** (since 2026-11-07). To switch: `npx wrangler logout`, sign the browser in to the other Cloudflare account, then `npx wrangler login`. Always pass `CLOUDFLARE_ACCOUNT_ID` to `bun run setup`.
 - Not checked live: the live panel showing a visitor after hibernation (needs a signed-in dashboard).
 
 ## Where things stand
@@ -250,7 +250,6 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
   - The sandbox has a $9 test product with a Payment Link (https://buy.stripe.com/test_fZu3cvfGh7zbe3idbo8bS00). After paying, the buyer is sent back to http://localhost:3000/index.html.
   - The link is already in `examples/test-site/config.js`. The site ID there is still a placeholder.
 - Paddle, Polar, Lemon Squeezy and Razorpay mappings have never been run against real payloads.
-- Real deploy to Cloudflare.
 
 - Read time is now correct:
   - Leaving a tab first counts the time just read; before, it was thrown away and leaves mostly reported 0 seconds.
@@ -312,14 +311,36 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 
 - **Never fake anything:** no simulated payments or data passed off as real. If something needs a real website or account, say so plainly.
 - Plain, non-technical explanations. The user tests in the browser.
-- Commit only when asked. Nothing has been committed since `97d554c`; every change above is uncommitted in the working tree.
+- Commit only when asked. `origin/main` is at `08125e5`; this branch is 3 commits ahead (see the plan below).
 - Deploy later, when the user asks.
 
-## Next steps
+## Gaps and features pass (2026-11-07, not committed, not deployed)
 
-0. End-to-end with real pieces is done: browser → tracker (through a blocker) → API → Stripe sandbox checkout → webhook → attributed sale → refund → red heatmap cell.
-1. The test site is configured: site `localhost` (`gl_8b5e717a83ac`) plus the sandbox Payment Link.
-   - Stripe's test webhook secret is stored on that site's row (`sites.stripe_webhook_secret`), so `.dev.vars` doesn't need it.
-   - Forwarding: `stripe listen --events checkout.session.completed,invoice.paid,invoice_payment.paid,charge.refunded --forward-to "localhost:8787/api/webhooks/stripe?siteId=gl_8b5e717a83ac"`.
-   - Serve the site with `bun run dev:test-site` (port 3000). Make a test purchase and confirm it is credited to its source, with its journey.
-2. Commit, then deploy (DEPLOY.md steps 1–11).
+**Waitlist.** The form posts to `/api/waitlist`, which stores `(email, plan, created_at)` in D1 `waitlist`. Now: owner-only `GET /api/stats/waitlist` and a "Waitlist (n)" card at the bottom of `/app` with CSV download; a hidden honeypot field (`website`); and a Workers Rate Limiting binding `WAITLIST_LIMITER` (5/min per IP) in `wrangler.toml` and the installer's `apiToml`. Nothing emails signers or the owner; the card says to write to them by hand. Production count on 2026-11-07: 0 signups (`339454ee…`); analytics.vidneat.app's copy (`7d4d7f88…`, other account) had one test row. Both databases are named `grosslytics-db`; check the id in wrangler's output.
+
+**Legal.** `/privacy` and `/terms` (operator David Mill, support@grosslytics.com, as the user chose), linked in the footer and under the waitlist form. Drafts written from what the code does; the user should have them reviewed. No governing law or refund window is stated; support@grosslytics.com must exist (Cloudflare Email Routing).
+
+**Features (the pasted list):**
+- Switching: tracker reads `data-umami-event`, `umami.track()`, Plausible `plausible-event-name=` classes; Stripe metadata `datafast_visitor_id`/`databull_visitor_id`; "Import past Stripe payments" card (`POST /api/stats/sites/:id/import/stripe`, 10 per call because of the Free-plan 50-query limit, sessions then invoices, real dates via new optional `PaymentRecord.createdAt`, key never stored). DataFast's cookie can't be read (we set no cookies); /docs says to send `gl_vid` instead.
+- AI crawlers: `POST /api/crawl {sid,path,ua}` from the owner's server (Next.js and Worker snippets in /docs#ai-crawlers), stored per day/bot/path in new table `ai_crawls` (migration 010). JS-running crawlers hitting `/api/event` now go there too instead of becoming visitors. Panel "AI bots reading your pages". Unauthenticated, like page views.
+- Click map: opt-in `/c.js` (656 B Brotli, source `packages/tracker/src/c.ts`) sends `t:'click'` events with `{el, dead, rage}`; panel "What people click" with buyers per element. Clicks are hidden from buyer journeys and count toward Cloud's event cap.
+- Ad spend: CSV import card (`POST /api/stats/ad-spend/bulk`, up to 2,000 rows, quoted "$1,200" handled) and MER in "Where the money goes". Meta/Google/X/LinkedIn OAuth not built: Google Ads needs an approved developer token and Meta an app review.
+- Tax: Stripe, Paddle, Polar, Lemon Squeezy and RevenueCat tax is removed from gross; the fee is still computed on the full charge.
+- Gateways: Cashfree (base64 HMAC of timestamp+body), Gumroad (form pings, `&key=` in the URL, refunds), PayPal (verified through PayPal's verify-webhook-signature API; secret `client_id:client_secret:webhook_id[:sandbox]`; real fee), RevenueCat (Authorization header; commission and tax from the event). Tracker tags Gumroad links with `visitor_id`. All four built from documentation only; **no real payload has been run**.
+- Tracker is 1,562 B Brotli; the build limit is now 1,587 B, the most that still rounds to the "1.5 KB" on the site.
+- Homepage, /docs (switch, AI crawlers, click map sections; new endpoints), llms.txt updated.
+
+**Verified:** 45 tests (6 new API tests, 1 tracker, 1 CSV parser), typecheck in every package, web build, `wrangler deploy --dry-run` shows the rate-limit binding, local migration applied. In the browser (local): waitlist join, Privacy/Terms/Docs render, no overflow at 375px, no console errors; c.js on the test site recorded dead and rage clicks; `/api/crawl` filled `ai_crawls`. Test rows were deleted afterwards.
+**Not verified:** the new `/app` panels and cards while signed in (needs the user's local password); any real Cashfree/Gumroad/PayPal/RevenueCat/Stripe-import call.
+
+**Still the user's to do (can't be done in code):**
+1. Set the dashboard password on grosslytics.com/app (`passwordSet:false` live).
+2. Make `vidneat/grosslytics` public, or publish the CLI to npm; `/start` and /docs tell visitors to clone a private repo.
+3. Open a paid plan: `LICENSE_SECRET`, R2 bucket + release, Stripe Payment Link + billing webhook, `PUBLIC_CHECKOUT_LIFETIME_URL`.
+4. Create support@grosslytics.com in Cloudflare Email Routing.
+5. Commit, push/merge, run `bun run db:migrate:remote` (migration 010), then deploy.
+
+## Local test-site recipe
+
+- Site `localhost` (`gl_8b5e717a83ac`) plus the sandbox Payment Link. Stripe's test webhook secret is on that site's row (`sites.stripe_webhook_secret`).
+- Forwarding: `stripe listen --events checkout.session.completed,invoice.paid,invoice_payment.paid,charge.refunded --forward-to "localhost:8787/api/webhooks/stripe?siteId=gl_8b5e717a83ac"`, then `bun run dev:test-site` (port 3000).

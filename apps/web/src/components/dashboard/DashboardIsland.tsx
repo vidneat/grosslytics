@@ -31,6 +31,7 @@ import { Milestones, Heatmap, MainChart, MiniBars, ProfitBridge, type Point } fr
 import { ApiTokens, CloudBilling, Connect, InstallSnippet, PaymentWebhooks } from './connect';
 import { buildDemo, DEMO_NOW, flag, journeyFor, type Dimension, type Filter, type Metric, type Mode, type Model, type Range } from './demo';
 import { gatewayLabel, JourneyDrawer, LiveFeed } from './live';
+import { AdSpendCsv, AiCrawlers, ClickMap, StripeImport, Waitlist } from './extras';
 import { BarList, CurrencyContext, Delta, Panel, SourceIcon, Sparkline, compact, num, useMoney } from './ui';
 
 const MODELS = [
@@ -619,6 +620,13 @@ function Workspace(props: {
 						</Panel>
 					</div>
 
+					{isOwner && conn && (
+						<div className="grid gap-5 lg:grid-cols-2">
+							<AiCrawlers conn={conn} range={range} />
+							<ClickMap conn={conn} range={range} />
+						</div>
+					)}
+
 					{isOwner && props.onShare && (
 						<label className="flex items-center justify-center gap-2 text-[13px] text-ink-2">
 							<input type="checkbox" className="accent-[var(--accent)]" checked={!!props.shared} onChange={(e) => props.onShare!(e.target.checked)} />
@@ -634,7 +642,10 @@ function Workspace(props: {
 						</label>
 					)}
 					{isOwner && conn && props.payments && <PaymentWebhooks key={conn.siteId} conn={conn} connected={props.payments} />}
+					{isOwner && conn && <StripeImport conn={conn} onDone={() => setRefresh((r) => r + 1)} />}
+					{isOwner && conn && <AdSpendCsv conn={conn} onSaved={() => setRefresh((r) => r + 1)} />}
 					{isOwner && conn && <ApiTokens conn={conn} />}
+					{isOwner && conn && <Waitlist conn={conn} />}
 				</>
 			)}
 			</div>

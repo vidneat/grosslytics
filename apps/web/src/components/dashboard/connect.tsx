@@ -422,6 +422,10 @@ const GATEWAYS = [
 	['polar', 'Polar', 'Settings → Webhooks → the endpoint’s secret'],
 	['paddle', 'Paddle', 'Developer tools → Notifications → secret key'],
 	['razorpay', 'Razorpay', 'Settings → Webhooks → the secret you set'],
+	['cashfree', 'Cashfree', 'Developers → API keys → your client secret (Cashfree signs webhooks with it)'],
+	['gumroad', 'Gumroad', 'make up a long random key; it goes at the end of the ping URL as &key=…'],
+	['paypal', 'PayPal', 'client_id:client_secret:webhook_id from developer.paypal.com; add :sandbox for a sandbox app'],
+	['revenuecat', 'RevenueCat', 'Integrations → Webhooks → the Authorization header value you set'],
 ] as const;
 
 /** Per-site payment webhook secrets. Write-only: a saved secret is never shown again, only "Connected". */
@@ -448,7 +452,8 @@ export function PaymentWebhooks({ conn, connected }: { conn: Connection; connect
 			<p className="mt-1 text-[13px] text-ink-2">In your payment provider, add a webhook to the URL below, then paste its signing secret here so Grosslytics can trust each sale.</p>
 			<ul className="mt-3 divide-y divide-line text-[13px]">
 				{GATEWAYS.map(([id, label, where]) => {
-					const url = `${api}/api/webhooks/${id}?siteId=${conn.siteId}`;
+					// Gumroad can't sign pings, so its key travels in the URL
+					const url = `${api}/api/webhooks/${id}?siteId=${conn.siteId}${id === 'gumroad' ? `&key=${open === id && secret ? encodeURIComponent(secret) : 'YOUR_KEY'}` : ''}`;
 					return (
 						<li key={id} className="py-2.5">
 							<div className="flex flex-wrap items-center gap-x-3 gap-y-1">

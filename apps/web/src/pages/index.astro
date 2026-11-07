@@ -14,10 +14,10 @@ const inApp = [
 	['X', 'x.com (in-app)'],
 ];
 const aiEngines = ['ChatGPT', 'Perplexity', 'Claude', 'Gemini', 'Copilot'];
-const gateways = ['Stripe', 'Razorpay', 'Polar', 'Paddle', 'Lemon Squeezy'];
+const gateways = ['Stripe', 'Razorpay', 'Polar', 'Paddle', 'Lemon Squeezy', 'Cashfree', 'Gumroad', 'PayPal', 'RevenueCat'];
 const steps = [
 	{ n: '1', title: 'Add one script tag', body: 'Paste a 1.5 KB script into your site’s <head>. Works on any site: Next.js, Astro, WordPress, Webflow, Framer, Shopify or plain HTML.' },
-	{ n: '2', title: 'Point your payment webhook', body: 'Add one webhook URL in Stripe, Razorpay, Polar, Paddle or Lemon Squeezy. Each sale is signed, checked and matched to the visitor who made it.' },
+	{ n: '2', title: 'Point your payment webhook', body: 'Add one webhook URL in Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal or RevenueCat. Each sale is signed, checked and matched to the visitor who made it.' },
 	{ n: '3', title: 'See which channels pay', body: 'Every source, page and campaign is ranked by the money it brought in after fees and ad spend, not by pageviews.' },
 ];
 const features = [
@@ -39,6 +39,10 @@ const features = [
 	{ title: 'Public revenue page', body: 'Share an open revenue page and an embeddable badge. Customer emails and journeys stay private.' },
 	{ title: 'Bots left out', body: 'Crawlers, headless browsers, verified bots and datacenter traffic are dropped before they reach your numbers.' },
 	{ title: 'Your currency and timezone', body: 'Report in USD, EUR, GBP or INR, with days and hours on your local clock.' },
+	{ title: 'AI crawlers, by page', body: 'See which pages GPTBot, ClaudeBot and PerplexityBot read, next to the revenue from people who arrive from AI answers.' },
+	{ title: 'Click map for pricing pages', body: 'An optional script shows which plan, FAQ or button people click, dead clicks and rage clicks, and how many of them paid.' },
+	{ title: 'Switch in one tag', body: 'DataFast, Plausible and Umami goal tags keep working, and past Stripe payments import with their real dates.' },
+	{ title: 'Ad spend from a CSV', body: 'Load daily spend exported from Meta, Google, X or LinkedIn Ads and see MER and profit per channel.' },
 ];
 const compares = [
 	{ href: '/compare/datafast-alternative', name: 'DataFast' },
@@ -48,7 +52,7 @@ const compares = [
 ];
 const faqs = [
 	{ question: 'What makes Grosslytics different from Google Analytics or Plausible?', answer: 'Those tools count visits. Grosslytics also receives your payment webhooks, so every sale is tied to the post, search or AI answer that brought the buyer, and shown after gateway fees and ad spend.' },
-	{ question: 'Which payment providers work?', answer: 'Stripe, Razorpay, Polar, Paddle and Lemon Squeezy, through signed webhooks. Stripe is the most tested; full Stripe refunds are handled automatically.' },
+	{ question: 'Which payment providers work?', answer: 'Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal and RevenueCat (app-store purchases), through signed or keyed webhooks. Stripe is the most tested; the others are built to each provider’s documented format. Full Stripe and Gumroad refunds are handled automatically, and sales tax is never counted as revenue.' },
 	{ question: 'What does self-hosted mean?', answer: 'Grosslytics runs on your own Cloudflare account: a Worker, a D1 database and a queue. Your visitor and revenue data never passes through our servers, and Cloudflare’s free tier covers most small sites.' },
 	{ question: 'Do I need to write code?', answer: 'No. You paste one script tag and one webhook URL. The setup at /start checks each step for you against real data.' },
 	{ question: 'What about cookies and GDPR?', answer: 'Grosslytics sets no cookies and stores no IP addresses. A random visitor ID is kept in your site’s browser storage so a sale can be matched to the visit, and buyer emails are masked. Rules differ by country, so check whether your visitors need a notice or consent.' },
@@ -120,7 +124,7 @@ const plans = [
 					</li>
 					<li>
 						<span class="font-semibold">Fees taken off automatically.</span>
-						<span class="text-ink-2">Stripe, Razorpay, Polar, Paddle and Lemon Squeezy.</span>
+						<span class="text-ink-2">Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal and RevenueCat.</span>
 					</li>
 					<li>
 						<span class="font-semibold">Renewals stay attributed.</span>
