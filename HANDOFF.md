@@ -205,7 +205,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 ## Live panel empty on analytics.vidneat.app (2026-11-07)
 
 - Cause 1: vidneat.app's CSP (`~/Applications/VidNeatWeb/public/_headers`) blocked `https://analytics.vidneat.app/g.js`, so no events reached the API. Added the host to `script-src` and `connect-src`. Deployed 2026-11-07 from a clean worktree of VidNeatWeb HEAD `0149366` plus only `_headers` (version `335dad76`); the folder's other uncommitted work was not shipped. Verified: g.js loads and `/api/event` returns 202. `_headers` is still uncommitted in VidNeatWeb.
-- Cause 2: `SiteLiveHub` kept online visitors only in memory, lost whenever the Durable Object hibernated. Presence is now stored under `v:<visitorId>` and reloaded in the constructor. 26 API tests and typecheck pass. Not committed or deployed.
+- Cause 2: `SiteLiveHub` kept online visitors only in memory, lost whenever the Durable Object hibernated. Presence is now stored under `v:<visitorId>` and reloaded in the constructor. 26 API tests and typecheck pass. Deployed to grosslytics.com in 5c4f419 (see below).
 - CSP note added: /docs §1 (example header), /start step 3 and the /app "No visits yet" box name the host to add to `script-src` and `connect-src`. Web typecheck and build pass; /docs checked in the browser. Not deployed.
 
 ## Self-hosted copies are noindex (2026-11-07)
@@ -215,6 +215,13 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 - `apps/web/src/middleware.ts` adds the same header to pages rendered on request (`/app`, `/share`, `/og`, `/badge`), since `_headers` only covers static assets.
 - Verified: new `installer:` test (27 API tests pass), CLI/web typecheck, web build; dev server (localhost) sends the header on `/`, `/app`, `/share/acme.io`. Not deployed: analytics.vidneat.app gets it on its next `bun run setup` in `/Users/raviair/grosslytics`.
 - `CLAUDE.md` now tells every session to read and update this file.
+
+## Deploy of 5c4f419 to grosslytics.com (2026-11-07)
+
+- Branch `fix/live-csp-noindex` (not merged to main, not pushed) holds the live-presence fix, the CSP note and noindex. Deployed to grosslytics.com with `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup` (version `2026-11-07-5c4f419`).
+- Checked live: `/`, `/app`, `/g.js`, `/api/auth/status` return 200; the /docs CSP note is up; grosslytics.com sends no `X-Robots-Tag` and keeps its sitemap (no `_headers` written for that host).
+- Wrangler on this Mac is now signed in to **ravi88927615@gmail.com**. analytics.vidneat.app and vidneat.app live on **ravi923615@gmail.com**; switch with `npx wrangler login` before deploying those. analytics.vidneat.app is still on `08125e5`: it needs these commits in `/Users/raviair/grosslytics`, then `bun run setup` there.
+- Not checked live: the live panel showing a visitor after hibernation (needs a signed-in dashboard).
 
 ## Where things stand
 
