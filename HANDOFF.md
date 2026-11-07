@@ -340,7 +340,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 4. Create support@grosslytics.com in Cloudflare Email Routing.
 5. Push/merge, then deploy. Migration 010 (`ai_crawls`) is already applied to grosslytics.com’s database (339454ee…, 2026-11-07); analytics.vidneat.app’s gets it on its next `bun run setup`.
 
-## Review fixes (2026-11-07, not committed, not deployed)
+## Review fixes (2026-11-07, committed 624d478, deployed)
 
 A full review found the issues below; all "must" and "should" items are fixed. 50 tests pass (6 new); typecheck passes in web, API, CLI, db-d1 and shared; the web build passes; `wrangler deploy --dry-run` shows both rate limiters.
 - **Cloud site takeover:** `requestSite` (`cloud.ts`) reads every place a site can be named (query, path, body, revoked token) and refuses when they disagree. Before, `POST /sites/<theirs>/secrets?siteId=<mine>` passed the ownership check.
@@ -359,7 +359,7 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - Nice-to-haves, also fixed: the dashboard refreshes on every live sale (it used to stop after 8, because it counted the capped live list; `useLiveSocket` now returns a `sales` counter). The MCP tool `compare_buyer_reading_time` now returns the real buyers-vs-everyone-else rows from the dashboard. MCP `range`/`model` are validated and a bad value comes back as an `isError` tool result. A stale size comment was removed from `packages/tracker/build.ts`. MCP covered by the `mcp:` test. The live-sale refresh was not checked with a real sale.
 - Not done (competitor gaps): custom date ranges, goals by name, alerts/email reports, CSV export, team members, refunds outside Stripe.
 
-## Dodo Payments checkout links, Cloud at $5.99 (2026-11-07, not committed, not deployed)
+## Dodo Payments checkout links, Cloud at $5.99 (2026-11-07, committed 624d478, deployed)
 
 - The user created two Dodo Payments products. Their links are the defaults in `apps/web/src/lib/checkout.ts` (overridable with `PUBLIC_CHECKOUT_LIFETIME_URL` / `PUBLIC_CHECKOUT_CLOUD_URL`):
   - Lifetime $29: `pdt_0NrRPjE8ZMtW2BNM0a6bm`, redirect `https://grosslytics.com/license`. `/start?plan=lifetime` now shows "Continue to checkout" instead of the waitlist.
@@ -368,7 +368,7 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - Dodo fulfilment is built (see "Dodo billing webhook" below).
 - Verified: web typecheck and build, 50 tests, `/start?plan=lifetime` links to the Dodo URL, homepage shows $5.99 with no overflow at 375px.
 
-## Dodo billing webhook (2026-11-07, not committed, not deployed)
+## Dodo billing webhook (2026-11-07, committed 624d478, deployed)
 
 - `POST /api/billing/dodo` (`routes/billing.ts`), signed with `DODO_BILLING_WEBHOOK_SECRET` (Standard Webhooks; the check is now shared with Polar as `verifyStandardWebhook` in `verify.ts`).
   - `payment.succeeded` with no `subscription_id` mints a Lifetime license keyed on the Dodo `payment_id` (optionally only if `product_cart` has `LIFETIME_PRODUCT_ID`).
@@ -377,7 +377,11 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - `/api/license/claim` takes `payment_id=pay_…` (or Stripe's `session_id=cs_…`); `/license` reads `payment_id` first, and its text no longer says Stripe. DEPLOY.md's Cloud and Lifetime steps now describe Dodo.
 - Verified: 51 tests (new `dodo:` test with signed payloads), edge-api and web typecheck. Not browser-checked (dev servers weren't running).
 - Not verified: Dodo's real payload field names (`payment_id`, `subscription_id`, `product_cart`, `customer.email`, `customer.customer_id`, `metadata.account_id`, `next_billing_date`) come from Dodo's docs, not a live event. Before launch, use Dodo's test mode: send a test event or make a test purchase, and confirm `/license?payment_id=…` shows a key and a Cloud subscription turns the account active.
-- `DODO_BILLING_WEBHOOK_SECRET` is set on the production worker `grosslytics-edge-api` (user ran it 2026-11-07). `LIFETIME_PRODUCT_ID = "pdt_0NrRPjE8ZMtW2BNM0a6bm"` is in `wrangler.toml` `[vars]` (production only, not `env.dev`). Still to deploy: the code itself, and the webhook in Dodo pointing at `https://grosslytics.com/api/billing/dodo`.
+- Deployed 2026-11-07 to grosslytics.com from branch `feat/dodo-billing` (commit 624d478, not pushed, not merged) with `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`; version `2026-11-07-624d478`. Migration 011 ran on the live DB (it had no legacy secrets).
+  - Live secrets on `grosslytics-edge-api`: `API_TOKEN`, `DODO_BILLING_WEBHOOK_SECRET`, `LIFETIME_PRODUCT_ID` (a secret, not a `[vars]` entry: production deploys use the generated `grosslytics-install/release/api/wrangler.toml`, whose `[vars]` come from `apiToml()` and would drop a root `wrangler.toml` var).
+  - Checked live: `/`, `/app`, `/g.js`, `/api/auth/status` 200; homepage shows $5.99; unsigned `POST /api/billing/dodo` → 401.
+  - **Still blocking sales:** `LICENSE_SECRET` is not set, so `/api/license/claim` answers 503 and a Dodo Lifetime payment webhook gets 503 (Dodo retries up to 8 times). No `RELEASES` R2 bucket, so a key can't download the installer yet. `CLOUD` is off, so no one can sign up for Indie Cloud and a subscription has no account to switch on.
+  - The Dodo webhook endpoint in Dodo's dashboard: unknown whether the user has added it.
 
 ## Brand icon files (2026-11-07)
 
