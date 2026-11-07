@@ -2,20 +2,39 @@
   "name": "grosslytics",
   "version": "0.1.0",
   "description": "Install Grosslytics in your own Cloudflare (Lifetime license), and the MCP stdio bridge",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://grosslytics.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vidneat/grosslytics.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "analytics",
+    "revenue",
+    "attribution",
+    "cloudflare",
+    "self-hosted",
+    "mcp"
+  ],
   "type": "module",
   "bin": {
     "grosslytics": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "bun build src/index.ts --target node --outfile dist/index.js",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
+  "devDependencies": {
     "@clack/prompts": "^0.9.0",
     "commander": "^13.1.0",
-    "picocolors": "^1.1.1"
-  },
-  "devDependencies": {
+    "picocolors": "^1.1.1",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   }

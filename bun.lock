@@ -57,13 +57,11 @@
       "bin": {
         "grosslytics": "./dist/index.js",
       },
-      "dependencies": {
+      "devDependencies": {
         "@clack/prompts": "^0.9.0",
+        "@types/node": "^22.0.0",
         "commander": "^13.1.0",
         "picocolors": "^1.1.1",
-      },
-      "devDependencies": {
-        "@types/node": "^22.0.0",
         "typescript": "^5.7.0",
       },
     },
