@@ -7,13 +7,14 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { apiToml, databaseId, deployedHost, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, noindex, saveState, unpack, webToml, wrangler } from './install.js';
+import pkg from '../package.json' with { type: 'json' };
 
 const program = new Command();
 
 program
 	.name('grosslytics')
 	.description('Grosslytics: Ultra-fast, edge-native revenue attribution CLI')
-	.version('0.1.0');
+	.version(pkg.version);
 
 // 1. Lifetime installer: license key → release bundle → everything created and deployed in the buyer's own Cloudflare.
 // Re-running it updates the same install to the latest release.
