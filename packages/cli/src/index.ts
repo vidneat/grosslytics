@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { intro, outro, text, password as secret, spinner, note, isCancel, cancel } from '@clack/prompts';
+import { intro, outro, text, password as secret, select, log, spinner, note, isCancel, cancel } from '@clack/prompts';
 import pc from 'picocolors';
 import { Command } from 'commander';
 import { randomBytes } from 'node:crypto';
@@ -65,6 +65,23 @@ program
 		} catch {
 			note('A browser window opens. Sign in to Cloudflare and click Allow.', 'Cloudflare sign-in');
 			wrangler(['login']);
+		}
+
+		// Wrangler caches the last-used account per folder and keeps using it after you log in as someone else; pin the signed-in one.
+		if (!process.env.CLOUDFLARE_ACCOUNT_ID) {
+			const me = JSON.parse(wrangler(['whoami', '--json'], { quiet: true })) as { email?: string; accounts?: Array<{ id: string; name: string }> };
+			const accounts = me.accounts ?? [];
+			if (!accounts.length) {
+				cancel('This Cloudflare login has no accounts. Run `npx wrangler login` with the right email, then try again.');
+				process.exit(1);
+			}
+			const id = accounts.length === 1 ? accounts[0]!.id : await select({ message: 'Which Cloudflare account?', options: accounts.map((a) => ({ value: a.id, label: a.name })) });
+			if (isCancel(id)) {
+				cancel('Cancelled. Nothing was changed.');
+				process.exit(0);
+			}
+			process.env.CLOUDFLARE_ACCOUNT_ID = String(id);
+			log.info(`Cloudflare: ${accounts.find((a) => a.id === id)?.name} (${me.email}). To use another, run \`npx wrangler login\` first.`);
 		}
 
 		await step('Creating the database', () => ensure(['d1', 'create', 'grosslytics-db']));
