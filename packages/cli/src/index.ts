@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { apiToml, databaseId, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, noindex, saveState, unpack, webToml, wrangler } from './install.js';
+import { apiToml, databaseId, deployedHost, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, noindex, saveState, unpack, webToml, wrangler } from './install.js';
 
 const program = new Command();
 
@@ -82,6 +82,13 @@ program
 			}
 			process.env.CLOUDFLARE_ACCOUNT_ID = String(id);
 			log.info(`Cloudflare: ${accounts.find((a) => a.id === id)?.name} (${me.email}). To use another, run \`npx wrangler login\` first.`);
+		}
+
+		// Worker names are fixed, so installing on an account that already runs Grosslytics for another hostname would replace it
+		const existing = await step('Checking this Cloudflare account', deployedHost);
+		if (existing && existing !== host) {
+			cancel(`This Cloudflare account already runs Grosslytics for ${existing}. Installing ${host} here would replace it. Run \`npx wrangler login\` with the account that owns ${zone}, then run this again.`);
+			process.exit(1);
 		}
 
 		await step('Creating the database', () => ensure(['d1', 'create', 'grosslytics-db']));

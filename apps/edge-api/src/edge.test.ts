@@ -14,7 +14,7 @@ import { billingRoute } from './routes/billing.js';
 import { CLOUD_EVENT_CAP, countUsage, usageMonth } from './cloud.js';
 import { licenseRoute } from './routes/license.js';
 import { verifyPassword } from './routes/auth.js';
-import { apiToml, hashPassword as cliHashPassword, isHost, noindex } from '../../../packages/cli/src/install.ts';
+import { apiToml, hashPassword as cliHashPassword, isHost, noindex, versionHost } from '../../../packages/cli/src/install.ts';
 import { cleanup, handleQueueBatch, RECEIPT_DAYS } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
 import { formatMoney } from '@grosslytics/shared/money';
@@ -846,6 +846,10 @@ test('lifetime: a paid one-time checkout mints a license, the buyer claims it, a
 	expect(await verifyPassword('wrong', cliHashPassword('correct horse'))).toBe(false);
 	expect(apiToml({ host: 'analytics.acme.io', zone: 'acme.io' }, 'db-1')).toContain('pattern = "analytics.acme.io/api/*", zone_name = "acme.io"');
 	expect(apiToml({ host: 'a.io', zone: 'a.io' }, 'db-1')).not.toContain('r2_buckets');
+	// The account check reads the existing API's hostname from `wrangler versions view --json`
+	expect(versionHost({ resources: { bindings: [{ name: 'DB' }, { name: 'TRACKER_ORIGIN', text: 'https://analytics.vidneat.app' }] } })).toBe('analytics.vidneat.app');
+	expect(versionHost({ resources: { bindings: [] } })).toBe(null);
+	expect(versionHost({})).toBe(null);
 	expect(apiToml({ host: 'a.io', zone: 'a.io', releasesBucket: 'rel' }, 'db-1')).toContain('[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "rel"');
 	expect([isHost('analytics.acme.io'), isHost('acme'), isHost('a.b/c')]).toEqual([true, false, false]);
 });

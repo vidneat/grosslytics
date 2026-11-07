@@ -399,7 +399,7 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 
 - The user ran `npx grosslytics install` for analytics.vidneat.app (folder `/Users/raviair/grosslytics-install`) while Wrangler was signed in to ravi88927615. Same worker names, so it deployed vidneat's API config over grosslytics.com's `grosslytics-edge-api` (version c0493f30, 2026-11-07 18:27 UTC): `TRACKER_ORIGIN` = analytics.vidneat.app and no `RELEASES` binding, so every license download answered "No release has been published yet". The website worker and data were not affected (no noindex header, sitemap intact, same D1).
 - Fixed by redeploying grosslytics.com with `bun run setup` (version fcb6bd9b): `RELEASES` and `TRACKER_ORIGIN = https://grosslytics.com` are back; pages, API, tracker 200; no `X-Robots-Tag`.
-- Risk remains: the installer doesn't check that the signed-in Cloudflare account owns the host's zone, so the same mistake can overwrite an operator's other deployment. A guard is proposed, not built.
+- Guard added (CLI 0.1.1, not yet on npm): after picking the account, the installer reads the existing `grosslytics-edge-api`'s `TRACKER_ORIGIN` (`wrangler deployments list --json` → `versions view --json`) and refuses if it serves a different hostname. Checked live against the vidneat account (reads `analytics.vidneat.app`); unit test for the parsing. Publish: `cd packages/cli && npm publish --access public` (browser approval).
 
 ## Dodo Payments as a customer payment provider (2026-11-07, deployed)
 

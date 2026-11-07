@@ -121,6 +121,27 @@ export const wrangler = (args: string[], opts: { cwd?: string; input?: string; q
 		stdio: [opts.input !== undefined ? 'pipe' : opts.quiet ? 'ignore' : 'inherit', opts.quiet ? 'pipe' : 'inherit', 'pipe'],
 	})?.toString() ?? '';
 
+/** The hostname a version of the API serves, from its TRACKER_ORIGIN setting (`wrangler versions view --json`). */
+export const versionHost = (version: { resources?: { bindings?: Array<{ name?: string; text?: string }> } }): string | null => {
+	const origin = version.resources?.bindings?.find((b) => b.name === 'TRACKER_ORIGIN')?.text;
+	try {
+		return origin ? new URL(origin).hostname : null;
+	} catch {
+		return null;
+	}
+};
+
+/** Which hostname this Cloudflare account's Grosslytics API already serves, or null when there is none (or it can't tell). */
+export function deployedHost(): string | null {
+	try {
+		const deployments = JSON.parse(wrangler(['deployments', 'list', '--name', 'grosslytics-edge-api', '--json'], { quiet: true }));
+		const id = deployments.at(-1)?.versions?.[0]?.version_id;
+		return id ? versionHost(JSON.parse(wrangler(['versions', 'view', id, '--name', 'grosslytics-edge-api', '--json'], { quiet: true }))) : null;
+	} catch {
+		return null; // no API deployed here yet
+	}
+}
+
 /** Runs a wrangler command whose failure only means "already exists". Any other failure is rethrown with wrangler's message. */
 export function ensure(args: string[]): void {
 	try {

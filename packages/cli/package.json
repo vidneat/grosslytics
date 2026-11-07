@@ -1,6 +1,6 @@
 {
   "name": "grosslytics",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Install Grosslytics in your own Cloudflare (Lifetime license), and the MCP stdio bridge",
   "license": "AGPL-3.0-only",
   "homepage": "https://grosslytics.com",
