@@ -11,6 +11,20 @@ Both must sit on **one domain**. The tracker sends beacons to `<origin of g.js>/
 
 ---
 
+## Quick setup (recommended)
+
+```bash
+bun run setup
+```
+
+One command does steps 2 to 10 below. It builds the code, signs in to Cloudflare (click **Allow**), creates the D1 database and both queues, runs every migration, deploys the API (`<host>/api/*`) and the website (custom domain `<host>`), and sets a random `API_TOKEN` plus your dashboard password. It prints the dashboard address and the `API_TOKEN` once, so save the token.
+
+Before the first run:
+- **New Cloudflare account:** open Workers & Pages in the dashboard once, so Cloudflare creates your workers.dev subdomain. Deploys are refused without it.
+- **Your hostname must have no DNS records** (A, AAAA or CNAME). Cloudflare won't attach a custom domain over existing records.
+
+It keeps its settings in `grosslytics-install/state.json`, which git ignores. Run it again in the same folder to update; that doesn't change your password or API_TOKEN. The manual steps below show what it does, for when you need to change one part.
+
 ## 0. Run everything locally first
 
 Create `.dev.vars` in the repo root (it's gitignored). Use any long random strings:
@@ -102,17 +116,9 @@ bunx wrangler login
 
 Your domain needs to be on Cloudflare (as a zone) before step 9.
 
-## 3. Choose your Durable Object storage (do this before the first deploy)
+## 3. Durable Object storage
 
-The Workers **Free** plan only supports SQLite-backed Durable Objects. If you're on Free, change the migration in `wrangler.toml` before deploying:
-
-```toml
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["SiteLiveHub"]   # instead of new_classes
-```
-
-You can't change this after the first deploy. On the Workers Paid plan either option works. Also check that your plan includes **Queues**.
+`wrangler.toml` uses SQLite-backed Durable Objects (`new_sqlite_classes`), which work on both the Workers Free and Paid plans. Leave it that way: the storage type can't be changed after the first deploy.
 
 ## 4. Create the D1 database
 

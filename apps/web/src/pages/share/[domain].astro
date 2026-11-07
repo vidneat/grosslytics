@@ -43,9 +43,10 @@ const badgePath = `/badge/${encodeURIComponent(domain)}.svg`;
 
 	<!-- Copy via data attribute: untrusted `domain` never reaches inline JS -->
 	<script>
+		import { copyText } from '../../lib/clipboard';
 		for (const b of document.querySelectorAll<HTMLButtonElement>('[data-copy-badge]')) {
 			b.addEventListener('click', async () => {
-				await navigator.clipboard.writeText(b.dataset.copyBadge || '');
+				if (!(await copyText(b.dataset.copyBadge || ''))) return;
 				b.textContent = 'Copied';
 				setTimeout(() => (b.textContent = 'Copy embed'), 1500);
 			});

@@ -10,3 +10,4 @@ dist/
 .dev.vars
 .release/
 grosslytics-install/
+.secrets/

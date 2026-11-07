@@ -1,7 +1,7 @@
 # Astro site (marketing, docs, share pages, dashboard). The edge API uses the root wrangler.toml.
 name = "grosslytics-web"
 main = "./dist/_worker.js/index.js"
-compatibility_date = "2024-12-01"
+compatibility_date = "2025-09-01" # MessageChannel global (React 19 server rendering) is on by default from 2025-08-15
 compatibility_flags = ["nodejs_compat"]
 
 [assets]

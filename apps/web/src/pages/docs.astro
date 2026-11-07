@@ -1,0 +1,168 @@
+---
+import Page from '../layouts/Page.astro';
+
+// Every statement here is checked against the code: tracker (packages/tracker/src/g.ts), webhooks (apps/edge-api/src/routes/webhooks.ts),
+// API routes (apps/edge-api/src/routes/stats.ts) and MCP tools (apps/edge-api/src/mcp.ts). Update both together.
+const ORIGIN = 'https://grosslytics.com';
+const toc = [
+	['install', 'Install the tracker'],
+	['goals', 'Track goals'],
+	['payments', 'Connect payments'],
+	['dashboard', 'Read the dashboard'],
+	['api', 'API'],
+	['mcp', 'AI agents (MCP)'],
+	['self-host', 'Self-hosting'],
+	['privacy', 'Privacy and bots'],
+] as const;
+
+const gateways = [
+	{
+		name: 'Stripe',
+		id: 'stripe',
+		events: 'checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded',
+		visitor: 'Payment Links and Checkout links on your page are tagged automatically (client_reference_id). With the Checkout API, pass client_reference_id or metadata.visitor_id. For renewals, put visitor_id in the subscription’s metadata.',
+	},
+	{ name: 'Polar', id: 'polar', events: 'order.paid', visitor: 'Checkout links on your page are tagged automatically (reference_id). Or pass metadata.visitor_id.' },
+	{ name: 'Lemon Squeezy', id: 'lemonsqueezy', events: 'order_created, subscription_payment_success', visitor: 'Checkout links on your page are tagged automatically (checkout[custom][visitor_id]).' },
+	{ name: 'Paddle', id: 'paddle', events: 'transaction.completed', visitor: 'Pass customData: { visitor_id } when you open Paddle Checkout.' },
+	{ name: 'Razorpay', id: 'razorpay', events: 'payment.captured', visitor: 'Pass notes: { visitor_id } when you create the order or payment.' },
+];
+
+const endpoints = [
+	['GET', '/api/stats/sites', 'Your sites (owner only, not read-only tokens)'],
+	['GET', '/api/stats/dashboard?siteId=…&range=30d&model=first&mode=net', 'Every dashboard number in one response. range: 24h, 7d, 30d, 90d. model: first, last, linear. mode: gross, net, profit. Filters: source, page, country, device.'],
+	['GET', '/api/stats?siteId=…&range=30d&model=first', 'Visitors, sales and revenue per channel'],
+	['GET', '/api/stats/journey/{visitorId}?siteId=…', 'One visitor’s pages, goals and payments in order'],
+	['POST', '/api/stats/ad-spend', '{ siteId, source, date: "YYYY-MM-DD", amountCents } sets one day’s spend for a source'],
+	['POST', '/api/stats/annotations', '{ siteId, at: unix seconds, label } adds a marker to the chart'],
+];
+
+const mcpTools = [
+	['query_channel_roas', 'Revenue, ad spend and return per channel'],
+	['inspect_unmasked_direct', 'What “Direct” traffic really was: in-app browsers, shared links, typed visits'],
+	['get_ai_search_citations', 'Visits and revenue from ChatGPT, Perplexity, Claude, Gemini and Copilot'],
+	['get_buyer_journeys', 'Recent buyers and the pages they saw before paying'],
+	['compare_buyer_reading_time', 'Reading time and scroll depth of buyers vs everyone else'],
+];
+
+const h2 = 'scroll-mt-20 text-[28px] font-semibold tracking-[-0.02em] text-ink';
+const h3 = 'mt-8 text-[19px] font-semibold text-ink';
+const pre = 'mt-4 overflow-x-auto rounded-xl bg-band p-4 font-mono text-[13.5px] leading-relaxed text-ink ring-1 ring-line';
+const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
+---
+
+<Page title="Docs — Grosslytics" description="Install the Grosslytics tracker, track goals, connect Stripe, Polar, Lemon Squeezy, Paddle or Razorpay, and use the API and MCP server.">
+	<main>
+		<article class="mx-auto max-w-[760px] px-5 pt-14 pb-24">
+			<header>
+				<p class="eyebrow mb-3">Docs</p>
+				<h1 class="text-[clamp(36px,5.5vw,56px)] font-semibold leading-[1.06] tracking-[-0.035em]">Set up Grosslytics.</h1>
+				<p class="mt-5 text-[21px] leading-relaxed text-ink-2">One script tag for visits, one webhook for sales. Then every payment is credited to the channel that brought the buyer.</p>
+			</header>
+
+			<nav aria-label="On this page" class="mt-10 rounded-xl bg-card p-5 ring-1 ring-line">
+				<p class="text-[13px] font-semibold text-ink">On this page</p>
+				<ol class="mt-2 grid gap-x-6 gap-y-1.5 text-[15px] sm:grid-cols-2">
+					{toc.map(([id, label], i) => <li><a class="text-accent hover:underline" href={`#${id}`}>{i + 1}. {label}</a></li>)}
+				</ol>
+			</nav>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="install" class={h2}>1. Install the tracker</h2>
+				<p>Sign in at <a class="text-accent hover:underline" href="/app">/app</a> and add your site. You get a site ID such as <code class={code}>gl_8b5e717a83ac</code>. Paste this into the <code class={code}>&lt;head&gt;</code> of every page:</p>
+				<pre class={pre}><code>{`<script defer src="${ORIGIN}/g.js" data-site-id="YOUR_SITE_ID"></script>`}</code></pre>
+				<p>Self-hosting? Use your own domain in <code class={code}>src</code>. The tracker sends events to the same domain it was loaded from, at <code class={code}>/api/event</code>. To send them somewhere else, add <code class={code}>data-api="https://your-api/api/event"</code>.</p>
+				<p>Events are only accepted from the site’s own domain, its subdomains, and <code class={code}>localhost</code>. The tracker records a pageview when the page loads, plus reading time and scroll depth when the visitor leaves.</p>
+				<p><strong>Single-page apps:</strong> the tracker records the page a visit loads on. Client-side route changes (React Router, Next.js links) are not recorded as separate pageviews yet.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="goals" class={h2}>2. Track goals</h2>
+				<p>Add an attribute to any button or link. A click records the goal:</p>
+				<pre class={pre}><code>{`<button data-gl-goal="signup">Create account</button>`}</code></pre>
+				<p><code class={code}>data-fast-goal</code> and <code class={code}>data-goal</code> work too, so buttons already tagged for DataFast keep working. From JavaScript:</p>
+				<pre class={pre}><code>{`window.grosslytics('signup', { plan: 'pro' });`}</code></pre>
+				<p><code class={code}>window.datafast</code>, <code class={code}>window.databull</code> and <code class={code}>window.plausible</code> point to the same function, so existing calls keep working after you swap the script.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="payments" class={h2}>3. Connect payments</h2>
+				<p>In your payment provider, add a webhook pointing at the URL below. Then, in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>Payments</strong>, paste the webhook’s signing secret. Unsigned webhooks, or ones with the wrong signature, are rejected.</p>
+				<pre class={pre}><code>{`${ORIGIN}/api/webhooks/{provider}?siteId=YOUR_SITE_ID`}</code></pre>
+				<p>To credit a sale to a channel, the payment has to carry the buyer’s visitor ID. On checkout links in your page, the tracker adds it for you. Anywhere else, read it in the browser and pass it to your checkout:</p>
+				<pre class={pre}><code>{`const visitorId = localStorage.getItem('gl_vid');`}</code></pre>
+				<p>If there is no visitor ID, a returning buyer is still matched by email when they paid before, and otherwise the sale is counted as unattributed.</p>
+
+				<div class="mt-8 space-y-4">
+					{gateways.map((g) => (
+						<div class="rounded-xl bg-card p-5 ring-1 ring-line">
+							<h3 class="text-[17px] font-semibold text-ink">{g.name} <span class="font-mono text-[13px] font-normal text-ink-3">/{g.id}</span></h3>
+							<p class="!mt-2 text-[15px]"><strong>Events:</strong> {g.events}</p>
+							<p class="!mt-1 text-[15px]"><strong>Visitor ID:</strong> {g.visitor}</p>
+						</div>
+					))}
+				</div>
+
+				<h3 class={h3}>Currencies and refunds</h3>
+				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. A full Stripe refund removes the sale from revenue; partial refunds are not handled yet.</p>
+				<p>Net revenue subtracts each provider’s standard published fee, which is an estimate; your actual fee can differ.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="dashboard" class={h2}>4. Read the dashboard</h2>
+				<p><strong>Attribution:</strong> first touch credits the source that first brought the buyer, last touch the one right before they paid, and linear splits each sale 50/50 between the two.</p>
+				<p><strong>Revenue:</strong> gross is what the buyer paid, net subtracts payment fees, and profit also subtracts the ad spend you enter for each source and day.</p>
+				<p><strong>Sources:</strong> visits that other tools call “Direct” are named where possible: in-app browsers (Instagram, Facebook, LinkedIn, TikTok, Telegram, X), AI search, links with <code class={code}>?utm_source=</code>, <code class={code}>?ref=</code> or <code class={code}>?via=</code>, and shared links versus typed addresses.</p>
+				<p><strong>Also on the dashboard:</strong> live visitors and sales, each buyer’s journey, lifetime value by first source, sales by day and hour in your site’s timezone, chart annotations, and an optional public revenue page at <code class={code}>/share/your-domain</code> that never shows customer emails or journeys.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="api" class={h2}>5. API</h2>
+				<p>Create a read-only token in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>API tokens</strong>. Each token reads one site and is shown once. Send it as a bearer token:</p>
+				<pre class={pre}><code>{`curl -H "Authorization: Bearer gl_pat_…" \\
+  "${ORIGIN}/api/stats/dashboard?siteId=YOUR_SITE_ID&range=30d"`}</code></pre>
+				<p>Read-only tokens can only make GET requests for their own site. The writes below need the owner’s API_TOKEN (self-hosting) or a signed-in dashboard session.</p>
+				<div class="mt-6 overflow-x-auto rounded-xl ring-1 ring-line">
+					<table class="w-full min-w-[560px] text-left text-[14px]">
+						<thead class="bg-band text-ink"><tr><th class="px-4 py-2.5 font-semibold">Method</th><th class="px-4 py-2.5 font-semibold">Path</th><th class="px-4 py-2.5 font-semibold">Returns</th></tr></thead>
+						<tbody class="divide-y divide-line">
+							{endpoints.map(([m, p, r]) => (
+								<tr><td class="px-4 py-2.5 font-mono text-ink-3">{m}</td><td class="px-4 py-2.5 font-mono text-[13px] text-ink break-all">{p}</td><td class="px-4 py-2.5 text-ink-2">{r}</td></tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="mcp" class={h2}>6. AI agents (MCP)</h2>
+				<p>Grosslytics includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?” Use a read-only API token. In Claude Code:</p>
+				<pre class={pre}><code>{`claude mcp add --transport http grosslytics \\
+  "${ORIGIN}/api/mcp?site=YOUR_SITE_ID" \\
+  --header "Authorization: Bearer gl_pat_…"`}</code></pre>
+				<p>Other clients take the same URL and header in their MCP settings (Streamable HTTP). Tools:</p>
+				<ul class="mt-4 space-y-2">
+					{mcpTools.map(([n, d]) => <li class="text-ink-2"><code class={code}>{n}</code> {d}</li>)}
+				</ul>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="self-host" class={h2}>7. Self-hosting</h2>
+				<p>Grosslytics runs entirely in your own Cloudflare account: Workers, D1, Queues and a Durable Object. The free Workers plan is enough for most sites.</p>
+				<p>From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
+				<pre class={pre}><code>{`git clone https://github.com/vidneat/grosslytics.git
+cd grosslytics && bun install
+bun run setup`}</code></pre>
+				<p>The <a class="text-accent hover:underline" href="/#pricing">Lifetime license</a> (opening soon) will do the same without the code: <code class={code}>npx grosslytics install</code>.</p>
+				<p>On first visit, a self-hosted dashboard asks for your API_TOKEN once and a password; after that you sign in with the password. Five wrong passwords lock sign-in for 15 minutes.</p>
+			</section>
+
+			<section class="prose-g mt-16 text-[17px] leading-relaxed">
+				<h2 id="privacy" class={h2}>8. Privacy and bots</h2>
+				<p>The tracker sets no cookies. It keeps a random visitor ID in the browser’s local storage and a session ID in session storage. Buyer emails are never stored in full: only a hash (to recognize repeat buyers) and a masked form such as j***@gmail.com for the dashboard.</p>
+				<p>Known bots, headless browsers and traffic from cloud data centers are dropped before they are counted. A visit whose browser identifies as an AI crawler, such as GPTBot, is recorded as an AI crawl instead of a visitor.</p>
+				<p class="!mt-10 text-[15px] text-ink-3">For AI assistants, a plain-text summary of this product is at <a class="text-accent hover:underline" href="/llms.txt">/llms.txt</a>.</p>
+			</section>
+		</article>
+	</main>
+</Page>

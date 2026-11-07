@@ -75,9 +75,10 @@ TRACKER_ORIGIN = "https://${s.host}"
 
 /** The website and dashboard, on <host> as a custom domain (Cloudflare creates the DNS record). */
 export function webToml(s: Pick<InstallState, 'host'>): string {
+	// 2025-09-01+: React 19 server rendering needs the MessageChannel global
 	return `name = "grosslytics-web"
 main = "./dist/_worker.js/index.js"
-compatibility_date = "2024-12-01"
+compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 routes = [{ pattern = "${s.host}", custom_domain = true }]
 
@@ -121,10 +122,15 @@ export async function download(origin: string, license: string): Promise<string>
 		const body = (await res.json().catch(() => ({}))) as { error?: string };
 		throw new Error(body.error || `Download failed (HTTP ${res.status}).`);
 	}
-	rmSync(join(DIR, 'release'), { recursive: true, force: true });
-	mkdirSync(join(DIR, 'release'), { recursive: true });
 	const file = join(DIR, 'release.tgz');
 	writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+	return unpack(file);
+}
+
+/** Unpacks a release bundle into DIR/release and returns its version. */
+export function unpack(file: string): string {
+	rmSync(join(DIR, 'release'), { recursive: true, force: true });
+	mkdirSync(join(DIR, 'release'), { recursive: true });
 	execFileSync('tar', ['-xzf', file, '-C', join(DIR, 'release')]);
 	const version = join(DIR, 'release', 'VERSION');
 	if (!existsSync(version)) throw new Error('The download was not a Grosslytics release.');

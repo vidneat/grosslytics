@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, Loader2 } from 'lucide-react';
 import { DEFAULT_API } from '../dashboard/api';
+import { copyText } from '../../lib/clipboard';
 
 type State = { kind: 'waiting' } | { kind: 'ready'; key: string; email: string | null } | { kind: 'error'; message: string };
 
@@ -29,7 +30,7 @@ export default function LicenseClaim() {
 		return () => clearTimeout(timer);
 	}, []);
 
-	const copy = (value: string, what: string) => navigator.clipboard.writeText(value).then(() => setCopied(what));
+	const copy = (value: string, what: string) => copyText(value).then((ok) => ok && setCopied(what));
 	const command = 'npx grosslytics install';
 
 	if (state.kind === 'waiting')

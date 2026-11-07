@@ -11,7 +11,7 @@ mode = "smart"
 [[d1_databases]]
 binding = "DB"
 database_name = "grosslytics-db"
-database_id = "" # Fill after `wrangler d1 create grosslytics-db`
+database_id = "" # Local dev only. `bun run setup` creates the real database and writes its own config
 
 # Cloudflare Queues - Ingestion Pipeline
 [[queues.producers]]
@@ -33,7 +33,7 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SiteLiveHub"]
+new_sqlite_classes = ["SiteLiveHub"] # SQLite-backed: required on the Workers Free plan
 
 # Environment variables
 [vars]

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Copy, KeyRound, LockKeyhole, Plug } from 'lucide-react';
 import { apiFetch, DEFAULT_API, logout, type Connection, type SiteInfo } from './api';
 import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
+import { copyText } from '../../lib/clipboard';
 
 // Password login needs the API on this site's own domain (the default deploy), so the session cookie is first-party.
 const SAME_ORIGIN_API = !import.meta.env?.PUBLIC_API_URL;
@@ -19,15 +20,17 @@ const TITLES: Record<Mode, [string, string]> = {
  * /app sign-in, like Traks and DataBull: on first visit the owner sets a password (proved with API_TOKEN), then signs in.
  * "remote" keeps the old API URL + token form for an API on another domain. With `start` it opens on the site list.
  */
-export function Connect({ onConnect, initialError, start, onCancel, onSignOut }: {
+export function Connect({ onConnect, initialError, start, onCancel, onSignOut, remote }: {
 	onConnect: (c: Connection) => void;
 	initialError?: string;
 	start?: Pick<Connection, 'api' | 'token'>;
 	onCancel?: () => void;
 	onSignOut?: () => void;
+	/** Only the API URL + token form: for connecting someone's own API from another site (/start) */
+	remote?: boolean;
 }) {
-	const [mode, setMode] = useState<Mode>(start ? (start.token ? 'remote' : 'login') : SAME_ORIGIN_API ? 'probe' : 'remote');
-	const [api, setApi] = useState(() => start?.api || DEFAULT_API || location.origin);
+	const [mode, setMode] = useState<Mode>(start ? (start.token ? 'remote' : 'login') : SAME_ORIGIN_API && !remote ? 'probe' : 'remote');
+	const [api, setApi] = useState(() => start?.api || DEFAULT_API || (remote ? '' : location.origin));
 	const [token, setToken] = useState(start?.token ?? '');
 	const [setupKey, setSetupKey] = useState('');
 	const [password, setPassword] = useState('');
@@ -206,7 +209,7 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut }:
 				>
 					<label className="block text-[13px] font-medium">
 						API URL
-						<input className={`${field} mt-1`} value={api} onChange={(e) => setApi(e.target.value.trim())} inputMode="url" required />
+						<input className={`${field} mt-1`} value={api} onChange={(e) => setApi(e.target.value.trim())} inputMode="url" placeholder="https://analytics.yourstartup.com" required />
 					</label>
 					<label className="block text-[13px] font-medium">
 						API token
@@ -214,7 +217,7 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut }:
 						<span className="mt-1 flex items-center gap-1 text-[12px] font-normal text-ink-3"><KeyRound size={12} aria-hidden="true" />API_TOKEN from .dev.vars locally, or `wrangler secret put API_TOKEN`</span>
 					</label>
 					<button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Connecting…' : 'Connect'}</button>
-					{SAME_ORIGIN_API && !start && <button type="button" className="text-[13px] text-accent hover:underline" onClick={() => (setMode('probe'), setError(''), probe())}>‹ Sign in with a password instead</button>}
+					{SAME_ORIGIN_API && !start && !remote && <button type="button" className="text-[13px] text-accent hover:underline" onClick={() => (setMode('probe'), setError(''), probe())}>‹ Sign in with a password instead</button>}
 				</form>
 			)}
 
@@ -269,7 +272,7 @@ export function InstallSnippet({ siteId, api }: { siteId: string; api: string })
 				<button
 					type="button"
 					className="btn btn-quiet shrink-0 !px-2 !py-1 !text-[13px]"
-					onClick={() => navigator.clipboard.writeText(snippet).then(() => setCopied(true))}
+					onClick={() => copyText(snippet).then(setCopied)}
 				>
 					<Copy size={13} aria-hidden="true" />
 					{copied ? 'Copied' : 'Copy'}
@@ -302,7 +305,7 @@ export function ApiTokens({ conn }: { conn: Connection }) {
 		setError('');
 		fn().then(load, (e: Error) => setError(e.message));
 	};
-	const copy = (text: string, what: string) => navigator.clipboard.writeText(text).then(() => setCopied(what));
+	const copy = (text: string, what: string) => copyText(text).then((ok) => ok && setCopied(what));
 	const mcpUrl = `${api}/api/mcp?site=${conn.siteId}`;
 
 	return (
@@ -463,7 +466,7 @@ export function PaymentWebhooks({ conn, connected }: { conn: Connection; connect
 								>
 									<div className="flex items-start gap-2">
 										<code className="min-w-0 flex-1 break-all font-mono text-[12.5px] text-ink-2">{url}</code>
-										<button type="button" className="btn btn-quiet shrink-0 !px-2 !py-1 !text-[13px]" onClick={() => navigator.clipboard.writeText(url).then(() => setCopied(id))}>
+										<button type="button" className="btn btn-quiet shrink-0 !px-2 !py-1 !text-[13px]" onClick={() => copyText(url).then((ok) => ok && setCopied(id))}>
 											<Copy size={13} aria-hidden="true" />{copied === id ? 'Copied' : 'Copy'}
 										</button>
 									</div>

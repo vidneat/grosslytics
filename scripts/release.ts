@@ -2,6 +2,7 @@
  * Builds the release bundle that Lifetime buyers' `npx grosslytics install` downloads (operator only).
  *   bun scripts/release.ts            build .release/grosslytics.tgz
  *   bun scripts/release.ts --upload   also put it in R2 as grosslytics-releases/latest.tgz (needs `wrangler login`)
+ *   bun scripts/release.ts --keep-env keep PUBLIC_* build settings (`bun run setup`, deploying your own copy)
  * Bundle: api/index.js (pre-bundled edge API), web/dist (the built site + dashboard), migrate.sql, VERSION.
  */
 import { execFileSync } from 'node:child_process';
@@ -15,7 +16,7 @@ rmSync(OUT, { recursive: true, force: true });
 mkdirSync(`${OUT}/bundle/web`, { recursive: true });
 
 // Buyers' sites must not carry the operator's checkout links or API URL
-const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('PUBLIC_')));
+const cleanEnv = process.argv.includes('--keep-env') ? process.env : Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('PUBLIC_')));
 run('bun', ['run', '--cwd', 'apps/web', 'build'], cleanEnv);
 cpSync('apps/web/dist', `${OUT}/bundle/web/dist`, { recursive: true });
 run('bunx', ['wrangler', 'deploy', '--dry-run', '--outdir', `${OUT}/bundle/api`]);

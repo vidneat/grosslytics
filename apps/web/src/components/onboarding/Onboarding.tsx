@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, Check, Copy, Loader2 } from 'lucide-react';
 import { DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection } from '../dashboard/api';
 import { Connect } from '../dashboard/connect';
+import { copyText } from '../../lib/clipboard';
 
 type Plan = 'self' | 'cloud' | 'lifetime';
 
@@ -130,7 +131,7 @@ function CopyBlock({ code, label }: { code: string; label?: string }) {
 			<pre className="overflow-x-auto px-3.5 py-2.5 pr-20 font-mono text-[12.5px] leading-relaxed text-ink"><code>{code}</code></pre>
 			<button
 				type="button"
-				onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true))}
+				onClick={() => copyText(code).then(setCopied)}
 				className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-card px-2 py-1 text-[12px] text-ink-2 ring-1 ring-line hover:text-ink"
 				aria-label={`Copy ${label ?? 'command'}`}
 			>
@@ -262,11 +263,11 @@ function SelfHost() {
 					</div>
 					{where === 'cloudflare' ? (
 						<>
-							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a> and a free Cloudflare account. About five minutes.</p>
+							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, a free Cloudflare account, and a domain on that account. About five minutes.</p>
 							<CopyBlock label="1. Get the code" code={`git clone ${REPO}.git\ncd grosslytics && bun install`} />
-							<CopyBlock label="2. Create the database and queues" code={'bunx wrangler login\nbunx wrangler d1 create grosslytics-db\nbunx wrangler queues create grosslytics-ingest\nbunx wrangler queues create grosslytics-ingest-dlq'} />
-							<p className="text-[13px]">Paste the <code className="font-mono">database_id</code> that <code className="font-mono">d1 create</code> prints into <code className="font-mono">wrangler.toml</code>. On the Workers Free plan, switch the Durable Object migration to <code className="font-mono">new_sqlite_classes</code> first (<a className="text-accent hover:underline" href={`${REPO}/blob/main/DEPLOY.md`}>DEPLOY.md</a>, step 3).</p>
-							<CopyBlock label="3. Create tables, set your API token, deploy" code={'bun run db:migrate:remote\nopenssl rand -hex 32   # copy this; it is your API token\nbunx wrangler secret put API_TOKEN\nbunx wrangler deploy --env=""'} />
+							<CopyBlock label="2. Set up and deploy" code="bun run setup" />
+							<p className="text-[13px]">It asks for a hostname (such as analytics.yourstartup.com) and a dashboard password, then opens Cloudflare: click <strong>Allow</strong>. It creates the database and queues, deploys, and prints your dashboard address and API_TOKEN. Run it again later to update.</p>
+							<p className="text-[13px]">Brand-new Cloudflare account? Open <a className="text-accent hover:underline" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages">Workers &amp; Pages</a> once first, so Cloudflare creates your workers.dev subdomain. If your hostname already has DNS records, delete them first.</p>
 						</>
 					) : (
 						<>
@@ -279,9 +280,10 @@ function SelfHost() {
 				</Step>
 
 				<Step n={2} title="Connect this dashboard and add your site" status={statuses[1]!} open={isOpen(1)} onToggle={toggle(1)} summary={conn && <>Connected to <code className="font-mono text-[12px]">{conn.api}</code>, site <code className="font-mono text-[12px]">{conn.siteId}</code>. <button type="button" className="text-accent hover:underline" onClick={() => (saveConnection(null), setConn(null), setOpen(1))}>Change</button></>}>
-					<p>Set your dashboard password with the API token from step 1, then add your site's domain. After this you sign in with the password only.</p>
+					<p>Open your own dashboard at <code className="font-mono text-[13px]">https://your-hostname/app</code> and sign in with the password you chose. It shows your tracker snippet and payment webhooks. Or connect it here with your API URL and the API_TOKEN that setup printed, and follow the next steps on this page.</p>
 					<div className="-mx-2">
 						<Connect
+							remote
 							onConnect={(c) => {
 								saveConnection(c);
 								setConn(c);

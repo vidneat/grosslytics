@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { apiToml, databaseId, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, saveState, webToml, wrangler } from './install.js';
+import { apiToml, databaseId, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, saveState, unpack, webToml, wrangler } from './install.js';
 
 const program = new Command();
 
@@ -22,7 +22,8 @@ program
 	.alias('init')
 	.description('Install or update Grosslytics in your own Cloudflare account (needs a Lifetime license key)')
 	.option('--from <origin>', 'Where licenses and releases are served', 'https://grosslytics.com')
-	.action(async (opts: { from: string }) => {
+	.option('--bundle <file>', 'Deploy a locally built bundle (bun run setup) instead of downloading one; no license needed')
+	.action(async (opts: { from: string; bundle?: string }) => {
 		intro(pc.bgGreen(pc.black(' Grosslytics installer ')));
 		mkdirSync(DIR, { recursive: true });
 		const prev = loadState();
@@ -35,7 +36,7 @@ program
 			return String(v).trim();
 		};
 
-		const license = process.env.GROSSLYTICS_LICENSE || prev.license || (await ask('Your license key', undefined, (v) => (v.startsWith('gl_lic_') ? undefined : 'Paste the gl_lic_… key from your purchase page'), 'gl_lic_…'));
+		const license = opts.bundle ? '' : process.env.GROSSLYTICS_LICENSE || prev.license || (await ask('Your license key', undefined, (v) => (v.startsWith('gl_lic_') ? undefined : 'Paste the gl_lic_… key from your purchase page'), 'gl_lic_…'));
 		const host = prev.host || (await ask('Where should Grosslytics live? A hostname on a domain you have on Cloudflare', undefined, (v) => (isHost(v.toLowerCase()) ? undefined : 'A hostname like analytics.yourstartup.com'), 'analytics.yourstartup.com')).toLowerCase();
 		const zone = prev.zone || (await ask('Its Cloudflare zone (the root domain)', guessZone(host), (v) => (host === v || host.endsWith(`.${v}`) ? undefined : `${host} must be inside this domain`))).toLowerCase();
 		const password = prev.passwordSet ? '' : await ask('Choose your dashboard password', undefined, (v) => (v.length >= 10 ? undefined : 'At least 10 characters'));
@@ -54,7 +55,8 @@ program
 			}
 		};
 
-		const version = await step('Downloading the latest release', () => download(opts.from, license));
+		const bundle = opts.bundle && resolve(opts.bundle);
+		const version = bundle ? await step('Unpacking your build', () => unpack(bundle)) : await step('Downloading the latest release', () => download(opts.from, license));
 		saveState({ license, host, zone, version, passwordSet: prev.passwordSet });
 
 		try {
@@ -95,7 +97,7 @@ program
 				(apiToken
 					? `\n${pc.bold('Your API_TOKEN')} (save it in your password manager; it is shown only now):\n${pc.yellow(apiToken)}\nYou need it to reset the dashboard password, or for scripts and MCP.\n`
 					: '') +
-				`\nTo update later, run ${pc.cyan('npx grosslytics install')} again in this folder.`,
+				`\nTo update later, run ${pc.cyan(bundle ? 'bun run setup' : 'npx grosslytics install')} again in this folder.`,
 			prev.passwordSet ? 'Updated' : 'Installed',
 		);
 		outro(pc.green('Done. Add a site on /app and paste its script tag into your site.'));

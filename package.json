@@ -20,7 +20,8 @@
     "dev:test-site": "python3 -m http.server 3000 --directory examples/test-site",
     "db:migrate:local": "bun scripts/db.ts migrate",
     "db:seed:local": "bun scripts/db.ts seed",
-    "db:migrate:remote": "bun scripts/db.ts migrate-remote"
+    "db:migrate:remote": "bun scripts/db.ts migrate-remote",
+    "setup": "bun scripts/release.ts --keep-env && bun packages/cli/src/index.ts install --bundle .release/grosslytics.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

@@ -175,6 +175,33 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
   - revoking a license on refund;
   - a buyer's instance still serves the marketing homepage at `/`.
 
+## Production deploy (2026-11-07)
+
+- Live at https://grosslytics.com on the Cloudflare account **ravi88927615@gmail.com** (account id `f6883459148b86e04de194a74b9ad66d`, Workers Free). Wrangler on this Mac is now signed in to that account, not ravi923615@gmail.com.
+- What exists there:
+  - D1 `grosslytics-db` (`339454ee-60ce-4bf1-9532-067b671d74db`), migrated through 009;
+  - queues `grosslytics-ingest` and `grosslytics-ingest-dlq`;
+  - workers.dev subdomain `grosslytics`, created only because Cloudflare requires one; both workers have `workers_dev = false`.
+- Workers:
+  - `grosslytics-edge-api` on route `grosslytics.com/api/*`, with SQLite Durable Objects (`new_sqlite_classes`, required on Free).
+  - `grosslytics-web` on the custom domain grosslytics.com. Its compatibility_date is now 2025-09-01, because React 19 server rendering needs the `MessageChannel` global.
+- The user deleted the old apex A/AAAA/CNAME records (they pointed at a dead server, error 522) so the custom domain could attach. MX = Cloudflare Email Routing, kept.
+- Secrets set: only `API_TOKEN`. The value is in `.secrets/production-api-token.txt` (mode 600, gitignored); never print it. The user pastes it once on /app to set the dashboard password.
+- Not set yet:
+  - payment webhook secrets (customers set them per site on /app → Payments);
+  - `CLOUD` is off, so customer sign-ups are disabled;
+  - `LICENSE_SECRET`, the R2 bucket, Stripe links and the billing webhook.
+- Checked live: `/`, `/app` (setup screen in the browser), `/g.js` and `/api/auth/status` return 200; `/api/stats/sites` returns 401 without a login.
+
+## One-command self-host: `bun run setup` (2026-11-07)
+
+- Why: the user followed /start's manual steps in a fresh clone (`/Users/raviair/grosslytics`). GitHub `main` is still `1ef1f15`, whose wrangler.toml has an empty KV binding, so every wrangler command failed. Local commits `b6bd620` and `0af6ae9` and today's work are **not pushed**. The manual steps also needed hand edits (database_id, DO storage) and would have crashed the website worker (compat date).
+- `bun run setup` runs `scripts/release.ts --keep-env` (local bundle), then `packages/cli/src/index.ts install --bundle .release/grosslytics.tgz`. It's the same flow as the Lifetime installer, minus the license and download. State lives in `grosslytics-install/state.json` (gitignored); re-running updates without touching the password or API_TOKEN.
+- `webToml` compat date is now 2025-09-01 (MessageChannel). The root `wrangler.toml` and `apps/web/wrangler.toml` are generic again (no database_id, no routes); production values live in the generated configs under `grosslytics-install/release/`. This Mac has a production `state.json` for grosslytics.com (`passwordSet: true`), so `bun run setup` here updates production.
+- Ran `bun run setup` once against production: build, existing-database handling, queues, migrations and both deploys succeeded (deployments 08:54–08:55 UTC). The site and API were fine afterwards. The first-install-only parts (secret put, owner password insert) have not run live.
+- /start step 1 is now `git clone` + `bun install` + `bun run setup`, with notes about the workers.dev subdomain and existing DNS records. Step 2 sends people to their own `/app`, or a `Connect remote` form (API URL + token). `/docs` self-hosting and DEPLOY.md "Quick setup" match.
+- **Not live yet:** the auto-mode classifier blocked further production deploys, so these /start, /docs and copy changes are built locally but not deployed. Fresh clones still get the old broken code until it is committed and pushed.
+
 ## Where things stand
 
 **Done and verified locally**
