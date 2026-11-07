@@ -1,0 +1,16 @@
+---
+import Page from '../layouts/Page.astro';
+import LicenseClaim from '../components/onboarding/LicenseClaim.tsx';
+---
+
+<Page title="Your Lifetime license — Grosslytics" description="Your Grosslytics Lifetime license key and the one command that installs it in your own Cloudflare account." noindex>
+	<main class="bg-canvas px-5 pt-16 pb-24">
+		<div class="mx-auto max-w-[640px]">
+			<header class="mb-10 text-center">
+				<h1 class="text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.05] tracking-[-0.035em]">Your Lifetime license.</h1>
+				<p class="mt-3 text-[17px] text-ink-2">One command puts Grosslytics in your own Cloudflare account.</p>
+			</header>
+			<LicenseClaim client:load />
+		</div>
+	</main>
+</Page>

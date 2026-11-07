@@ -7,7 +7,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS, MIGRATION_003_WAITLIST, MIGRATION_004_REFUNDS } from '../packages/db-d1/src/migrations.ts';
+import { ALL_MIGRATIONS } from '../packages/db-d1/src/migrations.ts';
 import { classifySourceCategory } from '../packages/shared/src/attribution.ts';
 import { calculateNetRevenue } from '../packages/shared/src/fees.ts';
 import type { PaymentGateway } from '../packages/shared/src/types.ts';
@@ -28,7 +28,7 @@ function write(name: string, sql: string) {
 }
 
 // D1 manages journal mode itself and rejects these pragmas
-const migrations = () => (MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS).replace(/^PRAGMA .*$/gm, '');
+const migrations = () => (ALL_MIGRATIONS).replace(/^PRAGMA .*$/gm, '');
 
 // Deterministic randomness, so every seed produces the same dataset shape
 let state = 42;

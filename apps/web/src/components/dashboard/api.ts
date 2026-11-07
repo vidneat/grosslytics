@@ -1,27 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DashboardData, DashFilter, DashMode, DashModel, DashRange, DashSale } from '@grosslytics/shared/dashboard';
+import { formatMoney } from '@grosslytics/shared/money';
 import { formatDuration } from '@grosslytics/shared/dashboard';
 import type { JourneyStep } from './demo';
 
-/** Where the edge API lives: PUBLIC_API_URL if set, else `wrangler dev` in development, else this site's own /api/* route. */
-export const DEFAULT_API = (import.meta.env.PUBLIC_API_URL as string | undefined) || (import.meta.env.DEV ? 'http://localhost:8787' : '');
+/** Where the edge API lives: PUBLIC_API_URL if set, else this site's own /api/* route (in development, astro.config proxies it to `wrangler dev`). */
+export const DEFAULT_API = (import.meta.env?.PUBLIC_API_URL as string | undefined) || '';
 
 export interface Connection {
 	api: string;
+	/** Empty when signed in with the dashboard password: the HttpOnly session cookie authenticates instead */
 	token: string;
 	siteId: string;
 }
 
 const KEY = 'gl_connection';
-// shortcut: the API token lives in localStorage (owner's own browser, self-host); hosted multi-user needs real sessions.
+// Password sign-in stores no secret here. Only the fallback "API on another address" form keeps its token in localStorage.
 export const loadConnection = (): Connection | null => {
 	try {
 		const c = JSON.parse(localStorage.getItem(KEY) || 'null');
-		return c?.api && c?.token && c?.siteId ? c : null;
+		return c?.api && typeof c.token === 'string' && c?.siteId ? c : null;
 	} catch {
 		return null;
 	}
 };
+
+/** Ends the password session (deletes it server-side and clears the cookie). */
+export const logout = (api: string) => fetch(`${api.replace(/\/$/, '')}/api/auth/logout`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(() => undefined, () => undefined);
 export const saveConnection = (c: Connection | null) => (c ? localStorage.setItem(KEY, JSON.stringify(c)) : localStorage.removeItem(KEY));
 
 export async function apiFetch<T>(c: Pick<Connection, 'api' | 'token'>, path: string, init?: RequestInit): Promise<T> {
@@ -30,7 +35,12 @@ export async function apiFetch<T>(c: Pick<Connection, 'api' | 'token'>, path: st
 		headers: { authorization: `Bearer ${c.token}`, 'content-type': 'application/json', ...init?.headers },
 	});
 	if (!res.ok) {
-		if (res.status === 401) throw new Error('The API token was rejected.');
+		if (res.status === 401 && !c.token) {
+			// Session expired or signed out elsewhere: forget the site choice and show the sign-in screen
+			saveConnection(null);
+			location.reload();
+		}
+		if (res.status === 401) throw new Error(c.token ? 'The API token was rejected.' : 'Your session has ended. Sign in again.');
 		const text = await res.text().catch(() => '');
 		let msg = text;
 		try {
@@ -46,6 +56,9 @@ export interface SiteInfo {
 	domain: string;
 	name: string;
 	shared: number;
+	timezone?: string;
+	/** Payment gateways with a webhook secret saved for this site */
+	payments?: string[];
 }
 
 const dashQuery = (q: { range: DashRange; model: DashModel; mode: DashMode; filters: DashFilter[] }) => {
@@ -63,12 +76,16 @@ export function useRemoteDashboard(
 	q: { range: DashRange; model: DashModel; mode: DashMode; filters: DashFilter[] },
 	refreshKey = 0,
 ) {
-	const [state, setState] = useState<{ data: DashboardData | null; error: string | null; loading: boolean }>({ data: null, error: null, loading: !!target });
-	const key = target ? JSON.stringify([target, q, refreshKey]) : '';
+	const scope = target ? JSON.stringify(target) : '';
+	const [state, setState] = useState<{ scope: string; data: DashboardData | null; error: string | null; loading: boolean }>({ scope, data: null, error: null, loading: !!target });
+	const key = JSON.stringify([scope, q, refreshKey]);
 	useEffect(() => {
-		if (!target) return;
+		if (!target) {
+			setState({ scope, data: null, error: null, loading: false });
+			return;
+		}
 		const ctl = new AbortController();
-		setState((s) => ({ ...s, loading: true }));
+		setState((s) => ({ scope, data: s.scope === scope ? s.data : null, error: null, loading: true }));
 		const params = dashQuery(q);
 		const req =
 			'conn' in target
@@ -79,13 +96,13 @@ export function useRemoteDashboard(
 						return r.json() as Promise<DashboardData>;
 					});
 		req.then(
-			(data) => setState({ data, error: null, loading: false }),
-			(e: Error) => e.name !== 'AbortError' && setState((s) => ({ data: s.data, error: e.message || 'Could not reach the API.', loading: false })),
+			(data) => !ctl.signal.aborted && setState({ scope, data, error: null, loading: false }),
+			(e: Error) => !ctl.signal.aborted && e.name !== 'AbortError' && setState((s) => ({ scope, data: s.scope === scope ? s.data : null, error: e.message || 'Could not reach the API.', loading: false })),
 		);
 		return () => ctl.abort();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [key]);
-	return state;
+	return state.scope === scope ? state : { data: null, error: null, loading: !!target };
 }
 
 interface JourneyEvent {
@@ -115,7 +132,7 @@ export async function fetchJourney(conn: Connection, sale: DashSale): Promise<Jo
 			const detail = kind === 'leave' && e.durationSec ? `${formatDuration(e.durationSec)} read · ${e.scrollDepth}% scrolled` : '';
 			return { t: stamp(e.timestamp), kind, what, src: kind === 'visit' && newSource ? e.source : '', detail };
 		});
-	const amount = (sale.gross / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+	const amount = formatMoney(sale.gross, sale.currency ?? 'USD', 2);
 	steps.push({ t: stamp(sale.at), kind: 'pay', what: `Paid ${amount} with ${sale.gateway}`, src: '', detail: sale.plan });
 	return steps;
 }
@@ -132,10 +149,12 @@ export interface LiveEntry {
 
 /** Owner live feed over the SiteLiveHub WebSocket: presence plus sales. Reconnects with backoff. */
 export function useLiveSocket(conn: Connection | null) {
-	const [online, setOnline] = useState<number | null>(null);
-	const [entries, setEntries] = useState<LiveEntry[]>([]);
+	const scope = conn ? JSON.stringify(conn) : '';
+	const [state, setState] = useState<{ scope: string; online: number | null; entries: LiveEntry[] }>({ scope, online: null, entries: [] });
 	const retry = useRef(0);
 	useEffect(() => {
+		setState({ scope, online: null, entries: [] });
+		retry.current = 0;
 		if (!conn) return;
 		let ws: WebSocket | null = null;
 		let timer: ReturnType<typeof setTimeout>;
@@ -145,16 +164,16 @@ export function useLiveSocket(conn: Connection | null) {
 			ws = new WebSocket(url);
 			ws.onopen = () => (retry.current = 0);
 			ws.onmessage = (m) => {
+				if (closed) return;
 				const msg = JSON.parse(String(m.data));
 				if (msg.type === 'presence') {
-					setOnline(msg.onlineVisitors);
-					setEntries((list) => {
-						const sales = list.filter((e) => e.sale);
+					setState((current) => {
+						const sales = current.entries.filter((e) => e.sale);
 						const visits: LiveEntry[] = msg.recentVisitors.map((v: any) => ({ id: `${v.visitorId}-${v.timestamp}`, cc: v.country, city: v.city, page: v.page, src: v.source, at: v.timestamp / 1000 }));
-						return [...sales, ...visits].sort((a, b) => b.at - a.at).slice(0, 8);
+						return { scope, online: msg.onlineVisitors, entries: [...sales, ...visits].sort((a, b) => b.at - a.at).slice(0, 8) };
 					});
 				} else if (msg.type === 'sale') {
-					setEntries((list) => [{ id: `sale-${msg.timestamp}`, cc: msg.country, city: '', page: msg.planName || '', src: msg.lastTouchSource, at: msg.timestamp / 1000, sale: msg.grossAmountCents }, ...list].slice(0, 8));
+					setState((current) => ({ ...current, entries: [{ id: `sale-${msg.timestamp}`, cc: msg.country, city: '', page: msg.planName || '', src: msg.lastTouchSource, at: msg.timestamp / 1000, sale: msg.grossAmountCents }, ...current.entries].slice(0, 8) }));
 				}
 			};
 			ws.onclose = () => {
@@ -168,6 +187,6 @@ export function useLiveSocket(conn: Connection | null) {
 			clearTimeout(timer);
 			ws?.close();
 		};
-	}, [conn?.api, conn?.token, conn?.siteId]);
-	return { online, entries };
+	}, [scope]);
+	return state.scope === scope ? state : { online: null, entries: [] };
 }

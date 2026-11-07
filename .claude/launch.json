@@ -26,6 +26,34 @@
       "autoPort": false
     },
     {
+      "name": "api-cloud",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8787",
+        "--var",
+        "CLOUD:1"
+      ],
+      "port": 8787,
+      "autoPort": false
+    },
+    {
+      "name": "api-license",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8787",
+        "--var",
+        "LICENSE_SECRET:local-test-only"
+      ],
+      "port": 8787,
+      "autoPort": false
+    },
+    {
       "name": "test-site",
       "runtimeExecutable": "python3",
       "runtimeArgs": [

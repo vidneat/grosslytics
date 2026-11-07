@@ -56,7 +56,7 @@ You need a free Stripe account and the Stripe CLI (`brew install stripe/stripe-c
    stripe login
    ```
    ```bash
-   stripe listen --events checkout.session.completed --forward-to "localhost:8787/api/webhooks/stripe?siteId=gl_YOUR_SITE_ID"
+   stripe listen --events checkout.session.completed,invoice.paid,invoice_payment.paid,charge.refunded --forward-to "localhost:8787/api/webhooks/stripe?siteId=gl_YOUR_SITE_ID"
    ```
    It prints a signing secret (`whsec_…`). Set it as `STRIPE_WEBHOOK_SECRET` in `.dev.vars` and restart `bun run dev:api`.
 5. Serve the test site:
@@ -130,6 +130,8 @@ bun run db:migrate:remote
 
 This applies every migration in `packages/db-d1/src/migrations.ts` to your Cloudflare D1. It's safe to re-run after updates, because each table is created only if it doesn't already exist.
 
+Existing installs must rerun `bun run db:migrate:remote` for migration 005 before deploying this version. It adds transactional delivery receipts and payment/refund references without rewriting existing events or payments. Previously duplicated visits and lost attribution are not reconstructed automatically.
+
 ## 6. Create the queues
 
 `wrangler.toml` uses both an ingest queue and a dead-letter queue:
@@ -149,6 +151,8 @@ Choose a site ID (for example `gl_live_abc123`) and add your site's row:
 ```bash
 bunx wrangler d1 execute grosslytics-db --remote --command "INSERT INTO sites (site_id, domain, name, currency) VALUES ('gl_live_abc123', 'yourdomain.com', 'Your Startup', 'USD');"
 ```
+
+Each site has one reporting currency: USD, EUR, GBP or INR. Choose it when adding a site in `/app`, or set the `currency` column in the insert above. New webhook payments in another currency return `422` without claiming the event. Historical payments in other currencies remain stored, but are excluded from totals and listed in a dashboard notice. No exchange-rate conversion is performed.
 
 ## 8. Set secrets
 
@@ -205,8 +209,9 @@ Optional website build settings, set when running `bun run build` in `apps/web`:
 | Variable | Effect |
 |---|---|
 | `PUBLIC_API_URL` | API on a different host than the website |
-| `PUBLIC_CHECKOUT_CLOUD_URL` | Stripe Payment Link for Indie Cloud. Unset, `/start?plan=cloud` shows a waitlist instead |
-| `PUBLIC_CHECKOUT_LIFETIME_URL` | Same, for Lifetime |
+| `PUBLIC_CHECKOUT_CLOUD_URL` | Stripe Payment Link for the $5/month Indie Cloud subscription. Used only on Hosted Cloud (see below), from the dashboard's Subscribe button |
+| `PUBLIC_STRIPE_PORTAL_URL` | Stripe customer portal login link, for the dashboard's "Manage billing" |
+| `PUBLIC_CHECKOUT_LIFETIME_URL` | Stripe Payment Link for the $29 Lifetime license (see "Selling Lifetime licenses"). Unset, `/start?plan=lifetime` shows a waitlist |
 | `PUBLIC_REPO_URL` | Repository that `/start` tells people to clone. Defaults to `https://github.com/vidneat/grosslytics` |
 
 Waitlist signups are stored in the `waitlist` table: `bunx wrangler d1 execute grosslytics-db --remote --command "SELECT * FROM waitlist"`.
@@ -229,21 +234,25 @@ Then go to Cloudflare dashboard → Workers → `grosslytics-web` → Settings �
 
 > `apps/web/public/.assetsignore` stops the server bundle (`_worker.js`) from being uploaded as public files. Don't delete it.
 
+Then open `https://grosslytics.com/app`. On the first visit it asks for your `API_TOKEN` once and a dashboard password; after that you sign in with the password only. The session is an HttpOnly cookie, so no secret is kept in the browser's storage. Forgot the password? Click **Forgot password?** and set a new one with `API_TOKEN`; that signs out every other session. Five wrong passwords lock sign-in for 15 minutes.
+
+Password sign-in needs the dashboard and API on the same domain (the setup above). If the API lives elsewhere (`PUBLIC_API_URL`), `/app` shows the API URL + token form instead.
+
 ## 11. Point your payment gateways at the API
 
 Use `https://grosslytics.com/api/webhooks/<gateway>?siteId=<your site id>`. `siteId` is required.
 
 | Gateway | URL suffix | Events to subscribe |
 |---|---|---|
-| Stripe | `/stripe` | `checkout.session.completed`, `invoice.paid` |
+| Stripe | `/stripe` | `checkout.session.completed`, `invoice.paid`, `invoice_payment.paid`, `charge.refunded` |
 | Razorpay | `/razorpay` | `payment.captured` |
 | Polar | `/polar` | `order.paid` |
 | Paddle | `/paddle` | `transaction.completed` |
 | LemonSqueezy | `/lemonsqueezy` | `order_created`, `subscription_payment_success` |
 
-Copy each signing secret into step 8.
+Copy each signing secret into step 8. `invoice_payment.paid` connects modern Stripe invoice IDs to their PaymentIntent IDs so refunds can arrive in either order. Full Stripe refunds are supported; partial refunds still need amount-based accounting.
 
-**How sales get linked to visitors:** the tracker adds the visitor ID to checkout **links** (`<a href>`) for Stripe, Polar, LemonSqueezy, Paddle and Razorpay. If you open checkout with JavaScript instead of a link, pass the visitor ID yourself:
+**How sales get linked to visitors:** the tracker tags Stripe links with `client_reference_id`, Polar links with `reference_id`, and LemonSqueezy links with `checkout[custom][visitor_id]`. Paddle and Razorpay require their checkout SDK or server integration; adding a URL parameter alone does not attach metadata. For checkouts created in code, pass the visitor ID yourself:
 
 - Stripe: `client_reference_id`
 - Razorpay: `notes.visitor_id`
@@ -300,15 +309,51 @@ For stdio-only clients, run `GROSSLYTICS_API_TOKEN=... npx grosslytics mcp --sit
 
 ---
 
+## Running Hosted Cloud (Indie Cloud, $5/month)
+
+This is only for you, the operator selling the hosted plan. Self-hosters skip it. It's the same code with one extra setting. Customers sign up on `/app` with an email and password, get 14 days free with no card, add sites, and can track up to 100,000 events a month. After the trial, or once a subscription ends, tracking pauses: visitors' pages don't notice anything, and the dashboard stays readable.
+
+1. Deploy as in steps 1–10, with `CLOUD = "1"` under `[vars]` in `apps/edge-api/wrangler.toml` (or `--var CLOUD:1`). `API_TOKEN` stays your admin key; customers never see it.
+2. In Stripe (test mode first), create a $5/month product and a **Payment Link** for it. Build the website with `PUBLIC_CHECKOUT_CLOUD_URL=<that link>`. The dashboard adds `client_reference_id=<account id>` and the customer's email to it.
+3. Turn on the **customer portal** (Settings → Billing → Customer portal), copy its login link, and build with `PUBLIC_STRIPE_PORTAL_URL=<that link>`.
+4. Add a Stripe webhook to `https://yourdomain.com/api/billing/stripe` with the events `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`. Then run `bunx wrangler secret put STRIPE_BILLING_WEBHOOK_SECRET` (its `whsec_…`).
+5. Customers connect their own payment providers on `/app` → Payments. Each site stores its own webhook signing secret. On Cloud, your `STRIPE_WEBHOOK_SECRET` and the other env secrets are never used for customer sites.
+
+Not built yet for Cloud: password reset by email (Grosslytics sends no email), a plan above 100,000 events, and account deletion. Usage is counted per calendar month (UTC).
+
+## Selling Lifetime licenses ($29 once)
+
+This is also only for you, the operator. A buyer pays, gets a license key on `/license`, and runs `npx grosslytics install`. That command downloads the release with the key, signs in to their Cloudflare (they click Allow), creates the database and queues, runs the migrations, deploys the API and dashboard to a hostname they choose, and sets their dashboard password. Running it again in the same folder updates them to your latest release.
+
+1. Create the R2 bucket that holds releases, and add it to the root `wrangler.toml` of **your** deployment:
+   ```bash
+   bunx wrangler r2 bucket create grosslytics-releases
+   ```
+   ```toml
+   [[r2_buckets]]
+   binding = "RELEASES"
+   bucket_name = "grosslytics-releases"
+   ```
+2. Set the key that license keys are derived from. It must never change, or old keys stop working: `openssl rand -hex 32`, then `bunx wrangler secret put LICENSE_SECRET`.
+3. In Stripe (test mode first), create a $29 one-time product and a **Payment Link**. Under *After payment*, choose "Don't show confirmation page" and redirect to `https://grosslytics.com/license?session_id={CHECKOUT_SESSION_ID}`. Build the website with `PUBLIC_CHECKOUT_LIFETIME_URL=<that link>`. Optionally set the var `LIFETIME_PAYMENT_LINK_ID=plink_…` so that only this link creates licenses.
+4. The billing webhook from the Hosted Cloud section (`/api/billing/stripe`, with `checkout.session.completed`) also creates licenses. Without Cloud, create that webhook with just this event and set `STRIPE_BILLING_WEBHOOK_SECRET`.
+5. Publish a release, and repeat this after every change you want buyers to get:
+   ```bash
+   bun scripts/release.ts --upload
+   ```
+   This builds the site without your `PUBLIC_*` settings, bundles the API, adds `migrate.sql`, and uploads `latest.tgz`.
+6. Publish the CLI to npm as `grosslytics` (`cd packages/cli && bun run build && npm publish`). Until then, `npx grosslytics` doesn't exist, and buyers would have to run `node packages/cli/dist/index.js install`.
+
+Limits: the installer runs on macOS and Linux (not Windows), and needs Node 18+. A refund does not revoke the key. A buyer's site also serves the Grosslytics homepage at `/`, with the dashboard at `/app`.
+
 ## Not production-ready yet
 
-- **`/app` signs in with the API token, which is stored in the browser's localStorage.** That's fine for one owner on their own device. A hosted multi-user product needs real accounts and sessions.
-- **One `API_TOKEN` covers every site.** That's fine for self-hosting one owner's sites. A hosted multi-tenant service needs a key per site.
-- **The dashboard queries raw events on every load.** The 90-day view of the sample data (19k visitors, 95k events) takes about 0.7s locally. Sites with millions of events a month will need the dashboard moved onto pre-aggregated rollups, or onto the ClickHouse adapter, which doesn't implement the dashboard query yet.
+- **Self-hosted `/app` has one owner password, not user accounts.** Hosted Cloud (`CLOUD=1`) has email accounts, but no email password reset yet.
+- **The dashboard and channel/MCP APIs query raw events on every load.** D1 no longer uses additive unique-visitor rollups, because those overcounted repeat visitors. At higher traffic volumes, measure query cost and use mergeable distinct-count aggregates or complete the ClickHouse dashboard implementation.
 - **Ad spend is entered by hand** (the dashboard's "Add ad spend" button, or `POST /api/stats/ad-spend`). There's no Google or Meta Ads import.
 - **No historical Stripe import, and no Telegram/Discord alerts.**
 - **The Paddle, Polar and LemonSqueezy field mapping is untested against real payloads.** Send a real test event and check the `payments` row (amount, currency, `visitor_id`) before you rely on those numbers.
-- **Indie Cloud doesn't exist yet.** `/start?plan=cloud` collects a waitlist until you set a checkout link, and taking payment still needs the hosted multi-tenant service behind it.
+- **Indie Cloud is built but not deployed or tested against real Stripe.** Billing is covered by unit tests with locally signed events. Run a Stripe test-mode subscription through it before taking real money. Lifetime licenses and `npx grosslytics install` are built, but not run against a real Cloudflare account or Stripe.
 - **The repository is private**, so the clone command on `/start` only works for you until you make it public.
 - **OG images are SVG, not PNG.**
 - **The tracker is 1.46KB Brotli**, against the spec's 1.2KB target.

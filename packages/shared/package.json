@@ -10,7 +10,8 @@
     "./fees": "./src/fees.ts",
     "./constants": "./src/constants.ts",
     "./types": "./src/types.ts",
-    "./dashboard": "./src/dashboard.ts"
+    "./dashboard": "./src/dashboard.ts",
+    "./money": "./src/money.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

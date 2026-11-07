@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
 import * as v from 'valibot';
 import { DashboardQuerySchema } from '@grosslytics/shared/schemas';
-import { dateRangeToTimestamps } from '@grosslytics/shared/attribution';
-import { D1StorageAdapter, queryDashboard } from '@grosslytics/db-d1';
+import { isTimeZone } from '@grosslytics/shared/attribution';
+import { D1StorageAdapter, queryDashboard, siteRange } from '@grosslytics/db-d1';
 import type { DashFilter } from '@grosslytics/shared/dashboard';
 import type { AttributionModel } from '@grosslytics/shared/types';
 import type { Bindings } from '../env.js';
+import { hashToken, newTokenSecret } from '../auth.js';
+import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
+import { PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
+import { accountActive, isCloud, sessionAccount } from '../cloud.js';
 
 export const statsRoute = new Hono<{ Bindings: Bindings }>();
 
@@ -18,7 +22,7 @@ statsRoute.get('/', async (c) => {
 	}
 
 	const { siteId, range = '30d', model = 'first' } = parsed.output;
-	const { start, end } = dateRangeToTimestamps(range as '24h' | '7d' | '30d' | '90d');
+	const { start, end } = await siteRange(c.env.DB, siteId, range as '24h' | '7d' | '30d' | '90d');
 
 	const adapter = new D1StorageAdapter(c.env.DB);
 	const stats = await adapter.queryChannelStats(
@@ -103,10 +107,18 @@ statsRoute.get('/dashboard', async (c) => {
 	return c.json(await queryDashboard(c.env.DB, p.siteId, p), 200, { 'Cache-Control': 'private, no-store' });
 });
 
-// GET /api/stats/sites - sites this API serves
+// A Hosted Cloud customer, or null for the owner / API_TOKEN (who see every site)
+const cloudAccount = (c: Parameters<typeof sessionAccount>[0]) => (isCloud(c.env) ? sessionAccount(c) : Promise.resolve(null));
+
+// GET /api/stats/sites - sites this API serves (on Hosted Cloud, the signed-in account's), with the payment gateways that have a webhook secret
 statsRoute.get('/sites', async (c) => {
-	const { results } = await c.env.DB.prepare('SELECT site_id AS id, domain, name, public_share_enabled AS shared FROM sites ORDER BY created_at').all();
-	return c.json({ sites: results });
+	const account = await cloudAccount(c);
+	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments";
+	const { results } = await (account
+		? c.env.DB.prepare(`SELECT ${cols} FROM sites s JOIN account_sites a ON a.site_id = s.site_id WHERE a.account_id = ? ORDER BY s.created_at`).bind(account.id)
+		: c.env.DB.prepare(`SELECT ${cols} FROM sites s ORDER BY s.created_at`)
+	).all<Record<string, unknown> & { payments: string | null }>();
+	return c.json({ sites: results.map((r) => ({ ...r, payments: r.payments ? r.payments.split(',') : [] })) });
 });
 
 const SiteBody = v.object({
@@ -118,15 +130,45 @@ const SiteBody = v.object({
 		v.maxLength(255),
 	),
 	name: v.optional(v.pipe(v.string(), v.maxLength(255))),
+	currency: v.optional(v.picklist(REPORTING_CURRENCIES), 'USD'),
+	// Sent automatically from the browser, so an unknown zone falls back to UTC instead of blocking site creation
+	timezone: v.fallback(v.optional(v.pipe(v.string(), v.maxLength(64), v.check(isTimeZone)), 'UTC'), 'UTC'),
 });
 
 // POST /api/stats/sites - add a site; returns its id for the tracker's data-site-id
 statsRoute.post('/sites', async (c) => {
 	const parsed = v.safeParse(SiteBody, await c.req.json().catch(() => null));
 	if (!parsed.success) return c.json({ error: 'Enter a domain like acme.io, or localhost for testing.' }, 400);
+	const account = await cloudAccount(c);
+	if (account && !accountActive(account)) return c.json({ error: 'Your trial has ended. Subscribe to add sites.' }, 402);
 	const id = `gl_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
-	await c.env.DB.prepare('INSERT INTO sites (site_id, domain, name) VALUES (?, ?, ?)').bind(id, parsed.output.domain, parsed.output.name || parsed.output.domain).run();
+	const insert = c.env.DB.prepare('INSERT INTO sites (site_id, domain, name, currency, timezone) VALUES (?, ?, ?, ?, ?)').bind(id, parsed.output.domain, parsed.output.name || parsed.output.domain, parsed.output.currency, parsed.output.timezone);
+	await c.env.DB.batch(account ? [insert, c.env.DB.prepare('INSERT INTO account_sites (site_id, account_id) VALUES (?, ?)').bind(id, account.id)] : [insert]);
 	return c.json({ id, domain: parsed.output.domain }, 201);
+});
+
+// POST /api/stats/sites/:id/timezone - the IANA zone the dashboard's days, hours and heatmap use
+statsRoute.post('/sites/:id/timezone', async (c) => {
+	const body = (await c.req.json().catch(() => ({}))) as { timezone?: unknown };
+	if (typeof body.timezone !== 'string' || body.timezone.length > 64 || !isTimeZone(body.timezone)) return c.json({ error: 'Pick a timezone such as Europe/London.' }, 400);
+	await c.env.DB.prepare('UPDATE sites SET timezone = ? WHERE site_id = ?').bind(body.timezone, c.req.param('id')).run();
+	return c.json({ ok: true });
+});
+
+// POST /api/stats/sites/:id/secrets {gateway, secret} - the payment webhook's signing secret; an empty secret removes it.
+// Write-only: secrets are never returned. Needed on Hosted Cloud, where env secrets can't be per customer.
+statsRoute.post('/sites/:id/secrets', async (c) => {
+	const body = (await c.req.json().catch(() => ({}))) as { gateway?: unknown; secret?: unknown };
+	const gateway = body.gateway as (typeof PAYMENT_GATEWAYS)[number];
+	if (!PAYMENT_GATEWAYS.includes(gateway)) return c.json({ error: 'Unknown payment provider.' }, 400);
+	const secret = typeof body.secret === 'string' ? body.secret.trim() : '';
+	if (secret && (secret.length < 8 || secret.length > 512)) return c.json({ error: 'That does not look like a webhook signing secret.' }, 400);
+	const site = c.req.param('id');
+	await (secret
+		? c.env.DB.prepare('INSERT INTO site_secrets (site_id, gateway, secret) VALUES (?, ?, ?) ON CONFLICT (site_id, gateway) DO UPDATE SET secret = excluded.secret').bind(site, gateway, secret)
+		: c.env.DB.prepare('DELETE FROM site_secrets WHERE site_id = ? AND gateway = ?').bind(site, gateway)
+	).run();
+	return c.json({ ok: true });
 });
 
 // POST /api/stats/sites/:id/share - turn the public revenue page on or off
@@ -167,4 +209,38 @@ statsRoute.post('/annotations', async (c) => {
 	const b = parsed.output;
 	await c.env.DB.prepare('INSERT INTO annotations (site_id, at, label) VALUES (?, ?, ?)').bind(b.siteId, b.at, b.label).run();
 	return c.json({ ok: true }, 201);
+});
+
+// API tokens: read-only, one site each, for MCP, scripts or a teammate. Master API_TOKEN only (enforced in requireToken).
+const TokenBody = v.object({
+	siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+	name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80)),
+});
+
+// GET /api/stats/tokens?siteId= - tokens for one site (never the secrets)
+statsRoute.get('/tokens', async (c) => {
+	const siteId = c.req.query('siteId');
+	if (!siteId) return c.json({ error: 'siteId required' }, 400);
+	const { results } = await c.env.DB.prepare('SELECT id, name, suffix, created_at AS createdAt, last_used_at AS lastUsedAt FROM api_tokens WHERE site_id = ? ORDER BY created_at DESC').bind(siteId).all();
+	return c.json({ tokens: results });
+});
+
+// POST /api/stats/tokens - create one; the secret is returned this once and only its hash is stored
+statsRoute.post('/tokens', async (c) => {
+	const parsed = v.safeParse(TokenBody, await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ error: 'Give the token a name.' }, 400);
+	const site = await c.env.DB.prepare('SELECT site_id FROM sites WHERE site_id = ?').bind(parsed.output.siteId).first();
+	if (!site) return c.json({ error: 'Unknown site.' }, 404);
+	const token = newTokenSecret();
+	const id = crypto.randomUUID();
+	await c.env.DB.prepare('INSERT INTO api_tokens (id, site_id, name, token_hash, suffix) VALUES (?, ?, ?, ?, ?)')
+		.bind(id, parsed.output.siteId, parsed.output.name, await hashToken(token), token.slice(-4))
+		.run();
+	return c.json({ id, name: parsed.output.name, token }, 201, { 'Cache-Control': 'no-store' });
+});
+
+// POST /api/stats/tokens/:id/revoke - takes effect on the next request
+statsRoute.post('/tokens/:id/revoke', async (c) => {
+	await c.env.DB.prepare('DELETE FROM api_tokens WHERE id = ?').bind(c.req.param('id')).run();
+	return c.json({ ok: true });
 });

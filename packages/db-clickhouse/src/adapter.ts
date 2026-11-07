@@ -1,3 +1,4 @@
+import { reportingCurrency } from '@grosslytics/shared/money';
 import type { ClickHouseClient } from '@clickhouse/client';
 import {
 	classifySourceCategory,
@@ -28,7 +29,7 @@ export class ClickHouseStorageAdapter implements AnalyticsStorageAdapter {
 				event_type: e.t,
 				event_name: e.n,
 				source: e.src,
-				category: classifySourceCategory(e.src),
+				category: classifySourceCategory(e.src, e.um, e.cat),
 				referrer: e.ref || '',
 				country: e.country || 'XX',
 				city: e.city || '',
@@ -45,7 +46,7 @@ export class ClickHouseStorageAdapter implements AnalyticsStorageAdapter {
 	}
 
 	async upsertVisitor(event: EnrichedEvent): Promise<void> {
-		const category = classifySourceCategory(event.src);
+		const category = classifySourceCategory(event.src, event.um, event.cat);
 		const ts = Math.floor(event.createdAt);
 		await this.client.insert({
 			table: 'visitors',
@@ -142,7 +143,9 @@ export class ClickHouseStorageAdapter implements AnalyticsStorageAdapter {
 		startTime: number,
 		endTime: number,
 		model: AttributionModel,
+		reportCurrency = 'USD',
 	): Promise<ChannelStats[]> {
+		const currency = reportingCurrency(reportCurrency);
 		const sourceCol = model === 'last' ? 'last_touch_source' : 'first_touch_source';
 
 		const trafficQuery = `
@@ -170,19 +173,19 @@ export class ClickHouseStorageAdapter implements AnalyticsStorageAdapter {
 			WHERE site_id = {siteId:String}
 			  AND created_at >= toDateTime({startTs:UInt32})
 			  AND created_at <= toDateTime({endTs:UInt32})
-			  AND status = 'succeeded'
+			  AND status = 'succeeded' AND upper(currency) = {currency:String}
 			GROUP BY ${sourceCol}
 		`;
 
 		const [trafficRes, paymentsRes] = await Promise.all([
 			this.client.query({
 				query: trafficQuery,
-				query_params: { siteId, startTs: startTime, endTs: endTime },
+				query_params: { siteId, startTs: startTime, endTs: endTime, currency },
 				format: 'JSONEachRow',
 			}),
 			this.client.query({
 				query: paymentsQuery,
-				query_params: { siteId, startTs: startTime, endTs: endTime },
+				query_params: { siteId, startTs: startTime, endTs: endTime, currency },
 				format: 'JSONEachRow',
 			}),
 		]);
@@ -230,6 +233,7 @@ export class ClickHouseStorageAdapter implements AnalyticsStorageAdapter {
 
 			return {
 				source: t.source,
+				currency,
 				category: t.category as ChannelStats['category'],
 				visitors,
 				sessions: Number(t.sessions),

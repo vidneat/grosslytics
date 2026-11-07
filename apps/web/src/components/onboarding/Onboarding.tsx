@@ -8,12 +8,13 @@ type Plan = 'self' | 'cloud' | 'lifetime';
 const PLANS: Array<{ id: Plan; name: string; price: string; unit: string; note: string }> = [
 	{ id: 'self', name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.' },
 	{ id: 'cloud', name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. You just add the script.' },
-	{ id: 'lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'A self-hosted license you own.' },
+	{ id: 'lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'One command installs it in your Cloudflare.' },
 ];
 
-// Stripe Payment Links for the paid plans. Unset = the plan isn't on sale yet and shows a waitlist.
+// Lifetime: a Stripe Payment Link, unset = waitlist. Cloud is open when this API runs Hosted Cloud (CLOUD=1):
+// people sign up in /app first and pay from there, so the payment is tied to their account.
 const CHECKOUT: Record<Exclude<Plan, 'self'>, string | undefined> = {
-	cloud: import.meta.env.PUBLIC_CHECKOUT_CLOUD_URL,
+	cloud: undefined,
 	lifetime: import.meta.env.PUBLIC_CHECKOUT_LIFETIME_URL,
 };
 const REPO = (import.meta.env.PUBLIC_REPO_URL as string | undefined) || 'https://github.com/vidneat/grosslytics';
@@ -57,11 +58,26 @@ function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
 	const [email, setEmail] = useState('');
 	const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
 	const name = PLANS.find((p) => p.id === plan)!.name;
+	const [cloudOpen, setCloudOpen] = useState(false);
+	useEffect(() => {
+		if (plan !== 'cloud') return;
+		fetch(`${DEFAULT_API || location.origin}/api/auth/status`, { cache: 'no-store' })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((s: { cloud?: boolean } | null) => setCloudOpen(!!s?.cloud), () => {});
+	}, [plan]);
+
+	if (plan === 'cloud' && cloudOpen)
+		return (
+			<div className="rounded-[22px] bg-card p-7 text-center ring-1 ring-line">
+				<p className="text-ink-2">Create your account, add one script tag, and you have 14 days free. No card needed. Then $5/month for up to 100,000 events.</p>
+				<a className="btn btn-primary mt-5" href="/app?signup">Start free trial <ArrowRight size={15} aria-hidden="true" /></a>
+			</div>
+		);
 
 	if (url)
 		return (
 			<div className="rounded-[22px] bg-card p-7 text-center ring-1 ring-line">
-				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once, then follow the self-host setup with your license.' : 'Pay, then add one script tag. We host everything else.'}</p>
+				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once. You get a license key, then run npx grosslytics install: it signs in to your Cloudflare, creates everything and deploys it. The same command updates it later.' : 'Pay, then add one script tag. We host everything else.'}</p>
 				<a className="btn btn-primary mt-5" href={url}>Continue to checkout <ArrowRight size={15} aria-hidden="true" /></a>
 			</div>
 		);
@@ -157,7 +173,7 @@ const GATEWAYS = {
 	stripe: {
 		label: 'Stripe',
 		where: 'Dashboard → Developers → Webhooks → Add endpoint',
-		events: 'checkout.session.completed, invoice.paid',
+		events: 'checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded',
 		secret: 'STRIPE_WEBHOOK_SECRET',
 		link: 'Checkout and Payment Links on your site get client_reference_id added automatically. For Checkout Sessions created on your server, pass client_reference_id: the visitor id from localStorage.gl_vid.',
 	},
@@ -263,7 +279,7 @@ function SelfHost() {
 				</Step>
 
 				<Step n={2} title="Connect this dashboard and add your site" status={statuses[1]!} open={isOpen(1)} onToggle={toggle(1)} summary={conn && <>Connected to <code className="font-mono text-[12px]">{conn.api}</code>, site <code className="font-mono text-[12px]">{conn.siteId}</code>. <button type="button" className="text-accent hover:underline" onClick={() => (saveConnection(null), setConn(null), setOpen(1))}>Change</button></>}>
-					<p>Use the API URL from step 1 and the token you set. Then add your site's domain.</p>
+					<p>Set your dashboard password with the API token from step 1, then add your site's domain. After this you sign in with the password only.</p>
 					<div className="-mx-2">
 						<Connect
 							onConnect={(c) => {

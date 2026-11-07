@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
 import { calculateNetRevenue, maskEmail } from '@grosslytics/shared/fees';
 import { timeToConvertHours } from '@grosslytics/shared/attribution';
-import { D1StorageAdapter } from '@grosslytics/db-d1';
+import { applyPaymentEvent, D1StorageAdapter } from '@grosslytics/db-d1';
 import type { PaymentGateway, PaymentRecord } from '@grosslytics/shared/types';
+import { isCloud } from '../cloud.js';
 import type { Bindings } from '../env.js';
 import { verifyWebhook } from '../verify.js';
+import { reportingCurrency } from '@grosslytics/shared/money';
 
 export const webhooksRoute = new Hono<{ Bindings: Bindings }>();
 
@@ -12,6 +14,7 @@ export const webhooksRoute = new Hono<{ Bindings: Bindings }>();
 interface ExtractedPayment {
 	eventId: string;
 	paymentId: string;
+	references?: string[];
 	grossCents: number;
 	currency: string;
 	email: string;
@@ -24,6 +27,8 @@ interface ExtractedPayment {
 
 type Extractor = (event: any, headers: Headers) => ExtractedPayment | null;
 
+const objectId = (value: any): string => typeof value === 'string' ? value : value?.id || '';
+
 const num = (x: unknown) => (Number.isFinite(Number(x)) ? Math.round(Number(x)) : 0);
 
 /** Returns null for events that are not a completed payment (they are acknowledged and ignored). */
@@ -35,7 +40,8 @@ const EXTRACTORS: Record<PaymentGateway, Extractor> = {
 			return {
 				eventId: e.id,
 				// Subscription checkouts share the invoice ID with invoice.paid, so the payment upserts once
-				paymentId: o.invoice || o.payment_intent || o.id,
+				paymentId: objectId(o.invoice) || objectId(o.payment_intent) || o.id,
+				references: [o.id, objectId(o.invoice), objectId(o.payment_intent)].filter(Boolean),
 				grossCents: num(o.amount_total),
 				currency: o.currency || 'usd',
 				email: o.customer_details?.email || o.customer_email || '',
@@ -50,6 +56,7 @@ const EXTRACTORS: Record<PaymentGateway, Extractor> = {
 			return {
 				eventId: e.id,
 				paymentId: o.id,
+				references: [o.id, objectId(o.payment_intent), ...(o.payments?.data ?? []).map((p: any) => objectId(p.payment?.payment_intent))].filter(Boolean),
 				grossCents: num(o.amount_paid),
 				currency: o.currency || 'usd',
 				email: o.customer_email || '',
@@ -85,7 +92,7 @@ const EXTRACTORS: Record<PaymentGateway, Extractor> = {
 			grossCents: num(o.total_amount ?? o.amount),
 			currency: o.currency || 'usd',
 			email: o.customer?.email || '',
-			visitorId: o.metadata?.visitor_id || o.custom_field_data?.visitor_id,
+			visitorId: o.metadata?.visitor_id || o.metadata?.reference_id || o.custom_field_data?.visitor_id,
 			planName: o.product?.name || 'Polar Order',
 			isRenewal: o.billing_reason === 'subscription_cycle',
 		};
@@ -137,14 +144,17 @@ webhooksRoute.post('/:gateway', async (c) => {
 
 	const adapter = new D1StorageAdapter(c.env.DB);
 	const site = await adapter.getSite(siteId);
-	const secret =
+	if (!site) return c.text('Unknown site', 404);
+	const saved = await c.env.DB.prepare('SELECT secret FROM site_secrets WHERE site_id = ? AND gateway = ?').bind(siteId, gateway).first<{ secret: string }>();
+	// Hosted Cloud never falls back to the operator's env secrets: each customer signs with their own
+	const secret = saved?.secret || (isCloud(c.env) ? '' :
 		{
 			stripe: site?.stripeWebhookSecret || c.env.STRIPE_WEBHOOK_SECRET,
 			razorpay: site?.razorpayWebhookSecret || c.env.RAZORPAY_WEBHOOK_SECRET,
 			polar: site?.polarWebhookSecret || c.env.POLAR_WEBHOOK_SECRET,
 			paddle: site?.paddleWebhookSecret || c.env.PADDLE_WEBHOOK_SECRET,
 			lemonsqueezy: c.env.LEMONSQUEEZY_WEBHOOK_SECRET,
-		}[gateway] || '';
+		}[gateway]) || '';
 
 	// Fail closed: unsigned or unconfigured webhooks are never trusted
 	const body = await c.req.text();
@@ -159,91 +169,89 @@ webhooksRoute.post('/:gateway', async (c) => {
 		return c.text('Invalid JSON', 400);
 	}
 
-	// Stripe full refund: the payment stops counting as revenue and shows as a refund on the dashboard.
-	// shortcut: full Stripe refunds only, matched on payment_intent or invoice; partial refunds and other gateways' refund events are ignored until needed.
+	// Modern Stripe invoices expose the PaymentIntent through invoice_payment.paid.
+	if (gateway === 'stripe' && event.type === 'invoice_payment.paid') {
+		const o = event.data?.object ?? {};
+		const paymentId = objectId(o.invoice);
+		const intent = objectId(o.payment?.payment_intent);
+		if (!event.id || !paymentId || !intent) return c.text('Missing event or payment reference', 400);
+		const result = await applyPaymentEvent(c.env.DB, { id: event.id, siteId, gateway, paymentId, references: [paymentId, intent] });
+		return c.json(result.processed ? { received: true } : { received: true, deduplicated: true });
+	}
+	// ponytail: full refunds only; partial refunds need amount-based accounting.
 	if (gateway === 'stripe' && event.type === 'charge.refunded') {
 		const ch = event.data?.object ?? {};
 		if (!ch.refunded) return c.json({ received: true, ignored: true });
-		if (!(await adapter.markWebhookProcessed(event.id, siteId))) return c.json({ received: true, deduplicated: true });
-		const ids = [ch.payment_intent, ch.invoice].filter((x): x is string => typeof x === 'string');
-		const now = Math.floor(Date.now() / 1000);
-		const hits = await c.env.DB.batch(
-			ids.flatMap((id) => [
-				c.env.DB.prepare("INSERT INTO refunds (payment_id, site_id, refunded_at) SELECT payment_id, site_id, ? FROM payments WHERE site_id = ? AND payment_id = ? ON CONFLICT DO NOTHING").bind(now, siteId, id),
-				c.env.DB.prepare("UPDATE payments SET status = 'refunded' WHERE site_id = ? AND payment_id = ?").bind(siteId, id),
-			]),
-		);
-		return c.json({ received: true, refunded: hits.some((h) => (h.meta?.changes ?? 0) > 0) });
+		const references = [objectId(ch.payment_intent), objectId(ch.invoice)].filter(Boolean);
+		if (!event.id || !references.length) return c.text('Missing event or payment reference', 400);
+		const result = await applyPaymentEvent(c.env.DB, {
+			id: event.id, siteId, gateway, references, refundedAt: event.created || Math.floor(Date.now() / 1000),
+		});
+		return c.json(result.processed ? { received: true, refunded: true } : { received: true, deduplicated: true });
 	}
 
 	const p = extract(event, c.req.raw.headers);
 	if (!p) return c.json({ received: true, ignored: true });
 	if (!p.eventId || !p.paymentId) return c.text('Missing event or payment id', 400);
-
-	// Atomic claim: a concurrent retry of the same event loses here and never double-alerts
-	if (!(await adapter.markWebhookProcessed(p.eventId, siteId))) {
-		return c.json({ received: true, deduplicated: true });
+	const currency = p.currency.toUpperCase();
+	if (currency !== reportingCurrency(site.currency ?? 'USD')) {
+		return c.json({ error: `This site reports ${site.currency}. Payment in ${currency} was not added. Use a separate site for that currency.` }, 422);
 	}
 
-	try {
-		const emailHash = p.email ? await hashEmail(p.email) : undefined;
-		const buyer = await adapter.findBuyer(siteId, p.visitorId, emailHash);
-		const { grossCents, feeCents, netCents } = calculateNetRevenue(gateway, p.grossCents);
-		const now = Math.floor(Date.now() / 1000);
-		const firstTouchSource = buyer?.firstSource ?? 'Unattributed';
-		const lastTouchSource = buyer?.lastSource ?? 'Unattributed';
+	const emailHash = p.email ? await hashEmail(p.email) : undefined;
+	const buyer = await adapter.findBuyer(siteId, p.visitorId, emailHash);
+	const { grossCents, feeCents, netCents } = calculateNetRevenue(gateway, p.grossCents);
+	const now = Math.floor(Date.now() / 1000);
+	const firstTouchSource = buyer?.firstSource ?? 'Unattributed';
+	const lastTouchSource = buyer?.lastSource ?? 'Unattributed';
 
-		const record: PaymentRecord = {
-			paymentId: p.paymentId,
-			siteId,
-			gateway,
-			visitorId: buyer?.visitorId ?? p.visitorId,
-			customerEmailHash: emailHash,
-			customerEmailMasked: p.email ? maskEmail(p.email) : undefined,
-			planName: p.planName,
-			grossAmountCents: grossCents,
-			feeAmountCents: feeCents,
-			netAmountCents: netCents,
-			currency: p.currency.toLowerCase(),
-			status: 'succeeded',
-			isRenewal: p.isRenewal,
-			firstTouchSource,
-			lastTouchSource,
-			country: p.country || buyer?.country || 'XX',
-			city: p.city || buyer?.city || undefined,
-			timeToConvertHours: buyer ? timeToConvertHours(buyer.firstSeenAt, now) : 0,
-			buyerReadSec: buyer?.totalActiveReadSec ?? 0,
-			buyerScrollPct: buyer?.maxScrollPct ?? 0,
-		};
+	const record: PaymentRecord = {
+		paymentId: p.paymentId,
+		siteId,
+		gateway,
+		visitorId: buyer?.visitorId ?? p.visitorId,
+		customerEmailHash: emailHash,
+		customerEmailMasked: p.email ? maskEmail(p.email) : undefined,
+		planName: p.planName,
+		grossAmountCents: grossCents,
+		feeAmountCents: feeCents,
+		netAmountCents: netCents,
+		currency: p.currency.toLowerCase(),
+		status: 'succeeded',
+		isRenewal: p.isRenewal,
+		firstTouchSource,
+		lastTouchSource,
+		country: p.country || buyer?.country || 'XX',
+		city: p.city || buyer?.city || undefined,
+		timeToConvertHours: buyer ? timeToConvertHours(buyer.firstSeenAt, now) : 0,
+		buyerReadSec: buyer?.totalActiveReadSec ?? 0,
+		buyerScrollPct: buyer?.maxScrollPct ?? 0,
+	};
 
-		await adapter.upsertPayment(record);
+	const result = await applyPaymentEvent(c.env.DB, { id: p.eventId, siteId, gateway, references: p.references ?? [p.paymentId], payment: record });
+	if (!result.processed) return c.json({ received: true, deduplicated: true });
 
-		if (c.env.SITE_LIVE_HUB) {
-			const stub = c.env.SITE_LIVE_HUB.get(c.env.SITE_LIVE_HUB.idFromName(siteId));
-			await stub
-				.fetch('http://do/internal/sale', {
-					method: 'POST',
-					body: JSON.stringify({
-						type: 'sale',
-						gateway,
-						grossAmountCents: grossCents,
-						netAmountCents: netCents,
-						currency: record.currency,
-						customerEmailMasked: record.customerEmailMasked || 'customer@***',
-						planName: p.planName,
-						firstTouchSource,
-						lastTouchSource,
-						country: record.country,
-						isRenewal: p.isRenewal,
-						timestamp: Date.now(),
-					}),
-				})
-				.catch(() => {}); // live broadcast is best-effort
-		}
-	} catch (err) {
-		// Release the claim so the gateway's retry is processed instead of silently dropped
-		await adapter.unmarkWebhookProcessed(p.eventId);
-		throw err;
+	if (result.inserted && !result.refunded && c.env.SITE_LIVE_HUB) {
+		const stub = c.env.SITE_LIVE_HUB.get(c.env.SITE_LIVE_HUB.idFromName(siteId));
+		await stub
+			.fetch('http://do/internal/sale', {
+				method: 'POST',
+				body: JSON.stringify({
+					type: 'sale',
+					gateway,
+					grossAmountCents: grossCents,
+					netAmountCents: netCents,
+					currency: record.currency,
+					customerEmailMasked: record.customerEmailMasked || 'customer@***',
+					planName: p.planName,
+					firstTouchSource,
+					lastTouchSource,
+					country: record.country,
+					isRenewal: p.isRenewal,
+					timestamp: Date.now(),
+				}),
+			})
+			.catch(() => {}); // live broadcast is best-effort
 	}
 
 	return c.json({ received: true });

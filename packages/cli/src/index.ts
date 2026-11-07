@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { intro, outro, text, select, spinner, note, isCancel, cancel } from '@clack/prompts';
+import { intro, outro, text, spinner, note, isCancel, cancel } from '@clack/prompts';
 import pc from 'picocolors';
 import { Command } from 'commander';
-import { execFileSync, execSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { MIGRATION_001_INIT, MIGRATION_002_ANNOTATIONS, MIGRATION_003_WAITLIST, MIGRATION_004_REFUNDS } from '@grosslytics/db-d1/migrations';
-import { writeFileSync } from 'node:fs';
+import { apiToml, databaseId, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, saveState, webToml, wrangler } from './install.js';
 
 const program = new Command();
 
@@ -14,95 +15,90 @@ program
 	.description('Grosslytics: Ultra-fast, edge-native revenue attribution CLI')
 	.version('0.1.0');
 
-// 1. Interactive 1-Click Cloudflare Provisioner
+// 1. Lifetime installer: license key → release bundle → everything created and deployed in the buyer's own Cloudflare.
+// Re-running it updates the same install to the latest release.
 program
-	.command('init')
-	.description('1-Click provision Cloudflare D1, Queues, and Durable Objects in <90s')
-	.action(async () => {
-		intro(pc.bgGreen(pc.black(' Grosslytics 1-Click Installer ')));
+	.command('install')
+	.alias('init')
+	.description('Install or update Grosslytics in your own Cloudflare account (needs a Lifetime license key)')
+	.option('--from <origin>', 'Where licenses and releases are served', 'https://grosslytics.com')
+	.action(async (opts: { from: string }) => {
+		intro(pc.bgGreen(pc.black(' Grosslytics installer ')));
+		mkdirSync(DIR, { recursive: true });
+		const prev = loadState();
+		const ask = async (message: string, initial: string | undefined, validate: (v: string) => string | undefined, placeholder?: string) => {
+			const v = await text({ message, initialValue: initial, placeholder, validate: (x) => validate(String(x ?? '').trim()) });
+			if (isCancel(v)) {
+				cancel('Cancelled. Nothing was changed.');
+				process.exit(0);
+			}
+			return String(v).trim();
+		};
 
-		const domain = await text({
-			message: 'What is your primary website domain?',
-			placeholder: 'mybrand.com',
-			validate: (val) => (!val ? 'Domain is required' : undefined),
-		});
-		if (isCancel(domain)) { cancel('Setup cancelled'); process.exit(0); }
+		const license = process.env.GROSSLYTICS_LICENSE || prev.license || (await ask('Your license key', undefined, (v) => (v.startsWith('gl_lic_') ? undefined : 'Paste the gl_lic_… key from your purchase page'), 'gl_lic_…'));
+		const host = prev.host || (await ask('Where should Grosslytics live? A hostname on a domain you have on Cloudflare', undefined, (v) => (isHost(v.toLowerCase()) ? undefined : 'A hostname like analytics.yourstartup.com'), 'analytics.yourstartup.com')).toLowerCase();
+		const zone = prev.zone || (await ask('Its Cloudflare zone (the root domain)', guessZone(host), (v) => (host === v || host.endsWith(`.${v}`) ? undefined : `${host} must be inside this domain`))).toLowerCase();
+		const password = prev.passwordSet ? '' : await ask('Choose your dashboard password', undefined, (v) => (v.length >= 10 ? undefined : 'At least 10 characters'));
 
-		const name = await text({
-			message: 'What is your project or startup name?',
-			placeholder: 'My Brand',
-			defaultValue: String(domain),
-		});
-		if (isCancel(name)) { cancel('Setup cancelled'); process.exit(0); }
-
-		const currency = await select({
-			message: 'Select primary revenue currency:',
-			options: [
-				{ value: 'USD', label: 'USD ($)' },
-				{ value: 'EUR', label: 'EUR (€)' },
-				{ value: 'INR', label: 'INR (₹)' },
-				{ value: 'GBP', label: 'GBP (£)' },
-			],
-		});
-		if (isCancel(currency)) { cancel('Setup cancelled'); process.exit(0); }
-
-		const siteId = `gl_live_${Math.random().toString(36).slice(2, 8)}`;
 		const s = spinner();
+		const step = async <T>(label: string, fn: () => T | Promise<T>): Promise<T> => {
+			s.start(label);
+			try {
+				const r = await fn();
+				s.stop(pc.green(label));
+				return r;
+			} catch (e) {
+				s.stop(pc.red(`${label}: failed`));
+				cancel(String((e as Error).message || e));
+				process.exit(1);
+			}
+		};
 
-		// Step 1: D1 Database Creation
-		s.start('Provisioning Cloudflare D1 SQLite Database...');
+		const version = await step('Downloading the latest release', () => download(opts.from, license));
+		saveState({ license, host, zone, version, passwordSet: prev.passwordSet });
+
 		try {
-			execSync('npx wrangler d1 create grosslytics-db --yes', { stdio: 'pipe' });
-			s.stop(pc.green('Cloudflare D1 database created'));
+			wrangler(['whoami'], { quiet: true });
 		} catch {
-			s.stop(pc.yellow('D1 database already exists or created'));
+			note('A browser window opens. Sign in to Cloudflare and click Allow.', 'Cloudflare sign-in');
+			wrangler(['login']);
 		}
 
-		// Step 2: Queue Creation
-		s.start('Configuring Cloudflare Queues batch ingestion pipeline...');
-		try {
-			execSync('npx wrangler queues create grosslytics-ingest', { stdio: 'pipe' });
-			s.stop(pc.green('Cloudflare Ingestion Queue configured'));
-		} catch {
-			s.stop(pc.yellow('Queue already configured'));
-		}
+		await step('Creating the database', () => ensure(['d1', 'create', 'grosslytics-db']));
+		const dbId = await step('Finding the database', databaseId);
+		await step('Creating the queues', () => {
+			ensure(['queues', 'create', 'grosslytics-ingest']);
+			ensure(['queues', 'create', 'grosslytics-ingest-dlq']);
+		});
+		await step('Creating or updating tables', () => wrangler(['d1', 'execute', 'grosslytics-db', '--remote', '--yes', '--file', resolve(DIR, 'release', 'migrate.sql')], { quiet: true }));
 
-		// Step 3: Run Database Migrations
-		s.start('Executing sub-5ms schema migrations (WAL mode, Hourly Rollups)...');
-		try {
-			writeFileSync('migration_init.sql', MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS);
-			execSync(`npx wrangler d1 execute grosslytics-db --file=migration_init.sql --yes`, { stdio: 'pipe' });
-			execSync('rm -f migration_init.sql');
-			s.stop(pc.green('Schema migrations applied to D1'));
-		} catch {
-			execSync('rm -f migration_init.sql');
-			s.stop(pc.yellow('Schema already applied'));
-		}
+		const api = join(DIR, 'release', 'api');
+		const web = join(DIR, 'release', 'web');
+		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone }, dbId));
+		writeFileSync(join(web, 'wrangler.toml'), webToml({ host }));
+		await step('Deploying the API', () => wrangler(['deploy'], { cwd: api, quiet: true }));
+		await step('Deploying the dashboard', () => wrangler(['deploy'], { cwd: web, quiet: true }));
 
-		// Step 4: Register Initial Site
-		s.start('Registering site record...');
-		try {
-			const q = (x: unknown) => `'${String(x).replace(/'/g, "''")}'`; // SQL string literal
-			const insertSql = `INSERT OR IGNORE INTO sites (site_id, domain, name, currency) VALUES (${q(siteId)}, ${q(domain)}, ${q(name)}, ${q(currency)});`;
-			// argv array, no shell: user input can't break out of the command
-			execFileSync('npx', ['wrangler', 'd1', 'execute', 'grosslytics-db', `--command=${insertSql}`, '--yes'], { stdio: 'pipe' });
-			s.stop(pc.green(`Registered site ${siteId}`));
-		} catch {
-			s.stop(pc.yellow('Site record ready'));
+		let apiToken = '';
+		if (!prev.passwordSet) {
+			apiToken = randomBytes(32).toString('hex');
+			await step('Setting the API key', () => wrangler(['secret', 'put', 'API_TOKEN'], { cwd: api, input: apiToken, quiet: true }));
+			// The hash is hex and $-separated, so it is safe inside the SQL literal
+			const sql = `INSERT INTO owner_auth (id, password_hash) VALUES (1, '${hashPassword(password)}') ON CONFLICT (id) DO UPDATE SET password_hash = excluded.password_hash, failed_count = 0, locked_until = 0, updated_at = unixepoch();`;
+			await step('Setting your dashboard password', () => wrangler(['d1', 'execute', 'grosslytics-db', '--remote', '--yes', '--command', sql], { quiet: true }));
+			saveState({ license, host, zone, version, passwordSet: true });
 		}
-
-		const trackerSnippet = `<script defer src="https://grosslytics.com/g.js" data-site-id="${siteId}"></script>`;
 
 		note(
-			`${pc.bold('Site ID:')} ${pc.cyan(siteId)}\n` +
-			`${pc.bold('Domain:')} ${domain}\n\n` +
-			`${pc.bold('Embed Tracker (add to <head>):')}\n${pc.green(trackerSnippet)}\n\n` +
-			`${pc.bold('Connect AI Assistant (Claude / Cursor / Windsurf):')}\n` +
-			`${pc.cyan(`GROSSLYTICS_API_TOKEN=<token> npx grosslytics mcp --site ${siteId}`)}`,
-			'Setup Complete in <90s 🚀',
+			`${pc.bold('Dashboard:')} ${pc.cyan(`https://${host}/app`)} (sign in with your password; a new domain can take a few minutes)\n` +
+				`${pc.bold('Version:')} ${version}\n` +
+				(apiToken
+					? `\n${pc.bold('Your API_TOKEN')} (save it in your password manager; it is shown only now):\n${pc.yellow(apiToken)}\nYou need it to reset the dashboard password, or for scripts and MCP.\n`
+					: '') +
+				`\nTo update later, run ${pc.cyan('npx grosslytics install')} again in this folder.`,
+			prev.passwordSet ? 'Updated' : 'Installed',
 		);
-
-		outro(pc.bold(pc.green('Done! Run `wrangler deploy` to publish your live edge endpoint.')));
+		outro(pc.green('Done. Add a site on /app and paste its script tag into your site.'));
 	});
 
 // 2. MCP stdio server: bridges an MCP client's stdio JSON-RPC to the hosted Streamable HTTP endpoint

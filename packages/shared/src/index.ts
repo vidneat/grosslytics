@@ -6,3 +6,4 @@ export * from './attribution.js';
 export * from './fees.js';
 
 export * from './dashboard.js';
+export * from './money.js';

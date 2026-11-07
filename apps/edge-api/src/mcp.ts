@@ -2,8 +2,7 @@ import { Hono } from 'hono';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { D1StorageAdapter } from '@grosslytics/db-d1';
-import { dateRangeToTimestamps } from '@grosslytics/shared/attribution';
+import { D1StorageAdapter, siteRange } from '@grosslytics/db-d1';
 import type { Bindings } from './env.js';
 
 export const mcpRoute = new Hono<{ Bindings: Bindings }>();
@@ -78,7 +77,7 @@ export function createMcpServer(env: Bindings, siteId: string) {
 	server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		const { name, arguments: args = {} } = request.params;
 		const range = (args.range as '24h' | '7d' | '30d' | '90d') || '30d';
-		const { start, end } = dateRangeToTimestamps(range);
+		const { start, end } = await siteRange(env.DB, siteId, range);
 
 		if (name === 'query_channel_roas') {
 			const model = (args.model as 'first' | 'last' | 'linear') || 'first';

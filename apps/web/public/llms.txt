@@ -13,7 +13,9 @@
 ## Setup
 - Tracker (1.5 KB Brotli, no cookies, stores a random visitor ID in localStorage):
   `<script defer src="https://grosslytics.com/g.js" data-site-id="YOUR_SITE_ID"></script>`
-- Checkout links to Stripe, Polar, Lemon Squeezy, Paddle and Razorpay are tagged with the visitor ID automatically.
+- Stripe, Polar and Lemon Squeezy checkout links are tagged automatically. Paddle requires custom_data.visitor_id via its checkout integration; Razorpay requires notes.visitor_id.
+- Stripe events: checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded (full refunds).
+- One reporting currency per site: USD, EUR, GBP or INR; different currencies are never summed.
 - Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy}?siteId=YOUR_SITE_ID` (signature required).
 - Self-host on Cloudflare: `npx grosslytics init`.
 

@@ -8,3 +8,5 @@ dist/
 .env.local
 .env.*.local
 .dev.vars
+.release/
+grosslytics-install/

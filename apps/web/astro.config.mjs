@@ -20,11 +20,13 @@ export default defineConfig({
 			filter: (page) =>
 				!page.includes('/app/') &&
 				!page.includes('/api/') &&
-				!page.includes('/badge/'),
+				!page.includes('/badge/') && !page.includes('/license'),
 		}),
 	],
 	vite: {
 		plugins: [tailwindcss()],
+		// Dev mirrors production: /api/* on the site's own origin, so the dashboard's session cookie is first-party
+		server: { proxy: { '/api': { target: 'http://localhost:8787', ws: true } } },
 	},
 });
 

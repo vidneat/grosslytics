@@ -6,20 +6,27 @@ import RoiCalculator from '../../components/marketing/RoiCalculator.tsx';
 export const prerender = true;
 
 /*
- * Every competitor fact below comes from the competitor's own public website, checked on VERIFIED.
- * Tracker sizes were measured by downloading each script and compressing it with Brotli (quality 11),
- * the same way packages/tracker/build.ts measures g.js. Re-check before changing any claim.
+ * Every competitor fact below comes from the competitor's own public website (or Google's help center for GA4),
+ * checked on VERIFIED. Tracker sizes were measured by downloading each script and compressing it with Brotli
+ * (quality 11), the same way packages/tracker/build.ts measures g.js. Re-check before changing any claim.
+ * Each page targets one keyword cluster: `keyword` is the primary term; headings and FAQs carry the long tail.
  */
 export function getStaticPaths() {
 	// getStaticPaths runs in isolation, so its constants live inside it
-	const VERIFIED = '2026-11-06';
+	const VERIFIED = '2026-11-07';
 	const US = {
 		tracker: '1.5 KB',
-		price: '$0 self-hosted, $5/mo hosted, or $29 lifetime',
+		price: '$0 self-hosted; hosted $5/mo and $29 lifetime plans',
 		gateways: 'Stripe, Razorpay, Polar, Paddle, Lemon Squeezy',
 		fees: 'Deducted automatically per gateway',
 		cookies: 'No cookies; a random visitor ID in localStorage',
 	};
+	const switchSteps = (them: string, extra?: string) => [
+		`Deploy Grosslytics to your Cloudflare account from /start. The setup checks each step against real data, so you know when it works.`,
+		`Replace the ${them} script tag with the Grosslytics one. You can run both side by side for a week to compare numbers before removing ${them}.`,
+		'Add one webhook URL in your payment provider (Stripe, Razorpay, Polar, Paddle or Lemon Squeezy). New sales are matched to the visitor who made them.',
+		extra ?? 'Add a data-goal attribute to any button you want counted in the “Reached a goal” step.',
+	];
 
 	return [
 		{
@@ -27,19 +34,56 @@ export function getStaticPaths() {
 			props: {
 				competitor: 'DataFast',
 				competitorDomain: 'datafa.st',
-				title: 'DataFast Alternative with Net Revenue | Grosslytics',
-				description: 'DataFast and Grosslytics both tie revenue to marketing channels. Grosslytics adds Razorpay and Paddle, subtracts gateway fees, and can run on your own Cloudflare account.',
+				keyword: 'DataFast alternative',
+				title: 'DataFast Alternative: Free, Self-Hosted, Net Revenue',
+				description: 'Looking for a DataFast alternative? Grosslytics attributes revenue to channels after gateway fees, adds Razorpay and Paddle, and self-hosts free on Cloudflare.',
+				h1: 'The DataFast alternative that counts what you keep.',
+				answer: 'Grosslytics is a revenue-first analytics tool like DataFast: it shows which posts, searches and AI answers bring paying customers. The differences are that Grosslytics subtracts payment fees and ad spend so you see net revenue, supports Razorpay and Paddle, needs no cookies, and can run free on your own Cloudflare account. DataFast is the more mature hosted product, with Shopify support and social-mention tracking.',
+				whatIs: 'DataFast (datafa.st) is a hosted, revenue-first web analytics tool. You add a script, connect Stripe, Lemon Squeezy, Polar or Shopify, and it shows revenue per channel, goals, funnels, visitor journeys and a live visitor view. It also offers an API, CLI and MCP server for AI agents, and its Growth plan adds social mentions on X and Reddit. Its default script uses cookies; a cookieless script is available with lower accuracy.',
 				rows: [
 					['Tracker size (Brotli)', '4.5 KB', US.tracker],
 					['Price', 'From $9/mo (Starter, 10k events, 1 site); Growth from $19/mo', US.price],
+					['Free option', '14-day free trial, no card', 'Self-hosting is free, no time limit'],
 					['Payment providers', 'Stripe, Lemon Squeezy, Polar, Shopify, plus a Payment API', US.gateways],
 					['Gateway fees', 'Not mentioned on datafa.st', US.fees],
+					['Ad spend and profit', 'Not mentioned on datafa.st', 'Enter daily spend per source; see profit per channel'],
 					['Self-hosting', 'Not offered on datafa.st', 'Yes, on your Cloudflare account'],
+					['Data retention', '3 years (Starter), 5+ years (Growth)', 'As long as you keep it in your own database'],
 					['MCP server', 'Yes (API, CLI and MCP)', 'Yes'],
 					['Cookies', 'Cookies by default; a cookieless script is available', US.cookies],
 				],
+				chooseThem: ['You sell through Shopify or need a generic Payment API', 'You want social-mention tracking for X and Reddit', 'You want a hosted product with a large user base and nothing to deploy'],
+				chooseUs: ['You get paid through Razorpay or Paddle', 'You want revenue after Stripe fees and ad spend, not just gross', 'You want to own the data on your own Cloudflare account, for free', 'You want no cookies by default and a smaller script'],
+				pricing: [
+					'DataFast is priced by monthly events. Starter starts at $9/month for 10,000 events, one website and three years of data. Growth starts at $19/month and adds up to 30 websites, 30 team members, 5+ years of data, and social mentions. Larger traffic tiers cost more. If you go over your plan, DataFast keeps tracking but asks you to upgrade to see the dashboard.',
+					'Grosslytics self-hosted costs $0: you run it on your own Cloudflare account, and Cloudflare’s free tier covers most small sites. There is no event cap set by us and no site limit. Hosted plans ($5/month, or $29 once for a lifetime self-hosted license) are offered from /start.',
+				],
+				deep: [
+					{
+						h2: 'Gross revenue vs net revenue',
+						ps: [
+							'DataFast reports the revenue your payment provider records. Grosslytics reports that too, then lets you switch to net (after gateway fees) or profit (after fees and the ad spend you enter for each source). On a $10,000 month with $450 in fees and $8,000 of ads on one channel, gross says the channel is your best. Profit says it made $1,550.',
+							'This matters most for founders on merchant-of-record platforms like Paddle or Lemon Squeezy, whose fees are higher than a plain card payment.',
+						],
+					},
+					{
+						h2: 'Attribution models',
+						ps: [
+							'Grosslytics gives you first-touch, last-touch and linear attribution, switchable with one click. Source revenue, revenue per visitor and profit recalculate for the model you pick. Renewals stay credited to the channel that found the customer.',
+						],
+					},
+				],
+				switching: switchSteps('DataFast', 'Keep your existing data-fast-goal attributes on buttons: the Grosslytics tracker counts them as goals, so you do not need to edit your markup.'),
+				faqs: [
+					{ question: 'What is the best DataFast alternative?', answer: 'If you want revenue attribution after fees and the option to self-host for free, Grosslytics. If you only need private traffic analytics, Plausible or Fathom. If you want a product-analytics suite with session replay, PostHog.' },
+					{ question: 'Is there a free DataFast alternative?', answer: 'Yes. Grosslytics is free to self-host on your own Cloudflare account, with no time limit and no site limit. DataFast offers a 14-day free trial, then starts at $9/month.' },
+					{ question: 'Can I self-host DataFast?', answer: 'DataFast does not offer self-hosting on datafa.st. Grosslytics and DataBull both run on your own Cloudflare account.' },
+					{ question: 'Does Grosslytics support Shopify like DataFast?', answer: 'Not yet. Grosslytics supports Stripe, Razorpay, Polar, Paddle and Lemon Squeezy. If you sell on Shopify, DataFast is the better fit today.' },
+					{ question: 'Can I import my DataFast history?', answer: 'Not yet. Grosslytics starts attributing visits and sales from the day you add the tracker. Running both tools side by side for a while keeps your history in DataFast.' },
+					{ question: 'Does Grosslytics use cookies?', answer: 'No. The tracker stores a random visitor ID in localStorage so it can connect a later purchase to the first visit. Some privacy laws treat that like a cookie, so check whether your site needs consent.' },
+				],
 				theyLead: ['Shopify integration and a Payment API', 'Social mentions (X and Reddit) and link attribution on Growth', 'A mature hosted product with many users'],
-				weDiffer: ['Razorpay and Paddle support', 'Net revenue after gateway fees', 'Self-host for $0 on your own Cloudflare account', 'A smaller tracker (1.5 KB vs 4.5 KB)'],
+				weDiffer: ['Razorpay and Paddle support', 'Net revenue after gateway fees and ad spend', 'Self-host for $0 on your own Cloudflare account', 'A smaller tracker (1.5 KB vs 4.5 KB)'],
 				verified: VERIFIED,
 				sources: [{ label: 'datafa.st (features, pricing, FAQ)', url: 'https://datafa.st' }, { label: 'datafa.st/js/script.js (measured)', url: 'https://datafa.st/js/script.js' }],
 			},
@@ -49,20 +93,56 @@ export function getStaticPaths() {
 			props: {
 				competitor: 'DataBull',
 				competitorDomain: 'databull.app',
-				title: 'DataBull Alternative with Net Revenue | Grosslytics',
-				description: 'DataBull and Grosslytics both run on Cloudflare and attribute revenue to channels. Grosslytics adds Razorpay, Paddle and Lemon Squeezy and reports revenue after gateway fees.',
+				keyword: 'DataBull alternative',
+				title: 'DataBull Alternative: Free Self-Hosted Revenue Analytics',
+				description: 'A DataBull alternative that self-hosts free on Cloudflare, supports Razorpay, Paddle and Lemon Squeezy, and shows revenue after gateway fees and ad spend.',
+				h1: 'The free DataBull alternative for your own Cloudflare.',
+				answer: 'Grosslytics and DataBull are both revenue-first analytics tools that run on your own Cloudflare account. Grosslytics is free to self-host where DataBull charges $49 once, supports Razorpay, Paddle and Lemon Squeezy, and reports revenue after gateway fees and ad spend. DataBull imports past payments on day one, supports Dodo and Creem, sends Telegram sale alerts, and has a one-command installer.',
+				whatIs: 'DataBull (databull.app) is revenue-first analytics that you install on your own Cloudflare account with one command, or use hosted (beta). It attributes Stripe, Polar, Dodo Payments and Creem sales to the visit that brought them, imports past sales, and includes lifetime value by first source, peak-hour heatmaps, a live view, Telegram sale pings and spike alerts, and an MCP server. It is not open source.',
 				rows: [
 					['Tracker size (Brotli)', '6.4 KB', US.tracker],
 					['Price', '$49 once (self-hosted); hosted from $9/mo (beta)', US.price],
 					['Payment providers', 'Stripe, Polar, Dodo, Creem', US.gateways],
 					['Gateway fees', 'Not mentioned on databull.app', US.fees],
+					['Ad spend and profit', 'Not mentioned on databull.app', 'Enter daily spend per source; see profit per channel'],
 					['Self-hosting', 'Yes, Cloudflare Workers + D1', 'Yes, Cloudflare Workers + D1'],
 					['MCP server', 'Built in', 'Built in'],
 					['In-app browser detection', 'Yes ("Readable Direct")', 'Yes'],
 					['Past payments', 'Imported on day one', 'Not yet; attribution starts when you install'],
+					['Alerts', 'Telegram sale pings and spike alerts', 'Not yet; live feed in the dashboard'],
+					['Cookies', 'Your choice per site: cookies, cookieless, or cookieless until consent', US.cookies],
 				],
-				theyLead: ['Dodo and Creem support', 'Imports past payments on day one', 'A more mature product with alerts and lifetime-value reports'],
-				weDiffer: ['Razorpay, Paddle and Lemon Squeezy support', 'Net revenue after gateway fees', 'A $0 self-hosted tier', 'A smaller tracker (1.5 KB vs 6.4 KB)'],
+				chooseThem: ['You sell through Dodo Payments or Creem', 'You want past Stripe sales imported on day one', 'You want Telegram pings for each sale and traffic spikes', 'You want a one-command installer, or a hosted version today'],
+				chooseUs: ['You want self-hosting for $0 instead of $49', 'You get paid through Razorpay, Paddle or Lemon Squeezy', 'You want profit per channel after fees and ad spend', 'You want a smaller script (1.5 KB vs 6.4 KB)'],
+				pricing: [
+					'DataBull self-hosted is $49 once, with unlimited sites and events and all future updates; sales are final. The hosted beta costs $9/month for 50,000 events or $19/month for 250,000. In both cases busy sites may need Cloudflare’s $5/month Workers plan, paid to Cloudflare.',
+					'Grosslytics self-hosted is $0 and runs on the same Cloudflare building blocks: Workers, D1, a Queue and a Durable Object. Hosted plans are offered from /start.',
+				],
+				deep: [
+					{
+						h2: 'Same platform, different focus',
+						ps: [
+							'Both tools keep your visitor and payment data in your own Cloudflare account, and both name in-app browser traffic from Instagram, TikTok and X instead of hiding it as “Direct”. DataBull focuses on getting started fast: an installer, payment history import and alerts. Grosslytics focuses on what a sale was worth to you: gateway fees taken off per provider, ad spend allocated per day, and a profit view for every channel.',
+						],
+					},
+					{
+						h2: 'Payment providers',
+						ps: [
+							'This is the clearest dividing line. DataBull covers Stripe, Polar, Dodo Payments and Creem. Grosslytics covers Stripe, Polar, Razorpay, Paddle and Lemon Squeezy. If you sell in India through Razorpay, or use Paddle or Lemon Squeezy as merchant of record, Grosslytics is the one that connects.',
+						],
+					},
+				],
+				switching: switchSteps('DataBull'),
+				faqs: [
+					{ question: 'Is there a free alternative to DataBull?', answer: 'Yes. Grosslytics self-hosts on your own Cloudflare account for $0. DataBull’s self-hosted license is $49 once.' },
+					{ question: 'Does Grosslytics run on Cloudflare like DataBull?', answer: 'Yes. Both run on Cloudflare Workers with a D1 database, so your data stays in your account. Cloudflare’s free plan covers most small sites for both.' },
+					{ question: 'Which payment providers does each support?', answer: 'DataBull: Stripe, Polar, Dodo Payments and Creem. Grosslytics: Stripe, Polar, Razorpay, Paddle and Lemon Squeezy.' },
+					{ question: 'Can Grosslytics import past payments like DataBull?', answer: 'Not yet. Grosslytics attributes sales from the day you install it. DataBull imports past sales on day one.' },
+					{ question: 'Is Grosslytics open source?', answer: 'No, and neither is DataBull. Grosslytics self-hosted runs in your Cloudflare account, so you control the data.' },
+					{ question: 'Does Grosslytics use cookies?', answer: 'No. The tracker stores a random visitor ID in localStorage so it can connect a later purchase to the first visit. Some privacy laws treat that like a cookie, so check whether your site needs consent.' },
+				],
+				theyLead: ['Dodo and Creem support', 'Imports past payments on day one', 'Telegram sale pings and spike alerts', 'A one-command installer and a hosted beta'],
+				weDiffer: ['Razorpay, Paddle and Lemon Squeezy support', 'Net revenue after gateway fees and ad spend', 'A $0 self-hosted tier', 'A smaller tracker (1.5 KB vs 6.4 KB)'],
 				verified: VERIFIED,
 				sources: [{ label: 'databull.app (features, pricing, FAQ)', url: 'https://databull.app' }, { label: 'databull.app/js/script.js (measured)', url: 'https://databull.app/js/script.js' }],
 			},
@@ -72,19 +152,55 @@ export function getStaticPaths() {
 			props: {
 				competitor: 'Plausible',
 				competitorDomain: 'plausible.io',
-				title: 'Plausible Alternative with Revenue Attribution | Grosslytics',
-				description: 'Plausible is lightweight, private web analytics. Grosslytics adds payment-provider revenue attribution: which channel each sale came from, and what you kept after fees.',
+				keyword: 'Plausible alternative',
+				title: 'Plausible Alternative with Stripe Revenue Attribution',
+				description: 'Plausible shows traffic. Grosslytics also credits each Stripe, Paddle or Razorpay sale to its channel and shows what you kept after fees. 1.5 KB, no cookies.',
+				h1: 'The Plausible alternative that shows where revenue comes from.',
+				answer: 'Plausible is simple, private traffic analytics. Grosslytics keeps that simplicity, with a 1.5 KB script and no cookies, and adds what Plausible does not: it receives your payment webhooks, credits each sale to the channel that brought the buyer, and shows revenue after gateway fees and ad spend. Choose Plausible for open-source, EU-hosted traffic analytics; choose Grosslytics when you need to know which channels pay.',
+				whatIs: 'Plausible (plausible.io) is open-source, cookie-free web analytics, made and hosted in the EU. It covers pageviews, sources, goals and custom events, funnels, saved segments and annotations, and can import Google Analytics data. Revenue can be recorded by sending revenue values with custom events from your own code; it does not list payment-provider integrations.',
 				rows: [
 					['Tracker size (Brotli)', '1.1 KB', US.tracker],
-					['Price', 'From $9/mo (Starter, 10k pageviews, 1 site)', US.price],
-					['Revenue', 'Revenue tracking through custom events', 'Payment webhooks credit each sale to a channel'],
+					['Price', 'From $9/mo (Starter, 10k pageviews, 1 site); 30-day free trial', US.price],
+					['Revenue', 'Revenue values sent with custom events', 'Payment webhooks credit each sale to a channel'],
 					['Payment providers', 'No integrations listed', US.gateways],
+					['Attribution models', 'Not offered', 'First touch, last touch, linear'],
 					['Gateway fees', 'Not mentioned on plausible.io', US.fees],
+					['Buyer journeys', 'Not offered', 'Every visit and page before each sale'],
 					['Cookies', 'No cookies', US.cookies],
 					['Open source', 'Yes', 'No'],
+					['Hosting', 'Hosted in the EU', 'Your own Cloudflare account'],
+				],
+				chooseThem: ['You only need traffic analytics, not revenue', 'You need open-source software or EU hosting', 'You want Google Analytics import and a long track record'],
+				chooseUs: ['You sell through Stripe, Razorpay, Polar, Paddle or Lemon Squeezy', 'You want each sale credited to the post or search that found the buyer', 'You want revenue per visitor and profit per channel', 'You want to self-host for free'],
+				pricing: [
+					'Plausible Starter is $9/month for up to 10,000 pageviews and one site, with a 30-day free trial and no retention limit. Growth starts at $14/month, and price rises with traffic.',
+					'Grosslytics self-hosted is $0 on your own Cloudflare account, with no pageview or site limit from us. Hosted plans are offered from /start.',
+				],
+				deep: [
+					{
+						h2: 'Revenue goals vs revenue attribution',
+						ps: [
+							'In Plausible, you send a revenue amount with a custom event, usually from your checkout success page. That tells you a sale happened on that visit. It does not hear about renewals, refunds or fees, and a buyer who comes back days later from another channel is credited to that last visit only.',
+							'Grosslytics listens to your payment provider instead. Each signed webhook is matched to the visitor ID carried through checkout, so first-touch, last-touch and linear credit, renewals, full Stripe refunds and gateway fees are all handled without event code.',
+						],
+					},
+					{
+						h2: 'Privacy',
+						ps: [
+							'Both tools are cookie-free. Plausible identifies visits with a daily-rotating hash and stores nothing in the browser. Grosslytics stores a random visitor ID in localStorage, which is what lets it connect a purchase days later to the first visit. That trade-off buys revenue attribution; check whether your visitors’ jurisdiction needs a notice or consent for it.',
+						],
+					},
+				],
+				switching: switchSteps('Plausible', 'Add a data-goal attribute to the buttons you tracked as Plausible goals. Grosslytics counts every visitor who reaches one in its “Reached a goal” step; goals are not yet broken down by name.'),
+				faqs: [
+					{ question: 'What is the best Plausible alternative with revenue tracking?', answer: 'If you want sales from Stripe, Razorpay, Polar, Paddle or Lemon Squeezy credited to channels automatically, Grosslytics. Plausible itself can record revenue sent with custom events, but it does not connect to payment providers.' },
+					{ question: 'Does Plausible track Stripe revenue?', answer: 'Not directly. Plausible lists no payment integrations; you can send a revenue value with a custom event from your own code. Grosslytics receives Stripe webhooks and attributes each sale for you.' },
+					{ question: 'Is Grosslytics as private as Plausible?', answer: 'Both set no cookies and store no IP addresses. Grosslytics keeps a random visitor ID in localStorage to connect later purchases to the first visit; Plausible stores nothing in the browser.' },
+					{ question: 'Is Grosslytics open source like Plausible?', answer: 'No. Plausible is open source. Grosslytics can be self-hosted on your own Cloudflare account, so the data stays in your account.' },
+					{ question: 'Can I run Grosslytics next to Plausible?', answer: 'Yes. The two scripts do not conflict, so you can keep Plausible for traffic and add Grosslytics for revenue.' },
 				],
 				theyLead: ['A smaller tracker (1.1 KB vs 1.5 KB)', 'Open source and hosted in the EU', 'Funnels, Google Analytics import and a long track record'],
-				weDiffer: ['Sales attributed from Stripe, Razorpay, Polar, Paddle and Lemon Squeezy', 'First-touch, last-touch and linear attribution', 'Net revenue after gateway fees'],
+				weDiffer: ['Sales attributed from Stripe, Razorpay, Polar, Paddle and Lemon Squeezy', 'First-touch, last-touch and linear attribution', 'Net revenue after gateway fees and ad spend'],
 				verified: VERIFIED,
 				sources: [{ label: 'plausible.io (features and pricing)', url: 'https://plausible.io' }, { label: 'plausible.io/js/script.js (measured)', url: 'https://plausible.io/js/script.js' }],
 			},
@@ -94,40 +210,68 @@ export function getStaticPaths() {
 			props: {
 				competitor: 'Google Analytics 4',
 				competitorDomain: 'analytics.google.com',
-				title: 'Lightweight GA4 Alternative with Revenue | Grosslytics',
-				description: 'Google Analytics 4 is free and deep, but heavy. Grosslytics is a 1.5 KB tracker that credits each payment to the channel that brought the buyer.',
+				keyword: 'GA4 alternative',
+				title: 'GA4 Alternative for SaaS: 1.5 KB, Cookie-Free, Revenue',
+				description: 'A lightweight GA4 alternative for SaaS founders: a 1.5 KB cookie-free script that credits each Stripe or Paddle sale to the channel that brought it.',
+				h1: 'The lightweight GA4 alternative that follows the money.',
+				answer: 'Google Analytics 4 is free and very deep, but its script is about 125 KB, it uses cookies, and revenue only appears if you send ecommerce events yourself. Grosslytics is a 1.5 KB, cookie-free tracker that receives your payment webhooks and shows which channel brought each paying customer, after fees. Keep GA4 if you rely on Google Ads and Search Console integration; switch if you want a one-page answer to “which channels make money?”',
+				whatIs: 'Google Analytics 4 is Google’s free web and app analytics. It is event-based, integrates with Google Ads, Search Console and BigQuery, and offers explorations, audiences and multiple attribution settings. It uses cookies, so many regions need a consent banner. User-level data in standard properties is kept for 2 or 14 months, set by you.',
 				rows: [
 					['Tracker size (Brotli)', '125 KB (gtag.js)', US.tracker],
 					['Price', 'Free', US.price],
 					['Revenue', 'Ecommerce events you send yourself', 'Payment webhooks credit each sale to a channel'],
 					['Gateway fees', 'Not handled', US.fees],
+					['Setup', 'Tag, events, conversions and reports to configure', 'One script tag and one webhook URL'],
+					['User-level data retention', '2 or 14 months (standard properties)', 'As long as you keep it in your own database'],
 					['Cookies', 'Uses cookies', US.cookies],
+					['Google Ads and Search Console', 'Built in', 'Not integrated'],
+				],
+				chooseThem: ['You buy Google Ads and need conversion data sent back to Google', 'You need Search Console, BigQuery export or audiences', 'You have an analyst who uses explorations and custom reports'],
+				chooseUs: ['You want one page that ranks channels by revenue', 'You want a script 1% of the size and no cookies', 'You do not want to write ecommerce event code', 'You are a SaaS or indie founder paid through Stripe, Razorpay, Polar, Paddle or Lemon Squeezy'],
+				pricing: [
+					'Google Analytics 4 is free; Google Analytics 360 is the paid enterprise tier. The cost is in setup time: tags, events, key events and reports, and keeping consent rules right.',
+					'Grosslytics self-hosted is $0 on your own Cloudflare account. Hosted plans are offered from /start.',
+				],
+				deep: [
+					{
+						h2: 'Why revenue is hard in GA4',
+						ps: [
+							'GA4 knows about a purchase only if your site sends a purchase event with the value, usually from a thank-you page. Subscription renewals, refunds and payment fees happen at your payment provider, not on your site, so GA4 never sees them unless you build that pipeline yourself.',
+							'Grosslytics starts from the payment side. Each signed webhook from your provider is matched to the visitor who checked out, so renewals stay credited to the channel that found the customer, full Stripe refunds drop out of revenue, and fees are subtracted automatically.',
+						],
+					},
+					{
+						h2: 'Speed and consent',
+						ps: [
+							'At about 125 KB compressed, gtag.js is roughly 80 times the size of the Grosslytics tracker. And because GA4 uses cookies, sites with visitors in the EU and UK usually need a consent banner, and visitors who decline are missing from the data. Grosslytics sets no cookies; it does keep a random visitor ID in localStorage, so check your local rules.',
+						],
+					},
+				],
+				switching: switchSteps('GA4', 'Add data-goal attributes to the buttons behind the GA4 key events you care about; they count toward the “Reached a goal” step. Keep GA4 running if you still need its Google Ads integration.'),
+				faqs: [
+					{ question: 'What is the best Google Analytics alternative for SaaS?', answer: 'For SaaS founders who want revenue by channel, a revenue-first tool like Grosslytics answers that directly. For private traffic analytics only, Plausible or Fathom. For product analytics with session replay, PostHog.' },
+					{ question: 'Is there a free Google Analytics alternative?', answer: 'Yes. Grosslytics is free to self-host on your own Cloudflare account, and some open-source tools such as Umami and Matomo can be self-hosted for free too.' },
+					{ question: 'Can Grosslytics replace GA4 completely?', answer: 'For traffic sources, pages, countries, devices and revenue attribution, yes. It does not replace Google Ads conversion import, Search Console data or BigQuery export, so keep GA4 if you depend on those.' },
+					{ question: 'Does Grosslytics need a cookie banner?', answer: 'It sets no cookies and stores no IP addresses. It keeps a random visitor ID in localStorage to connect purchases to visits; some privacy laws treat that like a cookie, so check what your visitors’ region requires.' },
+					{ question: 'How long does Grosslytics keep data?', answer: 'Data lives in the D1 database in your own Cloudflare account and stays until you delete it. GA4 standard properties keep user-level data for 2 or 14 months.' },
 				],
 				theyLead: ['Free, with very deep reporting', 'Google Ads and Search Console integration', 'Industry-standard tooling and support'],
 				weDiffer: ['About 1% of the tracker weight', 'No cookies', 'Sales from your payment provider, credited to channels without custom event code'],
 				verified: VERIFIED,
-				sources: [{ label: 'googletagmanager.com/gtag/js (measured)', url: 'https://www.googletagmanager.com/gtag/js' }],
+				sources: [{ label: 'googletagmanager.com/gtag/js (measured)', url: 'https://www.googletagmanager.com/gtag/js' }, { label: 'GA4 data retention (Google help)', url: 'https://support.google.com/analytics/answer/7667196' }],
 			},
 		},
 	];
 }
 
-const { competitor, competitorDomain, title, description, rows, theyLead, weDiffer, sources, verified: lastVerifiedDate } = Astro.props;
-
-const faqs = [
-	{
-		question: `How does Grosslytics differ from ${competitor}?`,
-		answer: `${weDiffer.join('. ')}. Where ${competitor} is ahead: ${theyLead.join('; ')}.`,
-	},
-	{
-		question: `Can I bring my history over from ${competitor}?`,
-		answer: 'Not yet. Grosslytics starts attributing visits and sales from the day you add the tracker. Importing past Stripe payments is planned.',
-	},
-	{
-		question: 'Does Grosslytics use cookies?',
-		answer: 'No. The tracker stores a random visitor ID in localStorage so it can connect a later purchase to the first visit. Some privacy laws treat that like a cookie, so check whether your site needs consent.',
-	},
-];
+const { competitor, competitorDomain, title, description, h1, answer, whatIs, rows, chooseThem, chooseUs, pricing, deep, switching, faqs, theyLead, weDiffer, sources, verified: lastVerifiedDate } = Astro.props;
+const related = [
+	{ href: '/compare/datafast-alternative', name: 'DataFast' },
+	{ href: '/compare/databull-alternative', name: 'DataBull' },
+	{ href: '/compare/plausible-alternative', name: 'Plausible' },
+	{ href: '/compare/ga4-alternative', name: 'Google Analytics 4' },
+].filter((r) => r.name !== competitor);
+const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 ---
 
 <Page title={title} description={description}>
@@ -136,7 +280,7 @@ const faqs = [
 			type="article"
 			title={title}
 			description={description}
-			datePublished="2025-01-01"
+			datePublished="2026-11-06"
 			dateModified={lastVerifiedDate}
 		/>
 		<SchemaJsonLd type="faq" faqs={faqs} />
@@ -156,17 +300,20 @@ const faqs = [
 
 			<header>
 				<p class="eyebrow mb-3">Grosslytics vs {competitor}</p>
-				<h1 class="text-[clamp(36px,5.5vw,56px)] font-semibold leading-[1.06] tracking-[-0.035em]">
-					The {competitor} alternative that counts what you keep.
-				</h1>
-				<p class="mt-5 text-[21px] leading-relaxed text-ink-2">{description}</p>
+				<h1 class="text-[clamp(36px,5.5vw,56px)] font-semibold leading-[1.06] tracking-[-0.035em]">{h1}</h1>
+				<p class="mt-5 text-[21px] leading-relaxed text-ink-2">{answer}</p>
 				<p class="mt-6 text-[13px] text-ink-3">
 					By the Grosslytics team · <time datetime={lastVerifiedDate}>Last verified {lastVerifiedDate}</time> · Checked against <span class="text-ink-2">{competitorDomain}</span>
 				</p>
 			</header>
 
-			<section class="mt-16">
-				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">At a glance</h2>
+			<section class="prose-g mt-14 text-[19px] leading-relaxed">
+				<h2 class={h2}>What is {competitor}?</h2>
+				<p>{whatIs}</p>
+			</section>
+
+			<section class="mt-14">
+				<h2 class={h2}>{competitor} vs Grosslytics at a glance</h2>
 				<div class="mt-6 overflow-x-auto rounded-[20px] ring-1 ring-line">
 					<table class="w-full min-w-[520px] text-left text-[15px]">
 						<thead>
@@ -189,8 +336,36 @@ const faqs = [
 				</div>
 				<p class="mt-4 text-[13px] leading-relaxed text-ink-3">
 					{competitor} details are from their public website, checked {lastVerifiedDate}. Tracker sizes were measured by compressing each script with Brotli. Sources:
-					{sources.map((src, i) => <>{i > 0 && ', '}<a class="underline decoration-ink-3/40 hover:text-ink-2" href={src.url} rel="nofollow noopener" target="_blank">{src.label}</a></>)}.				</p>
+					{sources.map((src, i) => <>{i > 0 && ', '}<a class="underline decoration-ink-3/40 hover:text-ink-2" href={src.url} rel="nofollow noopener" target="_blank">{src.label}</a></>)}.
+				</p>
 			</section>
+
+			<section class="mt-14 grid gap-4 sm:grid-cols-2">
+				<div class="rounded-[24px] bg-band p-7">
+					<h2 class="text-[21px] font-semibold tracking-[-0.02em]">Choose {competitor} if</h2>
+					<ul class="mt-4 space-y-2.5 text-[17px] text-ink-2">
+						{chooseThem.map((f) => <li class="flex gap-3"><span class="text-ink-3" aria-hidden="true">•</span>{f}</li>)}
+					</ul>
+				</div>
+				<div class="rounded-[24px] bg-band p-7">
+					<h2 class="text-[21px] font-semibold tracking-[-0.02em]">Choose Grosslytics if</h2>
+					<ul class="mt-4 space-y-2.5 text-[17px] text-ink-2">
+						{chooseUs.map((f) => <li class="flex gap-3"><span class="text-accent" aria-hidden="true">•</span>{f}</li>)}
+					</ul>
+				</div>
+			</section>
+
+			<section class="prose-g mt-14 text-[19px] leading-relaxed">
+				<h2 class={h2}>{competitor} pricing vs Grosslytics pricing</h2>
+				{pricing.map((p) => <p>{p}</p>)}
+			</section>
+
+			{deep.map((s) => (
+				<section class="prose-g mt-14 text-[19px] leading-relaxed">
+					<h2 class={h2}>{s.h2}</h2>
+					{s.ps.map((p) => <p>{p}</p>)}
+				</section>
+			))}
 		</article>
 
 		<section class="bg-band px-5 py-20">
@@ -215,7 +390,15 @@ const faqs = [
 			</section>
 
 			<section class="prose-g mt-16 text-[19px] leading-relaxed">
-				<h2 class="text-[28px] font-semibold tracking-[-0.02em] text-ink">Why net revenue matters</h2>
+				<h2 class={h2}>How to switch from {competitor}</h2>
+				<ol class="mt-4 list-decimal space-y-3 pl-6">
+					{switching.map((step) => <li>{step}</li>)}
+				</ol>
+				<p class="mt-4">Setup takes about five minutes. <a class="text-accent hover:underline" href="/start">Start the setup ›</a></p>
+			</section>
+
+			<section class="prose-g mt-16 text-[19px] leading-relaxed">
+				<h2 class={h2}>Why net revenue matters</h2>
 				<p>
 					Payment providers keep a cut of every sale: Stripe's standard US card rate is 2.9% + 30¢, and merchant-of-record platforms take more. Add ad spend, and a channel with $10,000 in sales, $8,000 in ads and $450 in fees made you <strong>$1,550</strong>.
 				</p>
@@ -225,7 +408,7 @@ const faqs = [
 			</section>
 
 			<section class="mt-16 border-t border-line pt-12">
-				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">Questions</h2>
+				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">{competitor} alternative: questions</h2>
 				<div class="mt-4 divide-y divide-line">
 					{faqs.map((faq) => (
 						<details class="group py-5">
@@ -238,6 +421,15 @@ const faqs = [
 					))}
 				</div>
 			</section>
+
+			<nav aria-label="Other comparisons" class="mt-16">
+				<h2 class="text-[21px] font-semibold tracking-[-0.02em]">Other comparisons</h2>
+				<ul class="mt-4 grid gap-3 sm:grid-cols-3">
+					{related.map((r) => (
+						<li><a href={r.href} class="block rounded-2xl bg-band p-4 text-[15px] hover:ring-1 hover:ring-line"><span class="text-ink-3">Grosslytics vs</span><span class="mt-1 block font-semibold">{r.name} ›</span></a></li>
+					))}
+				</ul>
+			</nav>
 
 			<div class="mt-16 rounded-[28px] bg-band p-10 text-center">
 				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">See your own numbers.</h2>

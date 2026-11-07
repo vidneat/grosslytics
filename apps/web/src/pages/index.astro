@@ -15,10 +15,53 @@ const inApp = [
 ];
 const aiEngines = ['ChatGPT', 'Perplexity', 'Claude', 'Gemini', 'Copilot'];
 const gateways = ['Stripe', 'Razorpay', 'Polar', 'Paddle', 'Lemon Squeezy'];
+const steps = [
+	{ n: '1', title: 'Add one script tag', body: 'Paste a 1.5 KB script into your site’s <head>. Works on any site: Next.js, Astro, WordPress, Webflow, Framer, Shopify or plain HTML.' },
+	{ n: '2', title: 'Point your payment webhook', body: 'Add one webhook URL in Stripe, Razorpay, Polar, Paddle or Lemon Squeezy. Each sale is signed, checked and matched to the visitor who made it.' },
+	{ n: '3', title: 'See which channels pay', body: 'Every source, page and campaign is ranked by the money it brought in after fees and ad spend, not by pageviews.' },
+];
+const features = [
+	{ title: 'Three attribution models', body: 'First touch, last touch, or linear. Switch with one click and every panel recalculates.' },
+	{ title: 'Gross, net or profit', body: 'See revenue before fees, after gateway fees, or after fees and the ad spend you enter per source.' },
+	{ title: 'Where the money goes', body: 'A simple bridge from gross revenue to what you kept: gateway fees and ad spend, side by side.' },
+	{ title: 'Buyer journeys', body: 'Open any sale to see each visit and page the buyer saw, from the first click to the payment.' },
+	{ title: 'Time to convert', body: 'How long buyers take from first visit to paying: same day, within a week, or longer.' },
+	{ title: 'Lifetime value by first source', body: 'Renewals included, so you know which channel finds customers who stay.' },
+	{ title: 'When buyers buy', body: 'A weekday-by-hour heatmap of sales, with refunds in red, in your own timezone.' },
+	{ title: 'Pages that sell', body: 'Revenue by entry page, plus read time and scroll depth, so you know which posts close.' },
+	{ title: 'Buyers vs everyone else', body: 'How people who paid used your site compared with visitors who didn’t.' },
+	{ title: 'Readable “Direct”', body: 'In-app browsers from Instagram, TikTok, LinkedIn and X are named instead of hidden as Direct.' },
+	{ title: 'Locations and technology', body: 'Countries, devices, browsers and operating systems, each with its own revenue.' },
+	{ title: 'Filters everywhere', body: 'Click any source, page, country or device to filter the whole dashboard to those visitors.' },
+	{ title: 'Live feed', body: 'Visitors and sales stream in over a WebSocket the moment they happen.' },
+	{ title: 'Refunds handled', body: 'A full Stripe refund removes the sale from revenue and marks it in red. Nothing to clean up by hand.' },
+	{ title: 'Chart notes', body: 'Mark a launch or a post on the chart, so next month you still know why that day spiked.' },
+	{ title: 'Public revenue page', body: 'Share an open revenue page and an embeddable badge. Customer emails and journeys stay private.' },
+	{ title: 'Bots left out', body: 'Crawlers, headless browsers, verified bots and datacenter traffic are dropped before they reach your numbers.' },
+	{ title: 'Your currency and timezone', body: 'Report in USD, EUR, GBP or INR, with days and hours on your local clock.' },
+];
+const compares = [
+	{ href: '/compare/datafast-alternative', name: 'DataFast' },
+	{ href: '/compare/databull-alternative', name: 'DataBull' },
+	{ href: '/compare/plausible-alternative', name: 'Plausible' },
+	{ href: '/compare/ga4-alternative', name: 'Google Analytics 4' },
+];
+const faqs = [
+	{ question: 'What makes Grosslytics different from Google Analytics or Plausible?', answer: 'Those tools count visits. Grosslytics also receives your payment webhooks, so every sale is tied to the post, search or AI answer that brought the buyer, and shown after gateway fees and ad spend.' },
+	{ question: 'Which payment providers work?', answer: 'Stripe, Razorpay, Polar, Paddle and Lemon Squeezy, through signed webhooks. Stripe is the most tested; full Stripe refunds are handled automatically.' },
+	{ question: 'What does self-hosted mean?', answer: 'Grosslytics runs on your own Cloudflare account: a Worker, a D1 database and a queue. Your visitor and revenue data never passes through our servers, and Cloudflare’s free tier covers most small sites.' },
+	{ question: 'Do I need to write code?', answer: 'No. You paste one script tag and one webhook URL. The setup at /start checks each step for you against real data.' },
+	{ question: 'What about cookies and GDPR?', answer: 'Grosslytics sets no cookies and stores no IP addresses. A random visitor ID is kept in your site’s browser storage so a sale can be matched to the visit, and buyer emails are masked. Rules differ by country, so check whether your visitors need a notice or consent.' },
+	{ question: 'Will ad blockers break it?', answer: 'The tracker posts to a neutral /api/event path on your own API with a plain request, which EasyPrivacy and uBlock Origin’s privacy list did not block in our tests.' },
+	{ question: 'Can I ask an AI agent about my numbers?', answer: 'Yes. Your API includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?”' },
+	{ question: 'Can I track several sites or client sites?', answer: 'Yes. Self-hosting has no site limit; each site has its own ID, currency and timezone.' },
+	{ question: 'I use DataFast. Is switching hard?', answer: 'Swap the script tag and point your payment webhook at your Grosslytics API. Existing data-fast-goal attributes on your buttons keep working.' },
+	{ question: 'Is hosting available, or only self-hosting?', answer: 'Both. Self-hosting is free. Indie Cloud is hosted for you at $5 a month for up to 100,000 events, after a 14-day free trial with no card. Lifetime is $29 once: a license key and one command that installs Grosslytics in your own Cloudflare account and updates it later.' },
+];
 const plans = [
 	{ id: 'self', cta: 'Start free', name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.', items: ['Unlimited sites', 'All attribution models', 'MCP server included'] },
-	{ id: 'cloud', cta: 'Get Indie Cloud', name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. You just add the script.', items: ['Everything in Self-host', 'Managed updates', 'Hosted dashboard'], featured: true },
-	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'A self-hosted license you own.', items: ['Everything in Self-host', 'Lifetime updates', 'Priority email support'] },
+	{ id: 'cloud', cta: 'Get Indie Cloud', name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. 14-day free trial, no card.', items: ['Everything in Self-host', 'Up to 100,000 events a month', 'Unlimited sites, hosted dashboard'], featured: true },
+	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'One command installs it in your Cloudflare.', items: ['Everything in Self-host', 'No setup by hand: npx grosslytics install', 'Updates with the same command'] },
 ];
 ---
 
@@ -27,6 +70,7 @@ const plans = [
 	description="Grosslytics ties every click, post, and AI search visit to the revenue you actually keep: after Stripe and Razorpay fees and ad spend."
 >
 	<SchemaJsonLd slot="head" type="software" />
+	<SchemaJsonLd slot="head" type="faq" faqs={faqs} />
 
 	<main>
 		<!-- Hero -->
@@ -44,6 +88,20 @@ const plans = [
 				<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
 			</div>
 			<p class="mt-5 text-[13px] text-ink-3">Free on your own Cloudflare. No cookies.</p>
+		</section>
+
+		<!-- How it works -->
+		<section id="how" class="mx-auto max-w-[1024px] scroll-mt-12 px-5 pb-24">
+			<h2 class="mb-10 text-center text-[clamp(28px,4vw,40px)] font-semibold leading-[1.1] tracking-[-0.03em]">Live in three steps.</h2>
+			<ol class="grid gap-4 md:grid-cols-3">
+				{steps.map((st) => (
+					<li class="rounded-[28px] bg-band p-8">
+						<span class="flex h-9 w-9 items-center justify-center rounded-full bg-card text-[15px] font-semibold ring-1 ring-line" aria-hidden="true">{st.n}</span>
+						<h3 class="mt-5 text-[20px] font-semibold tracking-[-0.02em]">{st.title}</h3>
+						<p class="mt-2 text-ink-2">{st.body}</p>
+					</li>
+				))}
+			</ol>
 		</section>
 
 		<!-- One sale, explained -->
@@ -168,6 +226,49 @@ const plans = [
 			</div>
 		</section>
 
+		<!-- Everything in the dashboard -->
+		<section id="features" class="scroll-mt-12 bg-band px-5 py-24">
+			<div class="mx-auto max-w-[1100px]">
+				<div class="mx-auto mb-12 max-w-2xl text-center">
+					<h2 class="text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">Everything in the dashboard.</h2>
+					<p class="mt-4 text-[19px] text-ink-2">One page, built around the money. All of it is in the free self-hosted version.</p>
+				</div>
+				<ul class="grid gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+					{features.map((f) => (
+						<li class="border-t border-line pt-5">
+							<h3 class="text-[17px] font-semibold tracking-[-0.01em]">{f.title}</h3>
+							<p class="mt-1.5 text-[15px] leading-relaxed text-ink-2">{f.body}</p>
+						</li>
+					))}
+				</ul>
+				<div class="mt-12 text-center">
+					<a href="/app/demo" class="btn-quiet text-[17px]">See every panel in the demo ›</a>
+				</div>
+			</div>
+		</section>
+
+		<!-- Install + privacy -->
+		<section class="mx-auto grid max-w-[1024px] gap-4 px-5 py-28 md:grid-cols-2">
+			<article class="min-w-0 rounded-[28px] bg-band p-8">
+				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">Two lines of setup.</h2>
+				<p class="mt-2 text-ink-2">The script goes in your site’s &lt;head&gt;:</p>
+				<pre class="mt-4 overflow-x-auto rounded-2xl bg-card p-4 font-mono text-[12.5px] leading-relaxed text-ink-2 ring-1 ring-line"><code>{'<script defer src="https://your-api/g.js"\n  data-site-id="gl_…"></script>'}</code></pre>
+				<p class="mt-5 text-ink-2">The webhook goes in your payment dashboard:</p>
+				<pre class="mt-4 overflow-x-auto rounded-2xl bg-card p-4 font-mono text-[12.5px] leading-relaxed text-ink-2 ring-1 ring-line"><code>https://your-api/api/webhooks/stripe?siteId=gl_…</code></pre>
+				<p class="mt-5 text-[15px] text-ink-2">Track button clicks with a <code class="font-mono text-[13px]">data-goal="signup"</code> attribute. Stripe and Polar checkout links get the visitor ID added for you.</p>
+			</article>
+			<article class="min-w-0 rounded-[28px] bg-band p-8">
+				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">Your Cloudflare. Your data.</h2>
+				<ul class="mt-5 space-y-4 text-[15px]">
+					<li><span class="font-semibold">No cookies, no IP addresses stored.</span> <span class="text-ink-2">Buyer emails are masked.</span></li>
+					<li><span class="font-semibold">Nothing passes through us.</span> <span class="text-ink-2">The tracker, API and database all run in your own Cloudflare account.</span></li>
+					<li><span class="font-semibold">Signed payments only.</span> <span class="text-ink-2">Every webhook signature is checked, and repeats are counted once.</span></li>
+					<li><span class="font-semibold">Events only from your domain.</span> <span class="text-ink-2">Visits sent from other sites are refused, and bots are filtered out.</span></li>
+					<li><span class="font-semibold">Free to run.</span> <span class="text-ink-2">Cloudflare’s free tier covers most small sites.</span></li>
+				</ul>
+			</article>
+		</section>
+
 		<!-- Calculator -->
 		<section class="bg-band px-5 py-24">
 			<div class="mx-auto mb-12 max-w-2xl text-center">
@@ -199,6 +300,44 @@ const plans = [
 			</div>
 			<div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
 				<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
+			</div>
+		</section>
+
+		<!-- Compare -->
+		<section class="mx-auto max-w-[1024px] px-5 pb-24">
+			<h2 class="mb-8 text-center text-[clamp(28px,4vw,40px)] font-semibold leading-[1.1] tracking-[-0.03em]">Coming from another tool?</h2>
+			<ul class="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+				{compares.map((c) => (
+					<li><a href={c.href} class="block rounded-2xl bg-band p-5 text-[15px] hover:ring-1 hover:ring-line"><span class="text-ink-3">Grosslytics vs</span><span class="mt-1 block font-semibold">{c.name} ›</span></a></li>
+				))}
+			</ul>
+		</section>
+
+		<!-- FAQ -->
+		<section id="faq" class="mx-auto max-w-[760px] scroll-mt-12 px-5 pb-24">
+			<h2 class="text-center text-[clamp(28px,4vw,40px)] font-semibold leading-[1.1] tracking-[-0.03em]">Questions</h2>
+			<div class="mt-8 divide-y divide-line border-y border-line">
+				{faqs.map((faq) => (
+					<details class="group py-5">
+						<summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-[17px] font-semibold">
+							<h3>{faq.question}</h3>
+							<span class="text-[22px] font-light text-ink-3 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+						</summary>
+						<p class="mt-3 text-[16px] leading-relaxed text-ink-2">{faq.answer}</p>
+					</details>
+				))}
+			</div>
+		</section>
+
+		<!-- Final CTA -->
+		<section class="px-5 pb-28">
+			<div class="mx-auto max-w-[1024px] rounded-[28px] bg-band px-6 py-16 text-center">
+				<h2 class="mx-auto max-w-[18ch] text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">Find out which posts pay the bills.</h2>
+				<p class="mt-4 text-[19px] text-ink-2">Free on your own Cloudflare. Set up in about five minutes.</p>
+				<div class="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+					<a href="/start" class="btn btn-primary">Start free</a>
+					<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
+				</div>
 			</div>
 		</section>
 	</main>

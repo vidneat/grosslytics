@@ -161,7 +161,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 
 	const sources = SOURCES.map((c) => {
 		const gross = ((c.gross * weight(c.last)) / wTotal) * baseTotal * scale * otherShare;
-		const ad = c.ad * scale * otherShare;
+		const ad = filters.some((filter) => filter.dim !== 'source') ? 0 : c.ad * scale * otherShare;
 		return {
 			key: c.key,
 			label: c.key,
@@ -183,6 +183,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 	);
 	const totalVisitors = totals.visitors;
 	const totalRevenue = totals.revenue;
+	const detailRevenue = mode === 'gross' ? totals.gross : totals.gross - totals.fee;
 
 	// Channel groups (category)
 	const groups = new Map<string, Row>();
@@ -200,7 +201,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 			label: r.label ?? r.key,
 			icon: iconOf?.(r),
 			visitors: Math.max(1, Math.round(totalVisitors * r.share)),
-			revenue: totalRevenue * r.rev,
+			revenue: detailRevenue * r.rev,
 			sales: totals.sales * r.rev,
 			note: r.read ? `${Math.floor(r.read / 60)}m ${r.read % 60}s read` : r.note,
 		}));
@@ -243,7 +244,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 	const funnel = [
 		{ label: 'Visited', count: funnelBase },
 		{ label: 'Viewed /pricing', count: Math.round(funnelBase * 0.27) },
-		{ label: 'Started checkout', count: Math.round(funnelBase * 0.031) },
+		{ label: 'Reached a goal', count: Math.round(funnelBase * 0.031) },
 		{ label: 'Paid', count: Math.round(totals.sales) },
 	];
 
@@ -275,7 +276,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		totals,
 		sources: shown.map((s) => ({ ...s, note: s.cat })),
 		groups: [...groups.values()],
-		campaigns: CAMPAIGNS.map((c) => ({ key: c.key, label: c.key, visitors: Math.round(totalVisitors * c.share), revenue: totalRevenue * c.rev, sales: totals.sales * c.rev, note: c.note })),
+		campaigns: CAMPAIGNS.map((c) => ({ key: c.key, label: c.key, visitors: Math.round(totalVisitors * c.share), revenue: detailRevenue * c.rev, sales: totals.sales * c.rev, note: c.note })),
 		pages: fromShares(PAGES),
 		entry: fromShares(ENTRY),
 		exit: fromShares(EXIT),
@@ -294,6 +295,10 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		direct,
 		prev: { visitors: totalVisitors * 0.89, revenue: totalRevenue * 0.85, sales: totals.sales * 0.9 },
 		live: false,
+		currency: 'USD',
+		timezone: 'UTC',
+		excludedCurrencies: [],
+		adSpendAvailable: !filters.some((filter) => filter.dim !== 'source'),
 		sales: DEMO_SALES,
 		annotations: ANNOTATIONS_30D.map((a) => ({ at: start30 + a.at * 86400 + 12 * 3600, label: a.label })),
 	};

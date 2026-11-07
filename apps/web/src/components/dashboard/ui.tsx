@@ -1,10 +1,14 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { formatMoney } from '@grosslytics/shared/money';
 import { ArrowDownRight, ArrowUpRight, Bookmark, CreditCard, Monitor, Share2, Smartphone, Tablet } from 'lucide-react';
 
 const GLYPHS = { '@desktop': Monitor, '@mobile': Smartphone, '@tablet': Tablet } as const;
 
-export const usd = (cents: number, digits = 0) =>
-	(cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: digits, minimumFractionDigits: digits });
+export const CurrencyContext = createContext('USD');
+export function useMoney(currency?: string) {
+	const inherited = useContext(CurrencyContext);
+	return (amount: number, digits = 0) => formatMoney(amount, currency ?? inherited, digits);
+}
 export const num = (n: number) => Math.round(n).toLocaleString('en-US');
 export const compact = (n: number) => n.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -58,7 +62,8 @@ export function Sparkline({ values, active }: { values: number[]; active?: boole
 	const max = Math.max(...values, 1);
 	const min = Math.min(...values);
 	const flat = max - min < max * 0.02; // near-constant series: draw mid-height, not on the floor
-	const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * w},${flat ? h / 2 : h - 2 - ((v - min) / (max - min)) * (h - 4)}`).join(' ');
+	// Rounded so server and browser float math render identical markup (no hydration mismatch)
+	const pts = values.map((v, i) => `${((i / Math.max(1, values.length - 1)) * w).toFixed(2)},${(flat ? h / 2 : h - 2 - ((v - min) / (max - min)) * (h - 4)).toFixed(2)}`).join(' ');
 	return (
 		<svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="overflow-visible">
 			<polyline points={pts} fill="none" stroke={active ? 'var(--ink)' : 'var(--ink-3)'} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -128,6 +133,7 @@ export function BarList(props: {
 	showIcons?: boolean;
 	limit?: number;
 }) {
+	const money = useMoney();
 	const rows = [...props.rows].sort((a, b) => b[props.sortBy] - a[props.sortBy]).slice(0, props.limit ?? 8);
 	const max = Math.max(...rows.map((r) => r[props.sortBy]), 1);
 	const head = (id: 'visitors' | 'revenue', label: string) => (
@@ -163,8 +169,8 @@ export function BarList(props: {
 									{r.note && <span className="hidden shrink-0 truncate text-[12px] text-ink-3 lg:inline">{r.note}</span>}
 								</span>
 								<span className="relative w-[4.75rem] text-right text-ink-2">{compact(r.visitors)}</span>
-								<span className="relative w-[4.75rem] text-right font-medium">{usd(r.revenue)}</span>
-								<span className="relative hidden w-[4.25rem] text-right text-ink-2 sm:inline">{usd(r.revenue / Math.max(1, r.visitors), 2)}</span>
+								<span className="relative w-[4.75rem] text-right font-medium">{money(r.revenue)}</span>
+								<span className="relative hidden w-[4.25rem] text-right text-ink-2 sm:inline">{money(r.revenue / Math.max(1, r.visitors), 2)}</span>
 							</button>
 						</li>
 					);

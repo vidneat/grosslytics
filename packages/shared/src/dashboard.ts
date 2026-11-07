@@ -32,6 +32,7 @@ export interface DashSource extends DashRow {
 }
 
 export interface DashSale {
+	currency?: string;
 	id: string;
 	email: string;
 	plan: string;
@@ -54,6 +55,13 @@ export interface DashSale {
 
 export interface DashboardData {
 	live: boolean;
+	currency: string;
+	/** IANA zone the buckets, heatmap and labels use */
+	timezone: string;
+	/** Historical payments retained in their original currency, excluded from reporting totals. */
+	excludedCurrencies: string[];
+	/** Spend is only attributable to a source, not a page/country/device cohort. */
+	adSpendAvailable: boolean;
 	totals: { visitors: number; gross: number; fee: number; ad: number; revenue: number; sales: number };
 	prev: { visitors: number; revenue: number; sales: number };
 	/** Buckets of `step` seconds starting at `start` (hours for 24h, days otherwise) */
@@ -80,7 +88,7 @@ export interface DashboardData {
 	browsers: DashRow[];
 	oses: DashRow[];
 	behaviour: Array<{ label: string; buyers: string; others: string }>;
-	/** 7 x 24 sales counts, Monday first, UTC hours */
+	/** 7 x 24 sales counts, Monday first, site-local hours */
 	heat: number[][];
 	/** Same grid for refunds, at the hour the refund happened. */
 	heatRefunds: number[][];

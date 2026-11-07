@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { num, usd, useWidth } from './ui';
+import { num, useMoney, useWidth } from './ui';
 
 export interface Point {
 	label: string;
@@ -127,9 +127,9 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /**
  * 7×24 heatmap: green for sales, red for refunds (darker = more). An hour with both is green with a red dot.
- * The three busiest sales hours get an outline. Hours are UTC, the same as the API's buckets.
+ * The three busiest sales hours get an outline. Hours are in the site's timezone, the same as the API's buckets.
  */
-export function Heatmap({ grid, refunds, total }: { grid: number[][]; refunds?: number[][]; total: number }) {
+export function Heatmap({ grid, refunds, total, timeZone = 'UTC' }: { grid: number[][]; refunds?: number[][]; total: number; timeZone?: string }) {
 	const [hover, setHover] = useState<[number, number] | null>(null);
 	const flat = grid.flat();
 	const sum = flat.reduce((a, b) => a + b, 0) || 1;
@@ -144,7 +144,7 @@ export function Heatmap({ grid, refunds, total }: { grid: number[][]; refunds?: 
 		const s = sales(grid[d]![hr]!);
 		const r = refunds?.[d]?.[hr] ?? 0;
 		const sTxt = `${Number.isInteger(s) ? s : s.toFixed(1)} ${s === 1 ? 'sale' : 'sales'}`;
-		return `${DAYS[d]} ${hourLabel(hr)} UTC: ${sTxt}${r ? `, ${r} ${r === 1 ? 'refund' : 'refunds'}` : ''}`;
+		return `${DAYS[d]} ${hourLabel(hr)} ${timeZone}: ${sTxt}${r ? `, ${r} ${r === 1 ? 'refund' : 'refunds'}` : ''}`;
 	};
 	return (
 		<div className="tnum px-3">
@@ -180,7 +180,7 @@ export function Heatmap({ grid, refunds, total }: { grid: number[][]; refunds?: 
 					<>
 						<span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-up" />Sales</span>
 						<span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-down" />Refunds</span>
-						<span>Outlined: busiest hours. Times in UTC.</span>
+						<span>Outlined: busiest hours. Times in {timeZone}.</span>
 					</>
 				)}
 			</p>
@@ -188,25 +188,22 @@ export function Heatmap({ grid, refunds, total }: { grid: number[][]; refunds?: 
 	);
 }
 
-export function Funnel({ steps }: { steps: Array<{ label: string; count: number }> }) {
-	const first = steps[0]?.count || 1;
+export function Milestones({ steps }: { steps: Array<{ label: string; count: number }> }) {
+	const max = Math.max(1, ...steps.map((step) => step.count));
 	return (
 		<ol className="tnum space-y-3 px-3">
-			{steps.map((s, i) => {
-				const prev = steps[i - 1]?.count;
+			{steps.map((s) => {
 				return (
 					<li key={s.label}>
 						<div className="mb-1 flex items-baseline justify-between text-[13px]">
 							<span>{s.label}</span>
 							<span>
 								<span className="font-semibold">{num(s.count)}</span>
-								<span className="ml-2 text-ink-3">{((s.count / first) * 100).toFixed(s.count / first < 0.1 ? 2 : 0)}%</span>
 							</span>
 						</div>
 						<div className="h-2.5 overflow-hidden rounded-full bg-band">
-							<div className="h-full rounded-full bg-ink-2" style={{ width: `${Math.max(1, (s.count / first) * 100)}%` }} />
+							<div className="h-full rounded-full bg-ink-2" style={{ width: `${(s.count / max) * 100}%` }} />
 						</div>
-						{prev !== undefined && <div className="mt-1 text-[11px] text-ink-3">{((1 - s.count / prev) * 100).toFixed(0)}% drop from the step before</div>}
 					</li>
 				);
 			})}
@@ -216,12 +213,13 @@ export function Funnel({ steps }: { steps: Array<{ label: string; count: number 
 
 /** Gross → fees → ad spend → profit, as a bridge. */
 export function ProfitBridge({ gross, fee, ad }: { gross: number; fee: number; ad: number }) {
+	const money = useMoney();
 	const profit = gross - fee - ad;
 	const steps = [
-		{ label: 'Gross revenue', from: 0, to: gross, tone: 'bg-ink-3/45', value: usd(gross) },
-		{ label: 'Payment fees', from: gross - fee, to: gross, tone: 'bg-fee', value: `−${usd(fee)}` },
-		{ label: 'Ad spend', from: gross - fee - ad, to: gross - fee, tone: 'bg-fee/60', value: `−${usd(ad)}` },
-		{ label: 'True profit', from: 0, to: profit, tone: 'bg-net', value: usd(profit), bold: true },
+		{ label: 'Gross revenue', from: 0, to: gross, tone: 'bg-ink-3/45', value: money(gross) },
+		{ label: 'Payment fees', from: gross - fee, to: gross, tone: 'bg-fee', value: `−${money(fee)}` },
+		{ label: 'Ad spend', from: gross - fee - ad, to: gross - fee, tone: 'bg-fee/60', value: `−${money(ad)}` },
+		{ label: 'True profit', from: 0, to: profit, tone: 'bg-net', value: money(profit), bold: true },
 	];
 	return (
 		<ul className="tnum space-y-3 px-3">

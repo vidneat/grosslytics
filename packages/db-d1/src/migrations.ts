@@ -175,3 +175,120 @@ CREATE TABLE IF NOT EXISTS refunds (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_refunds_site_at ON refunds(site_id, refunded_at);
 `;
+
+/** Durable receipts and provider references; all writes using a receipt commit in one D1 batch. */
+export const MIGRATION_005_DELIVERY_RECEIPTS = `
+CREATE TABLE IF NOT EXISTS processed_messages (
+    message_id TEXT PRIMARY KEY,
+    attempt_id TEXT NOT NULL,
+    processed_at INTEGER NOT NULL DEFAULT (unixepoch())
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS payment_references (
+    site_id TEXT NOT NULL,
+    gateway TEXT NOT NULL,
+    reference_id TEXT NOT NULL,
+    payment_id TEXT NOT NULL,
+    PRIMARY KEY (site_id, gateway, reference_id)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_payment_references_payment ON payment_references(site_id, payment_id);
+
+CREATE TABLE IF NOT EXISTS refund_references (
+    site_id TEXT NOT NULL,
+    gateway TEXT NOT NULL,
+    reference_id TEXT NOT NULL,
+    refunded_at INTEGER NOT NULL,
+    PRIMARY KEY (site_id, gateway, reference_id)
+) STRICT, WITHOUT ROWID;
+`;
+
+/** Read-only API tokens, one site each. Only the SHA-256 of the secret is stored; the secret is shown once. */
+export const MIGRATION_006_API_TOKENS = `
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    suffix TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    last_used_at INTEGER
+) STRICT, WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_api_tokens_site ON api_tokens(site_id);
+`;
+
+/** Dashboard owner login: one password (PBKDF2), hashed session IDs, and a lockout after repeated failures. */
+export const MIGRATION_007_OWNER_LOGIN = `
+CREATE TABLE IF NOT EXISTS owner_auth (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    password_hash TEXT NOT NULL,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id_hash TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL
+) STRICT, WITHOUT ROWID;
+`;
+
+/**
+ * Hosted Cloud (CLOUD=1): customer accounts with email + password, sites owned by an account,
+ * monthly event usage for the plan cap, and per-site payment webhook secrets set from the dashboard.
+ * New tables instead of ALTERs, so the whole file stays safe to re-run.
+ */
+export const MIGRATION_008_CLOUD = `
+CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'trial',
+    trial_ends_at INTEGER NOT NULL,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    current_period_end INTEGER,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+) STRICT, WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_accounts_subscription ON accounts(stripe_subscription_id);
+
+CREATE TABLE IF NOT EXISTS account_sessions (
+    id_hash TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS account_sites (
+    site_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL
+) STRICT, WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_account_sites_account ON account_sites(account_id);
+
+CREATE TABLE IF NOT EXISTS account_usage (
+    account_id TEXT NOT NULL,
+    month TEXT NOT NULL,
+    events INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, month)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS site_secrets (
+    site_id TEXT NOT NULL,
+    gateway TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    PRIMARY KEY (site_id, gateway)
+) STRICT, WITHOUT ROWID;
+`;
+
+/** Lifetime licenses sold through Stripe. The key is derived from the checkout session (HMAC), so only its hash is stored. */
+export const MIGRATION_009_LICENSES = `
+CREATE TABLE IF NOT EXISTS licenses (
+    key_hash TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL UNIQUE,
+    email TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    last_download_at INTEGER
+) STRICT, WITHOUT ROWID;
+`;
+
+export const ALL_MIGRATIONS = MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS + MIGRATION_005_DELIVERY_RECEIPTS + MIGRATION_006_API_TOKENS + MIGRATION_007_OWNER_LOGIN + MIGRATION_008_CLOUD + MIGRATION_009_LICENSES;

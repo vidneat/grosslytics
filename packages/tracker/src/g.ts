@@ -123,8 +123,8 @@ if (!w.__gl && !n.webdriver) {
 				const s = u.hostname;
 				const V = 'visitor_id';
 				const p = s.includes('stripe') ? 'client_reference_id' :
-					s.includes('polar') || s.includes('lemons') ? `checkout[custom][${V}]` :
-					s.includes('paddle') || s.includes('razor') ? V : 0;
+					s.includes('polar') ? 'reference_id' :
+					s.includes('lemons') ? `checkout[custom][${V}]` : 0;
 				if (p && !u.searchParams.has(p)) {
 					u.searchParams.set(p, vid);
 					a.href = u.href;

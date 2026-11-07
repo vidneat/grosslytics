@@ -4,7 +4,7 @@ import type { DashSale } from '@grosslytics/shared/dashboard';
 import { sourceIcon } from '@grosslytics/shared/dashboard';
 import type { LiveEntry } from './api';
 import { flag, LIVE_POOL, type JourneyStep } from './demo';
-import { SourceIcon, usd } from './ui';
+import { SourceIcon, useMoney } from './ui';
 
 const ago = (s: number) => (s < 5 ? 'now' : s < 60 ? `${Math.floor(s)}s ago` : s < 3600 ? `${Math.floor(s / 60)}m ago` : `${Math.floor(s / 3600)}h ago`);
 const GATEWAY_LABEL: Record<string, string> = { stripe: 'Stripe', razorpay: 'Razorpay', paddle: 'Paddle', polar: 'Polar', lemonsqueezy: 'Lemon Squeezy' };
@@ -30,6 +30,7 @@ function useDemoFeed(enabled: boolean): LiveEntry[] {
 }
 
 export function LiveFeed({ entries: real }: { entries?: LiveEntry[] }) {
+	const money = useMoney();
 	const demo = useDemoFeed(!real);
 	const entries = real ?? demo;
 	const [now, setNow] = useState(() => Date.now() / 1000);
@@ -51,7 +52,7 @@ export function LiveFeed({ entries: real }: { entries?: LiveEntry[] }) {
 							{e.sale ? (
 								<span className="flex items-center gap-1.5 font-medium">
 									<CircleDollarSign size={14} className="text-up" aria-hidden="true" />
-									{usd(e.sale)} sale{e.city ? ` from ${e.city}` : ''}
+									{money(e.sale)} sale{e.city ? ` from ${e.city}` : ''}
 								</span>
 							) : (
 								<span className="block truncate">
@@ -75,6 +76,7 @@ const KIND_ICON = { visit: Eye, leave: LogOut, goal: MousePointerClick, pay: Cre
 
 /** Slide-over showing how one buyer found you, what they read, and what you kept. */
 export function JourneyDrawer({ sale, onClose, loadJourney }: { sale: DashSale | null; onClose: () => void; loadJourney: (s: DashSale) => Promise<JourneyStep[]> }) {
+	const money = useMoney();
 	const closeRef = useRef<HTMLButtonElement>(null);
 	const [journey, setJourney] = useState<JourneyStep[] | null>(null);
 	const [failed, setFailed] = useState(false);
@@ -168,9 +170,9 @@ export function JourneyDrawer({ sale, onClose, loadJourney }: { sale: DashSale |
 					</section>
 
 					<section className="tnum rounded-xl bg-band px-4 py-3 text-[14px]">
-						<div className="flex justify-between py-1"><span className="text-ink-2">Gross</span><span>{usd(sale.gross, 2)}</span></div>
-						<div className="flex justify-between py-1"><span className="text-ink-2">{gatewayLabel(sale.gateway)} fee</span><span className="text-ink-2">−{usd(sale.fee, 2)}</span></div>
-						<div className="mt-1 flex justify-between border-t border-line pt-2 font-semibold"><span>You kept</span><span>{usd(sale.gross - sale.fee, 2)}</span></div>
+						<div className="flex justify-between py-1"><span className="text-ink-2">Gross</span><span>{money(sale.gross, 2)}</span></div>
+						<div className="flex justify-between py-1"><span className="text-ink-2">{gatewayLabel(sale.gateway)} fee</span><span className="text-ink-2">−{money(sale.fee, 2)}</span></div>
+						<div className="mt-1 flex justify-between border-t border-line pt-2 font-semibold"><span>You kept</span><span>{money(sale.gross - sale.fee, 2)}</span></div>
 					</section>
 				</div>
 			</aside>

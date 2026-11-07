@@ -73,6 +73,7 @@ export interface EnrichedEvent extends BeaconPayload {
 /** Channel stats returned by the dashboard API */
 export interface ChannelStats {
 	source: string;
+	currency: string;
 	category: SourceCategory;
 	visitors: number;
 	sessions: number;
@@ -137,18 +138,8 @@ export interface DashboardFilterState {
 
 /** Unified StorageAdapter interface for dual-engine support */
 export interface AnalyticsStorageAdapter {
-	/** Batch insert enriched events (called by queue consumer) */
-	insertEventBatch(events: EnrichedEvent[]): Promise<void>;
-	/** Upsert visitor first/last touch attribution */
-	upsertVisitor(event: EnrichedEvent): Promise<void>;
-	/** Upsert hourly rollup counters */
-	upsertHourlyRollup(events: EnrichedEvent[]): Promise<void>;
 	/** Insert or deduplicate a payment */
 	upsertPayment(payment: PaymentRecord): Promise<boolean>;
-	/** Check webhook dedup log */
-	isWebhookProcessed(webhookEventId: string): Promise<boolean>;
-	/** Claim a webhook event ID; false if it was already processed */
-	markWebhookProcessed(webhookEventId: string, siteId: string): Promise<boolean>;
 	/** Query channel stats for dashboard */
 	queryChannelStats(
 		siteId: string,

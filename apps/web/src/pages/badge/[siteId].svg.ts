@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { formatMoney } from '@grosslytics/shared/money';
 
 export const prerender = false;
 
@@ -7,8 +8,8 @@ async function verifiedNet(api: string, domain: string): Promise<string | null> 
 	try {
 		const res = await fetch(`${api}/api/share/${encodeURIComponent(domain)}?range=30d&mode=net`, { signal: AbortSignal.timeout(3000) });
 		if (!res.ok) return null;
-		const d = (await res.json()) as { totals: { revenue: number } };
-		return (d.totals.revenue / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+		const d = (await res.json()) as { currency: string; totals: { revenue: number } };
+		return formatMoney(d.totals.revenue, d.currency);
 	} catch {
 		return null;
 	}

@@ -43,6 +43,7 @@ export const SOURCE_CATEGORIES = {
 	EMAIL: 'Email',
 	AI_SEARCH: 'AI Search',
 	AI_CRAWLER: 'AI Crawler',
+	MIXED: 'Mixed',
 } as const;
 
 /** Payment gateway identifiers */
