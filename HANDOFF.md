@@ -220,7 +220,8 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 
 - Branch `fix/live-csp-noindex` (not merged to main, not pushed) holds the live-presence fix, the CSP note and noindex. Deployed to grosslytics.com with `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup` (version `2026-11-07-5c4f419`).
 - Checked live: `/`, `/app`, `/g.js`, `/api/auth/status` return 200; the /docs CSP note is up; grosslytics.com sends no `X-Robots-Tag` and keeps its sitemap (no `_headers` written for that host).
-- Wrangler on this Mac is now signed in to **ravi88927615@gmail.com**. analytics.vidneat.app and vidneat.app live on **ravi923615@gmail.com**; switch with `npx wrangler login` before deploying those. analytics.vidneat.app is still on `08125e5`: it needs these commits in `/Users/raviair/grosslytics`, then `bun run setup` there.
+- analytics.vidneat.app updated too: `/Users/raviair/grosslytics` fast-forwarded to `80e5fde` (from this repo's branch), then `CLOUDFLARE_ACCOUNT_ID=a54e52e1a0c582eafa8841eaba88a2fc bun run setup` there (version `2026-11-07-80e5fde`). Checked: every page sends `X-Robots-Tag: noindex, nofollow`, robots.txt has no sitemap, and an event from vidneat.app returns 202.
+- Two Cloudflare accounts: grosslytics.com is **ravi88927615@gmail.com** (`f6883459…`); vidneat.app and analytics.vidneat.app are **ravi923615@gmail.com** (`a54e52e1…`). Wrangler is currently signed in to **ravi923615**. To switch: `npx wrangler logout`, sign the browser in to the other Cloudflare account, then `npx wrangler login`. Always pass `CLOUDFLARE_ACCOUNT_ID` to `bun run setup`.
 - Not checked live: the live panel showing a visitor after hibernation (needs a signed-in dashboard).
 
 ## Where things stand
