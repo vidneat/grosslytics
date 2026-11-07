@@ -7,7 +7,7 @@ import { flag, LIVE_POOL, type JourneyStep } from './demo';
 import { SourceIcon, useMoney } from './ui';
 
 const ago = (s: number) => (s < 5 ? 'now' : s < 60 ? `${Math.floor(s)}s ago` : s < 3600 ? `${Math.floor(s / 60)}m ago` : `${Math.floor(s / 3600)}h ago`);
-const GATEWAY_LABEL: Record<string, string> = { stripe: 'Stripe', razorpay: 'Razorpay', paddle: 'Paddle', polar: 'Polar', lemonsqueezy: 'Lemon Squeezy', gumroad: 'Gumroad', paypal: 'PayPal', cashfree: 'Cashfree', revenuecat: 'RevenueCat' };
+const GATEWAY_LABEL: Record<string, string> = { stripe: 'Stripe', razorpay: 'Razorpay', paddle: 'Paddle', polar: 'Polar', dodo: 'Dodo Payments', lemonsqueezy: 'Lemon Squeezy', gumroad: 'Gumroad', paypal: 'PayPal', cashfree: 'Cashfree', revenuecat: 'RevenueCat' };
 export const gatewayLabel = (g: string) => GATEWAY_LABEL[g] ?? g;
 
 /** Simulated stream for the demo; the real one comes from useLiveSocket. */

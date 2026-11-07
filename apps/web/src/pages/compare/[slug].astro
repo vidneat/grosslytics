@@ -17,7 +17,7 @@ export function getStaticPaths() {
 	const US = {
 		tracker: '1.5 KB',
 		price: '$0 self-hosted (open source); hosted $5.99/mo; $29 Lifetime with installer, support and commercial license',
-		gateways: 'Stripe, Razorpay, Polar, Paddle, Lemon Squeezy',
+		gateways: 'Stripe, Razorpay, Polar, Paddle, Lemon Squeezy, Dodo Payments, Cashfree, Gumroad, PayPal, RevenueCat',
 		fees: 'Deducted automatically per gateway',
 		cookies: 'No cookies; a random visitor ID in localStorage',
 	};
@@ -97,7 +97,7 @@ export function getStaticPaths() {
 				title: 'DataBull Alternative: Free Self-Hosted Revenue Analytics',
 				description: 'A DataBull alternative that self-hosts free on Cloudflare, supports Razorpay, Paddle and Lemon Squeezy, and shows revenue after gateway fees and ad spend.',
 				h1: 'The free DataBull alternative for your own Cloudflare.',
-				answer: 'Grosslytics and DataBull are both revenue-first analytics tools that run on your own Cloudflare account. Grosslytics is free to self-host where DataBull charges $49 once, supports Razorpay, Paddle and Lemon Squeezy, and reports revenue after gateway fees and ad spend. DataBull imports past payments on day one, supports Dodo and Creem, sends Telegram sale alerts, and has a one-command installer.',
+				answer: 'Grosslytics and DataBull are both revenue-first analytics tools that run on your own Cloudflare account. Grosslytics is free to self-host where DataBull charges $49 once, supports Razorpay, Paddle and Lemon Squeezy, and reports revenue after gateway fees and ad spend. DataBull imports past payments on day one, supports Creem, sends Telegram sale alerts, and has a one-command installer.',
 				whatIs: 'DataBull (databull.app) is revenue-first analytics that you install on your own Cloudflare account with one command, or use hosted (beta). It attributes Stripe, Polar, Dodo Payments and Creem sales to the visit that brought them, imports past sales, and includes lifetime value by first source, peak-hour heatmaps, a live view, Telegram sale pings and spike alerts, and an MCP server. It is not open source.',
 				rows: [
 					['Tracker size (Brotli)', '6.4 KB', US.tracker],
@@ -112,7 +112,7 @@ export function getStaticPaths() {
 					['Alerts', 'Telegram sale pings and spike alerts', 'Not yet; live feed in the dashboard'],
 					['Cookies', 'Your choice per site: cookies, cookieless, or cookieless until consent', US.cookies],
 				],
-				chooseThem: ['You sell through Dodo Payments or Creem', 'You want past Stripe sales imported on day one', 'You want Telegram pings for each sale and traffic spikes', 'You want a one-command installer, or a hosted version today'],
+				chooseThem: ['You sell through Creem', 'You want past Stripe sales imported on day one', 'You want Telegram pings for each sale and traffic spikes', 'You want a one-command installer, or a hosted version today'],
 				chooseUs: ['You want self-hosting for $0 instead of $49', 'You get paid through Razorpay, Paddle or Lemon Squeezy', 'You want profit per channel after fees and ad spend', 'You want a smaller script (1.5 KB vs 6.4 KB)'],
 				pricing: [
 					'DataBull self-hosted is $49 once, with unlimited sites and events and all future updates; sales are final. The hosted beta costs $9/month for 50,000 events or $19/month for 250,000. In both cases busy sites may need Cloudflare’s $5/month Workers plan, paid to Cloudflare.',
@@ -128,7 +128,7 @@ export function getStaticPaths() {
 					{
 						h2: 'Payment providers',
 						ps: [
-							'This is the clearest dividing line. DataBull covers Stripe, Polar, Dodo Payments and Creem. Grosslytics covers Stripe, Polar, Razorpay, Paddle and Lemon Squeezy. If you sell in India through Razorpay, or use Paddle or Lemon Squeezy as merchant of record, Grosslytics is the one that connects.',
+							'This is the clearest dividing line. DataBull covers Stripe, Polar, Dodo Payments and Creem. Grosslytics covers Stripe, Polar, Dodo Payments, Razorpay, Paddle, Lemon Squeezy, Cashfree, Gumroad, PayPal and RevenueCat. If you sell in India through Razorpay, or use Paddle or Lemon Squeezy as merchant of record, Grosslytics is the one that connects.',
 						],
 					},
 				],
@@ -136,12 +136,12 @@ export function getStaticPaths() {
 				faqs: [
 					{ question: 'Is there a free alternative to DataBull?', answer: 'Yes. Grosslytics self-hosts on your own Cloudflare account for $0. DataBull’s self-hosted license is $49 once.' },
 					{ question: 'Does Grosslytics run on Cloudflare like DataBull?', answer: 'Yes. Both run on Cloudflare Workers with a D1 database, so your data stays in your account. Cloudflare’s free plan covers most small sites for both.' },
-					{ question: 'Which payment providers does each support?', answer: 'DataBull: Stripe, Polar, Dodo Payments and Creem. Grosslytics: Stripe, Polar, Razorpay, Paddle and Lemon Squeezy.' },
+					{ question: 'Which payment providers does each support?', answer: 'DataBull: Stripe, Polar, Dodo Payments and Creem. Grosslytics: Stripe, Polar, Dodo Payments, Razorpay, Paddle, Lemon Squeezy, Cashfree, Gumroad, PayPal and RevenueCat.' },
 					{ question: 'Can Grosslytics import past payments like DataBull?', answer: 'Not yet. Grosslytics attributes sales from the day you install it. DataBull imports past sales on day one.' },
 					{ question: 'Is Grosslytics open source?', answer: 'Yes, under AGPL-3.0, and free to self-host. DataBull is not open source. Either way, the self-hosted version runs in your own Cloudflare account, so you control the data.' },
 					{ question: 'Does Grosslytics use cookies?', answer: 'No. The tracker stores a random visitor ID in localStorage so it can connect a later purchase to the first visit. Some privacy laws treat that like a cookie, so check whether your site needs consent.' },
 				],
-				theyLead: ['Dodo and Creem support', 'Imports past payments on day one', 'Telegram sale pings and spike alerts', 'A one-command installer and a hosted beta'],
+				theyLead: ['Creem support', 'Imports past payments on day one', 'Telegram sale pings and spike alerts', 'A one-command installer and a hosted beta'],
 				weDiffer: ['Razorpay, Paddle and Lemon Squeezy support', 'Net revenue after gateway fees and ad spend', 'A $0 self-hosted tier', 'A smaller tracker (1.5 KB vs 6.4 KB)'],
 				verified: VERIFIED,
 				sources: [{ label: 'databull.app (features, pricing, FAQ)', url: 'https://databull.app' }, { label: 'databull.app/js/script.js (measured)', url: 'https://databull.app/js/script.js' }],

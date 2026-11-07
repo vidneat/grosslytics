@@ -104,6 +104,7 @@ test('checkout links use gateway-specific parameters and preserve an existing re
 		'https://shop.lemonsqueezy.com/checkout/buy/test',
 		'https://pay.paddle.io/test',
 		'https://rzp.io/test',
+		'https://checkout.dodopayments.com/buy/pdt_1?quantity=1',
 	].map((href) => ({ href }));
 	const visitorId = load('', '', links).sent[0].vid;
 	expect(new URL(links[0]!.href).searchParams.get('reference_id')).toBe(visitorId);
@@ -112,6 +113,8 @@ test('checkout links use gateway-specific parameters and preserve an existing re
 	expect(new URL(links[3]!.href).searchParams.get('checkout[custom][visitor_id]')).toBe(visitorId);
 	expect(new URL(links[4]!.href).search).toBe('');
 	expect(new URL(links[5]!.href).search).toBe('');
+	expect(new URL(links[6]!.href).searchParams.get('metadata_visitor_id')).toBe(visitorId);
+	expect(new URL(links[6]!.href).searchParams.get('quantity')).toBe('1');
 });
 
 test('goal syntax from DataFast, Umami and Plausible works unchanged', () => {

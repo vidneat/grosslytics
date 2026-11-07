@@ -210,6 +210,25 @@ const EXTRACTORS: Record<PaymentGateway, Extractor> = {
 			feeCents: num(gross * (Number(o.commission_percentage) || 0)),
 		};
 	},
+	// Dodo Payments: checkout links carry metadata_visitor_id, which arrives as metadata.visitor_id. Amounts are in cents.
+	dodo: (e) => {
+		const o = e.data ?? {};
+		if (e.type !== 'payment.succeeded' || !o.payment_id) return null;
+		return {
+			eventId: `dodo:${o.payment_id}`,
+			paymentId: `dodo_${o.payment_id}`,
+			grossCents: num(o.total_amount),
+			currency: o.currency || 'usd',
+			email: o.customer?.email || '',
+			visitorId: vidOf(o.metadata),
+			planName: o.product_cart?.[0]?.name || o.product_cart?.[0]?.product_id || 'Dodo Payment',
+			// shortcut: Dodo doesn't say which subscription payment is a renewal, so every one counts as a new sale; compare against earlier payments of the same subscription_id if renewals matter.
+			isRenewal: false,
+			country: o.billing?.country,
+			city: o.billing?.city,
+			taxCents: num(o.tax),
+		};
+	},
 };
 
 export const extractPayment = (gateway: PaymentGateway, event: any, headers: Headers) => EXTRACTORS[gateway](event, headers);
@@ -322,6 +341,14 @@ webhooksRoute.post('/:gateway', async (c) => {
 	// Gumroad sends the sale again with refunded=true
 	if (gateway === 'gumroad' && event.refunded === 'true' && event.sale_id) {
 		const result = await applyPaymentEvent(c.env.DB, { id: `gumroad:refund:${event.sale_id}`, siteId, gateway, references: [`gum_${event.sale_id}`], refundedAt: Math.floor(Date.now() / 1000) });
+		return c.json(result.processed ? { received: true, refunded: true } : { received: true, deduplicated: true });
+	}
+
+	// Dodo: full refunds only, like Stripe; a partial refund keeps the sale
+	if (gateway === 'dodo' && event.type === 'refund.succeeded') {
+		const r = event.data ?? {};
+		if (r.is_partial !== false || !r.payment_id) return c.json({ received: true, ignored: true });
+		const result = await applyPaymentEvent(c.env.DB, { id: `dodo:refund:${r.refund_id || r.payment_id}`, siteId, gateway, references: [`dodo_${r.payment_id}`], refundedAt: Math.floor(Date.parse(event.timestamp) / 1000) || Math.floor(Date.now() / 1000) });
 		return c.json(result.processed ? { received: true, refunded: true } : { received: true, deduplicated: true });
 	}
 

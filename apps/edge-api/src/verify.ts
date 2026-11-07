@@ -56,7 +56,7 @@ export async function verifyWebhook(
 		return pairs.some(([k, v]) => k === 'h1' && safeEqual(v, expected));
 	}
 
-	if (gateway === 'polar') return verifyStandardWebhook(secret, body, headers, now);
+	if (gateway === 'polar' || gateway === 'dodo') return verifyStandardWebhook(secret, body, headers, now);
 
 	if (gateway === 'cashfree') {
 		// base64 HMAC-SHA256 of timestamp (ms) + raw body
@@ -81,7 +81,7 @@ export async function verifyWebhook(
 }
 
 /**
- * Standard Webhooks (Polar, and Dodo Payments for Grosslytics' own billing): HMAC-SHA256 over `id.timestamp.body`,
+ * Standard Webhooks (Polar and Dodo Payments): HMAC-SHA256 over `id.timestamp.body`,
  * base64, in `webhook-signature` as space-separated `v1,<sig>`. "whsec_" secrets are base64 after the prefix; others are raw bytes (Polar SDK behaviour).
  */
 export async function verifyStandardWebhook(secret: string, body: string, headers: Headers, now = Math.floor(Date.now() / 1000)): Promise<boolean> {

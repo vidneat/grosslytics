@@ -283,7 +283,7 @@ export function InstallSnippet({ siteId, api }: { siteId: string; api: string })
 				Already added it? If your site sends a Content-Security-Policy header, add <code className="font-mono text-[12.5px]">{api.replace(/\/$/, '') || origin}</code> to its <code className="font-mono text-[12.5px]">script-src</code> and <code className="font-mono text-[12.5px]">connect-src</code>, or the browser blocks the tracker.
 			</p>
 			<p className="mt-3 text-[13px] text-ink-2">
-				Then point your payment webhooks at <code className="font-mono text-[12.5px]">{api.replace(/\/$/, '')}/api/webhooks/stripe?siteId={siteId}</code> (or razorpay, paddle, polar, lemonsqueezy).
+				Then point your payment webhooks at <code className="font-mono text-[12.5px]">{api.replace(/\/$/, '')}/api/webhooks/stripe?siteId={siteId}</code> (or razorpay, paddle, polar, lemonsqueezy, dodo, and the rest under Settings → Payment webhooks).
 			</p>
 		</section>
 	);
@@ -423,6 +423,7 @@ const GATEWAYS = [
 	['cashfree', 'Cashfree', 'Developers → API keys → your client secret (Cashfree signs webhooks with it)'],
 	['gumroad', 'Gumroad', 'make up a long random key; it goes at the end of the ping URL as &key=…'],
 	['paypal', 'PayPal', 'client_id:client_secret:webhook_id from developer.paypal.com; add :sandbox for a sandbox app'],
+	['dodo', 'Dodo Payments', 'Developer → Webhooks → your endpoint → Signing secret (whsec_…)'],
 	['revenuecat', 'RevenueCat', 'Integrations → Webhooks → the Authorization header value you set'],
 ] as const;
 

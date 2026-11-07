@@ -2,7 +2,7 @@
 
 Revenue analytics that counts what you keep. Grosslytics ties every visit, post, search and AI answer to the sales it brought, after payment fees and ad spend. It runs entirely in your own Cloudflare account: a 1.5 KB cookie-free tracker, a Worker API, a D1 database and a queue.
 
-- Payment webhooks from Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal and RevenueCat, each matched to the visitor who paid
+- Payment webhooks from Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal, Dodo Payments and RevenueCat, each matched to the visitor who paid
 - First-touch, last-touch and linear attribution, net revenue after fees, ad spend and profit per channel
 - Live visitors, buyer journeys, funnels, goals, click maps and AI-crawler reports
 - An MCP server, so Claude Code, Cursor or Windsurf can answer questions about your numbers

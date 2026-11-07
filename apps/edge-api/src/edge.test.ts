@@ -1158,3 +1158,32 @@ test('dodo: signed payments mint Lifetime licenses, subscription events turn Clo
 	await dodo('subscription.renewed', { ...sub('sub_2'), metadata: {} });
 	expect(account().status).toBe('active');
 });
+
+test('Dodo Payments: signed payment attributed via metadata, tax and fee taken out, full refunds only', async () => {
+	const { fetch, sqlite } = makeApp();
+	seedBuyer(sqlite);
+	const secret = `whsec_${btoa('dodo-site-secret-123')}`;
+	sqlite.run("INSERT INTO site_secrets VALUES ('s1', 'dodo', ?)", [secret]);
+	let n = 0;
+	const send = async (type: string, data: object, sign = true) => {
+		const body = JSON.stringify({ business_id: 'bus_1', type, timestamp: new Date().toISOString(), data });
+		const id = `msg_${++n}`;
+		const ts = String(Math.floor(Date.now() / 1000));
+		const k = await crypto.subtle.importKey('raw', Uint8Array.from(atob(secret.slice(6)), (ch) => ch.charCodeAt(0)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+		const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(`${id}.${ts}.${body}`)))));
+		return fetch('/api/webhooks/dodo?siteId=s1', { method: 'POST', body, headers: { 'webhook-id': id, 'webhook-timestamp': ts, 'webhook-signature': `v1,${sign ? sig : 'AAAA'}` } });
+	};
+	const pay = { payment_id: 'pay_abc123', total_amount: 11000, tax: 1000, currency: 'USD', customer: { email: 'buyer@example.com' }, metadata: { visitor_id: 'v1' }, billing: { country: 'IN', city: 'Pune' }, product_cart: [{ product_id: 'pdt_1', quantity: 1 }] };
+
+	expect((await send('payment.succeeded', pay, false)).status).toBe(401);
+	expect((await send('payment.succeeded', pay)).status).toBe(200);
+	expect(await (await send('payment.succeeded', pay)).json()).toMatchObject({ deduplicated: true });
+	// $110 paid, $10 of it tax → $100 revenue; Dodo's 4% + 40¢ is estimated on the whole $110
+	expect(payment(sqlite, 'dodo_pay_abc123')).toMatchObject({ g: 10000, f: 480, n: 9520, v: 'v1', status: 'succeeded' });
+	expect((sqlite.query("SELECT first_touch_source s, country c FROM payments WHERE payment_id = 'dodo_pay_abc123'").get() as any)).toEqual({ s: 'google.com', c: 'IN' });
+
+	expect(await (await send('refund.succeeded', { refund_id: 'ref_1', payment_id: 'pay_abc123', is_partial: true })).json()).toMatchObject({ ignored: true });
+	expect(payment(sqlite, 'dodo_pay_abc123').status).toBe('succeeded');
+	expect(await (await send('refund.succeeded', { refund_id: 'ref_2', payment_id: 'pay_abc123', is_partial: false })).json()).toMatchObject({ refunded: true });
+	expect(payment(sqlite, 'dodo_pay_abc123').status).toBe('refunded');
+});

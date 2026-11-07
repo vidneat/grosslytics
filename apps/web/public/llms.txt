@@ -3,7 +3,7 @@
 > Revenue analytics for founders: credits each payment to the channel that brought the buyer, and reports revenue after payment-provider fees and ad spend.
 
 ## What it does
-- Attributes sales from Stripe, Razorpay, Polar, Paddle, Lemon Squeezy, Cashfree, Gumroad, PayPal and RevenueCat (verified webhooks) to marketing channels. Sales tax is excluded from revenue.
+- Attributes sales from Stripe, Razorpay, Polar, Paddle, Lemon Squeezy, Cashfree, Gumroad, PayPal, Dodo Payments and RevenueCat (verified webhooks) to marketing channels. Sales tax is excluded from revenue.
 - Counts AI crawler requests (GPTBot, ClaudeBot, PerplexityBot…) per page, reported server-side to `POST /api/crawl`.
 - Optional click map script (`/c.js`) for pricing and checkout pages: clicks, dead clicks, rage clicks, and buyers per element.
 - Reads DataFast, Plausible and Umami goal syntax; imports past Stripe payments; imports ad spend from CSV.
@@ -16,10 +16,10 @@
 ## Setup
 - Tracker (1.5 KB Brotli, no cookies, stores a random visitor ID in localStorage):
   `<script defer src="https://grosslytics.com/g.js" data-site-id="YOUR_SITE_ID"></script>`
-- Stripe, Polar, Lemon Squeezy and Gumroad checkout links are tagged automatically. PayPal uses custom_id, Cashfree order_tags.visitor_id, RevenueCat the subscriber attribute visitor_id. Paddle requires custom_data.visitor_id via its checkout integration; Razorpay requires notes.visitor_id.
+- Stripe, Polar, Lemon Squeezy, Gumroad and Dodo Payments checkout links are tagged automatically. PayPal uses custom_id, Cashfree order_tags.visitor_id, RevenueCat the subscriber attribute visitor_id. Paddle requires custom_data.visitor_id via its checkout integration; Razorpay requires notes.visitor_id.
 - Stripe events: checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded (full refunds).
 - One reporting currency per site: USD, EUR, GBP or INR; different currencies are never summed.
-- Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy|cashfree|gumroad|paypal|revenuecat}?siteId=YOUR_SITE_ID` (signature required; Gumroad uses a key in the URL).
+- Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy|cashfree|gumroad|paypal|dodo|revenuecat}?siteId=YOUR_SITE_ID` (signature required; Gumroad uses a key in the URL).
 - Self-host on Cloudflare: step-by-step at /start/. Full docs: /docs/.
 
 ## API (requires `Authorization: Bearer <API_TOKEN>`)
@@ -34,7 +34,7 @@
 
 ## Compared with alternatives (competitor facts from their websites, checked 2026-11-06)
 - DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.5 KB.
-- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.5 KB.
+- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Both support Dodo; Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.5 KB.
 - Plausible: private web analytics, open source, 1.1 KB tracker, from $9/month; revenue via custom events. Grosslytics adds payment-provider attribution and net revenue.
 - Google Analytics 4: free and deep; gtag.js is 125 KB and uses cookies. Grosslytics is 1.5 KB with no cookies.
 

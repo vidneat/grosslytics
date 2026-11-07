@@ -120,6 +120,7 @@ if (!w.__gl && !n.webdriver) {
 				const V = 'visitor_id';
 				const p = s.includes('stripe') ? 'client_reference_id' :
 					s.includes('polar') ? 'reference_id' :
+					s.includes('dodo') ? 'metadata_' + V :
 					s.includes('lemons') ? `checkout[custom][${V}]` :
 					s.includes('gum') ? V : 0;
 				if (p && !u.searchParams.has(p)) {

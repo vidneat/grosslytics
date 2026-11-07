@@ -394,6 +394,17 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - Done 2026-11-07 (user approved all three): `feat/dodo-billing` fast-forwarded into `main` and pushed (origin/main = 56b0959); repo `vidneat/grosslytics` made **public** (anonymous `git ls-remote` works, GitHub page 200); grosslytics.com redeployed as `2026-11-07-56b0959`. Checked live: `/`, `/start/`, `/terms/`, compare pages, `/app`, API 200; new pricing/FAQ/Terms text is up; README is on GitHub.
 - Still open: HANDOFF.md (public, with history) shows personal emails and Cloudflare account IDs (user was told, chose to go ahead). The commercial-license wording in Terms is not lawyer-reviewed. `grosslytics@0.1.0` is published on npm (2026-11-07, account `grosslytics`, 2FA on; publishing needs the user's browser approval). Checked from an empty folder: `npx grosslytics --version` → 0.1.0 and `install --help` works. Not checked: a full `npx grosslytics install` with a real license key (needs a real Dodo purchase). Next CLI release: bump `packages/cli/package.json` version, then `npm publish --access public` from `packages/cli`. The R2 release (`latest.tgz`) is 7a45fa5 (uploaded by the user 2026-11-07), matching the open-source copy. GitHub hadn't detected the license yet right after the switch (`licenseInfo` empty).
 
+## Dodo Payments as a customer payment provider (2026-11-07, committed, not deployed)
+
+- `dodo` is the 10th gateway (`PAYMENT_GATEWAYS`). `POST /api/webhooks/dodo?siteId=…`, secret saved per site in Settings → Payment webhooks (no env fallback), verified with the shared Standard Webhooks check.
+  - `payment.succeeded` → a sale `dodo_<payment_id>`: `total_amount` and `tax` in cents (tax taken out of revenue), `metadata.visitor_id` for attribution, `billing.country/city`, fee estimated at 4% + 40¢.
+  - `refund.succeeded` with `is_partial: false` marks it refunded; partial refunds, or a refund without `is_partial`, are ignored.
+  - shortcut: every subscription payment counts as a new sale (Dodo doesn't flag renewals).
+- Tracker tags `*dodo*` checkout links with `metadata_visitor_id` (1,580 bytes Brotli, budget 1,587; ~7 bytes left).
+- Copy: homepage lists, FAQ, docs provider table, dashboard settings + live feed label, compare pages (DataBull no longer leads on Dodo; our provider list now names all 10), README, llms.txt.
+- Verified: 52 tests (new `Dodo Payments:` API test with signed payloads, tracker link test), typecheck in all packages, web build.
+- Not verified: Dodo's real payload field names (`total_amount`, `tax`, `billing`, `product_cart[].name`, refund `is_partial`) are from Dodo's docs, not a live event. First check: a test-mode purchase on vidneat.app with its webhook pointed at analytics.vidneat.app.
+
 ## analytics.vidneat.app removed (2026-11-07)
 
 - The user removed the vidneat.app install from Cloudflare account ravi923615 (`a54e52e1…`): workers `grosslytics-web` (with the `analytics.vidneat.app` custom domain) and `grosslytics-edge-api`, queues `grosslytics-ingest` and `grosslytics-ingest-dlq`, and D1 `grosslytics-db` (`7d4d7f88…`, its data is gone). Checked: none listed any more; `analytics.vidneat.app` no longer resolves; grosslytics.com unaffected.

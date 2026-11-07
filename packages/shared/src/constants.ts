@@ -28,7 +28,7 @@ export const SOURCE_CATEGORIES = {
 } as const;
 
 /** Payment gateway identifiers */
-export const PAYMENT_GATEWAYS = ['stripe', 'razorpay', 'polar', 'paddle', 'lemonsqueezy', 'gumroad', 'paypal', 'cashfree', 'revenuecat'] as const;
+export const PAYMENT_GATEWAYS = ['stripe', 'razorpay', 'polar', 'paddle', 'lemonsqueezy', 'gumroad', 'paypal', 'cashfree', 'revenuecat', 'dodo'] as const;
 
 /** Visitor presence TTL (milliseconds) */
 export const PRESENCE_TTL_MS = 5 * 60 * 1000; // 5 minutes

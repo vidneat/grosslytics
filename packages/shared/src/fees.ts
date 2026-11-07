@@ -15,6 +15,7 @@ import type { PaymentGateway } from './types.js';
  * - Gumroad: 10% + 50¢ (direct sales)
  * - PayPal: 3.49% + 49¢ (US checkout)
  * - Cashfree: 1.95% + 0¢ (India domestic)
+ * - Dodo Payments: 4% + 40¢ (merchant of record, includes tax remittance)
  * - RevenueCat: the store's cut comes with each event (takehome_percentage), so this default is unused
  */
 const GATEWAY_FEES: Record<PaymentGateway, { fixedCents: number; percentBps: number }> = {
@@ -27,6 +28,7 @@ const GATEWAY_FEES: Record<PaymentGateway, { fixedCents: number; percentBps: num
 	paypal: { fixedCents: 49, percentBps: 349 },
 	cashfree: { fixedCents: 0, percentBps: 195 },
 	revenuecat: { fixedCents: 0, percentBps: 0 },
+	dodo: { fixedCents: 40, percentBps: 400 },
 };
 
 /**
