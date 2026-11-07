@@ -150,10 +150,11 @@ export interface LiveEntry {
 /** Owner live feed over the SiteLiveHub WebSocket: presence plus sales. Reconnects with backoff. */
 export function useLiveSocket(conn: Connection | null) {
 	const scope = conn ? JSON.stringify(conn) : '';
-	const [state, setState] = useState<{ scope: string; online: number | null; entries: LiveEntry[] }>({ scope, online: null, entries: [] });
+	// `sales` counts every sale message; `entries` keeps only the newest 8, so it can't be used to notice a new sale
+	const [state, setState] = useState<{ scope: string; online: number | null; entries: LiveEntry[]; sales: number }>({ scope, online: null, entries: [], sales: 0 });
 	const retry = useRef(0);
 	useEffect(() => {
-		setState({ scope, online: null, entries: [] });
+		setState({ scope, online: null, entries: [], sales: 0 });
 		retry.current = 0;
 		if (!conn) return;
 		let ws: WebSocket | null = null;
@@ -170,10 +171,10 @@ export function useLiveSocket(conn: Connection | null) {
 					setState((current) => {
 						const sales = current.entries.filter((e) => e.sale);
 						const visits: LiveEntry[] = msg.recentVisitors.map((v: any) => ({ id: `${v.visitorId}-${v.timestamp}`, cc: v.country, city: v.city, page: v.page, src: v.source, at: v.timestamp / 1000 }));
-						return { scope, online: msg.onlineVisitors, entries: [...sales, ...visits].sort((a, b) => b.at - a.at).slice(0, 8) };
+						return { ...current, scope, online: msg.onlineVisitors, entries: [...sales, ...visits].sort((a, b) => b.at - a.at).slice(0, 8) };
 					});
 				} else if (msg.type === 'sale') {
-					setState((current) => ({ ...current, entries: [{ id: `sale-${msg.timestamp}`, cc: msg.country, city: '', page: msg.planName || '', src: msg.lastTouchSource, at: msg.timestamp / 1000, sale: msg.grossAmountCents }, ...current.entries].slice(0, 8) }));
+					setState((current) => ({ ...current, sales: current.sales + 1, entries: [{ id: `sale-${msg.timestamp}`, cc: msg.country, city: '', page: msg.planName || '', src: msg.lastTouchSource, at: msg.timestamp / 1000, sale: msg.grossAmountCents }, ...current.entries].slice(0, 8) }));
 				}
 			};
 			ws.onclose = () => {
@@ -188,5 +189,5 @@ export function useLiveSocket(conn: Connection | null) {
 			ws?.close();
 		};
 	}, [scope]);
-	return state.scope === scope ? state : { online: null, entries: [] };
+	return state.scope === scope ? state : { online: null, entries: [], sales: 0 };
 }

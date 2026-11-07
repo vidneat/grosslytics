@@ -58,6 +58,7 @@ export async function requireToken(
 		if (!isCloud(c.env) && (await hasSession(c))) return csrfOk ? next() : c.text('Unauthorized', 401);
 		const account = isCloud(c.env) ? await sessionAccount(c) : null;
 		if (!account || !csrfOk) return c.text('Unauthorized', 401);
+		if (c.req.path === '/api/stats/waitlist') return c.text('Owner only', 403);
 		if (c.req.path === '/api/stats/sites') return next();
 		const site = await requestSite(c);
 		if (!site || !(await ownsSite(c.env.DB, account.id, site))) return c.text('Not your site', 403);
@@ -71,9 +72,9 @@ export async function requireToken(
 
 	const path = c.req.path;
 	const isMcp = path.startsWith('/api/mcp');
-	const site = isMcp ? c.req.query('site') : c.req.query('siteId');
-	const readOnly = isMcp || (c.req.method === 'GET' && !path.startsWith('/api/stats/tokens'));
-	if (!readOnly || site !== row.site_id) return c.text('This token can only read its own site', 403);
+	// The waitlist and the site list belong to the whole install, not to the token's site
+	const readOnly = isMcp || (c.req.method === 'GET' && !/^\/api\/stats\/(tokens|waitlist|sites)(\/|$)/.test(path));
+	if (!readOnly || (await requestSite(c)) !== row.site_id) return c.text('This token can only read its own site', 403);
 
 	const now = Math.floor(Date.now() / 1000);
 	// At most one write a minute per token

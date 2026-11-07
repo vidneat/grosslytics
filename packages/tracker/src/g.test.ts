@@ -28,6 +28,7 @@ function load(search = '', referrer = '', anchors: Array<{ href: string }> = [])
 		performance: { now: () => clock },
 		URL,
 		URLSearchParams,
+		history: { pushState(_s: unknown, _t: string, url: string) { g.location.pathname = url; } },
 		addEventListener: (e: string, f: () => void) => (handlers[e] = f),
 	};
 	g.window = g;
@@ -40,6 +41,7 @@ function load(search = '', referrer = '', anchors: Array<{ href: string }> = [])
 		hide: () => ((doc.visibilityState = 'hidden'), handlers.visibilitychange!()),
 		show: () => ((doc.visibilityState = 'visible'), handlers.visibilitychange!()),
 		close: () => handlers.pagehide!(),
+		back: (path: string) => ((g.location.pathname = path), handlers.popstate!()),
 	};
 }
 
@@ -72,9 +74,26 @@ test('a sub-second bounce still sends one leave', () => {
 });
 
 test('tagged links name the source; own-site referrers keep the visit source', () => {
-	expect(load('?utm_source=newsletter&utm_medium=email').sent[0]).toMatchObject({ src: 'newsletter', cat: 'Email' });
-	expect(load('', 'https://news.ycombinator.com/item').sent[0]).toMatchObject({ src: 'news.ycombinator.com', cat: 'Referral' });
-	expect(load('', 'https://acme.io/blog').sent[0]).toMatchObject({ src: 'Direct (Typed/Bookmark)', cat: 'Direct' });
+	expect(load('?utm_source=newsletter&utm_medium=email').sent[0]).toMatchObject({ src: 'newsletter', um: 'email' });
+	expect(load('', 'https://news.ycombinator.com/item').sent[0]).toMatchObject({ src: 'news.ycombinator.com' });
+	expect(load('', 'https://chatgpt.com/').sent[0]).toMatchObject({ src: 'chatgpt.com (AI)' });
+	expect(load('', 'https://acme.io/blog').sent[0]).toMatchObject({ src: 'Direct (Typed/Bookmark)' });
+});
+
+test('single-page apps: each path change closes the old page and counts the new one', () => {
+	const p = load();
+	p.wait(12.4);
+	p.g.history.pushState({}, '', '/checkout');
+	p.wait(3);
+	p.g.history.pushState({}, '', '/checkout'); // same path again: nothing new
+	p.back('/pricing');
+	expect(p.sent.map((b) => [b.t, b.n, b.dur])).toEqual([
+		['pageview', '/pricing', 0],
+		['leave', '/pricing', 12],
+		['pageview', '/checkout', 0],
+		['leave', '/checkout', 3],
+		['pageview', '/pricing', 0],
+	]);
 });
 
 test('checkout links use gateway-specific parameters and preserve an existing reference', () => {

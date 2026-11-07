@@ -41,7 +41,7 @@ export default function RoiCalculator() {
 				))}
 			</ul>
 			<p className="mt-4 text-[12px] leading-relaxed text-ink-3">
-				Published entry prices, checked Nov 6, 2026. Higher traffic tiers cost more on DataFast and Plausible. Hosted options: DataBull from $9/mo, Grosslytics $5/mo.
+				Published entry prices, checked Nov 6, 2026. Higher traffic tiers cost more on DataFast and Plausible. Hosted options: DataBull from $9/mo, Grosslytics $5.99/mo.
 			</p>
 
 			<div className="mt-10 border-t border-line pt-8">

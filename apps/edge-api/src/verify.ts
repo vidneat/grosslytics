@@ -56,19 +56,7 @@ export async function verifyWebhook(
 		return pairs.some(([k, v]) => k === 'h1' && safeEqual(v, expected));
 	}
 
-	if (gateway === 'polar') {
-		// Standard Webhooks spec; "whsec_" secrets are base64, others are raw bytes (Polar SDK behaviour)
-		const id = headers.get('webhook-id') || '';
-		const ts = headers.get('webhook-timestamp') || '';
-		if (!id || !fresh(Number(ts))) return false;
-		const polarKey = secret.startsWith('whsec_')
-			? Uint8Array.from(atob(secret.slice(6)), (c) => c.charCodeAt(0))
-			: key;
-		const expected = b64(await hmac(polarKey, `${id}.${ts}.${body}`));
-		return (headers.get('webhook-signature') || '')
-			.split(' ')
-			.some((s) => s.startsWith('v1,') && safeEqual(s.slice(3), expected));
-	}
+	if (gateway === 'polar') return verifyStandardWebhook(secret, body, headers, now);
 
 	if (gateway === 'cashfree') {
 		// base64 HMAC-SHA256 of timestamp (ms) + raw body
@@ -90,6 +78,23 @@ export async function verifyWebhook(
 	// Razorpay & LemonSqueezy: hex HMAC-SHA256 of the raw body
 	const sig = headers.get(gateway === 'razorpay' ? 'x-razorpay-signature' : 'x-signature') || '';
 	return safeEqual(sig, hex(await hmac(key, body)));
+}
+
+/**
+ * Standard Webhooks (Polar, and Dodo Payments for Grosslytics' own billing): HMAC-SHA256 over `id.timestamp.body`,
+ * base64, in `webhook-signature` as space-separated `v1,<sig>`. "whsec_" secrets are base64 after the prefix; others are raw bytes (Polar SDK behaviour).
+ */
+export async function verifyStandardWebhook(secret: string, body: string, headers: Headers, now = Math.floor(Date.now() / 1000)): Promise<boolean> {
+	const id = headers.get('webhook-id') || '';
+	const ts = headers.get('webhook-timestamp') || '';
+	if (!id || !Number.isFinite(Number(ts)) || Math.abs(now - Number(ts)) > TOLERANCE_SEC) return false;
+	try {
+		const key = secret.startsWith('whsec_') ? Uint8Array.from(atob(secret.slice(6)), (c) => c.charCodeAt(0)) : enc.encode(secret);
+		const expected = b64(await hmac(key, `${id}.${ts}.${body}`));
+		return (headers.get('webhook-signature') || '').split(' ').some((s) => s.startsWith('v1,') && safeEqual(s.slice(3), expected));
+	} catch {
+		return false; // a secret that isn't valid base64
+	}
 }
 
 /**

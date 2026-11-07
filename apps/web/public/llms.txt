@@ -29,7 +29,7 @@
 
 ## Pricing
 - Self-host: $0 (your Cloudflare account)
-- Indie Cloud: $5/month
+- Indie Cloud: $5.99/month
 - Lifetime self-hosted license: $29 one time
 
 ## Compared with alternatives (competitor facts from their websites, checked 2026-11-06)

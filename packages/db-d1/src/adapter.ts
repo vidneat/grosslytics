@@ -1,11 +1,8 @@
-import { applyPaymentEvent } from './payment-events.js';
 import { queryChannelStats } from './dashboard.js';
 import { eq, and } from 'drizzle-orm';
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 
 import type {
-	AnalyticsStorageAdapter,
-	PaymentRecord,
 	ChannelStats,
 	BuyerJourneyEvent,
 	AttributionModel,
@@ -13,28 +10,13 @@ import type {
 import * as schema from './schema.js';
 
 /**
- * D1StorageAdapter — Cloudflare D1 (SQLite WAL) implementation of AnalyticsStorageAdapter.
- *
- * Optimized for the Write-Behind Batch Ingestion pattern:
- * - Uses `db.batch([...])` for single-transaction multi-statement writes
- * - Reads distinct events and payment attribution
- * - Implements idempotent payment upserts with webhook dedup
+ * Typed D1 reads for webhooks, the channel API and MCP. Writes go through ingestEvents and applyPaymentEvent.
  */
-export class D1StorageAdapter implements AnalyticsStorageAdapter {
+export class D1StorageAdapter {
 	private db: DrizzleD1Database<typeof schema>;
 
 	constructor(private readonly d1: D1Database) {
 		this.db = drizzle(d1, { schema });
-	}
-
-	/**
-	 * Idempotent payment upsert with ON CONFLICT(payment_id) DO UPDATE.
-	 * Returns true if a new payment was inserted, false if it was a duplicate update.
-	 */
-	async upsertPayment(payment: PaymentRecord): Promise<boolean> {
-		return (await applyPaymentEvent(this.d1, {
-			id: crypto.randomUUID(), siteId: payment.siteId, gateway: payment.gateway, references: [payment.paymentId], payment,
-		})).inserted;
 	}
 
 	/** Site row (per-site webhook secrets, share flag). */

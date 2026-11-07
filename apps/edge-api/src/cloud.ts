@@ -6,7 +6,7 @@ import { hashToken, SESSION_COOKIE } from './auth.js';
 /** Hosted Cloud: one shared deployment, many customer accounts. Off unless the `CLOUD` var is "1"; self-host is unchanged. */
 export const isCloud = (env: Bindings) => env.CLOUD === '1';
 
-/** The $5/mo Indie Cloud plan */
+/** The $5.99/mo Indie Cloud plan */
 export const CLOUD_EVENT_CAP = 100_000;
 export const TRIAL_DAYS = 14;
 
@@ -40,24 +40,28 @@ export async function sessionAccount(c: Context<{ Bindings: Bindings }>): Promis
 
 /**
  * Which site a stats/MCP request touches: `?siteId=`, MCP's `?site=`, `/sites/:id/…`, a token being revoked, or a JSON body's siteId.
- * Null when none is named, so the caller can refuse.
+ * Every place is read, because routes act on different ones. Null when none is named, or when two places name different sites
+ * (`/sites/<theirs>/share?siteId=<mine>`), so the caller can refuse.
  */
 export async function requestSite(c: Context<{ Bindings: Bindings }>): Promise<string | null> {
-	const q = c.req.query('siteId') || c.req.query('site');
-	if (q) return q;
+	const named = new Set<string>();
+	const add = (x: unknown) => typeof x === 'string' && named.add(x);
+	add(c.req.query('siteId'));
+	add(c.req.query('site'));
 	const path = c.req.path;
 	const inPath = path.match(/^\/api\/stats\/sites\/([^/]+)\//)?.[1];
-	if (inPath) return decodeURIComponent(inPath);
+	if (inPath) add(decodeURIComponent(inPath));
 	const token = path.match(/^\/api\/stats\/tokens\/([^/]+)\/revoke$/)?.[1];
 	if (token) {
 		const row = await c.env.DB.prepare('SELECT site_id FROM api_tokens WHERE id = ?').bind(decodeURIComponent(token)).first<{ site_id: string }>();
-		return row?.site_id ?? null;
+		if (!row) return null;
+		add(row.site_id);
 	}
-	if (c.req.method === 'POST') {
+	if (c.req.method !== 'GET') {
 		const body = (await c.req.raw.clone().json().catch(() => null)) as { siteId?: unknown } | null;
-		if (typeof body?.siteId === 'string') return body.siteId;
+		add(body?.siteId);
 	}
-	return null;
+	return named.size === 1 ? [...named][0]! : null;
 }
 
 export async function ownsSite(db: D1Database, accountId: string, siteId: string): Promise<boolean> {

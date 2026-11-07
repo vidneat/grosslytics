@@ -4,7 +4,7 @@ import { hashToken } from '../auth.js';
 
 /**
  * Lifetime licenses, served by the operator's deployment (grosslytics.com), not by customers' installs.
- * Stripe's Payment Link sends the buyer to /license?session_id=…; the billing webhook has recorded that session, so the
+ * The checkout sends the buyer to /license?payment_id=… (Dodo) or ?session_id=… (Stripe); the billing webhook has recorded that session, so the
  * page can show the key. `npx grosslytics install` then downloads the release bundle with the key.
  */
 export const licenseRoute = new Hono<{ Bindings: Bindings }>();
@@ -18,7 +18,7 @@ export async function licenseKey(secret: string, sessionId: string): Promise<str
 	return LICENSE_PREFIX + Array.from(mac.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Called by the billing webhook for a paid one-time checkout. Idempotent: Stripe retries are harmless. */
+/** Called by the billing webhook for a paid one-time checkout. Idempotent: webhook retries are harmless. */
 export async function mintLicense(env: Bindings, sessionId: string, email: string | null): Promise<boolean> {
 	if (!env.LICENSE_SECRET) return false;
 	const key = await licenseKey(env.LICENSE_SECRET, sessionId);
@@ -26,12 +26,12 @@ export async function mintLicense(env: Bindings, sessionId: string, email: strin
 	return true;
 }
 
-// GET /api/license/claim?session_id=cs_… - the key for a paid checkout. 404 until Stripe's webhook arrives, so the page polls.
-// The checkout session ID is long, random and only shown to the buyer by Stripe's redirect.
+// GET /api/license/claim?payment_id=pay_… (Dodo) or ?session_id=cs_… (Stripe) - the key for a paid checkout. 404 until the webhook arrives, so the page polls.
+// The ID is random and only shown to the buyer by the checkout's redirect.
 licenseRoute.get('/claim', async (c) => {
-	const sessionId = c.req.query('session_id') ?? '';
+	const sessionId = c.req.query('payment_id') ?? c.req.query('session_id') ?? '';
 	if (!c.env.LICENSE_SECRET) return c.json({ error: 'Lifetime licenses are not set up on this server.' }, 503);
-	if (!/^cs_[A-Za-z0-9_]{10,255}$/.test(sessionId)) return c.json({ error: 'Missing or invalid checkout session.' }, 400);
+	if (!/^(cs|pay)_[A-Za-z0-9_]{10,255}$/.test(sessionId)) return c.json({ error: 'Missing or invalid checkout session.' }, 400);
 	const row = await c.env.DB.prepare('SELECT email FROM licenses WHERE session_id = ?').bind(sessionId).first<{ email: string | null }>();
 	if (!row) return c.json({ error: 'Payment not confirmed yet.' }, 404, { 'Cache-Control': 'no-store' });
 	return c.json({ key: await licenseKey(c.env.LICENSE_SECRET, sessionId), email: row.email }, 200, { 'Cache-Control': 'no-store' });

@@ -59,7 +59,6 @@ const brotliBytes = brotliCompressSync(code, {
 console.log(`Tracker raw: ${(rawBytes / 1024).toFixed(2)} KB (${rawBytes} bytes)`);
 console.log(`Tracker Brotli: ${(brotliBytes / 1024).toFixed(2)} KB (${brotliBytes} bytes)`);
 
-// shortcut: Tracker is 1.32KB Brotli (target < 1.2KB) due to full multi-gateway decoration and 4 drop-in global aliases; upgrade by moving gateway regexes server-side if strict sub-1.2KB is needed
 // The site says "1.5 KB": 1,587 bytes is the most that still rounds to 1.5 KB (1,024-byte KB)
 const MAX_BROTLI_BYTES = 1587;
 if (brotliBytes > MAX_BROTLI_BYTES) {

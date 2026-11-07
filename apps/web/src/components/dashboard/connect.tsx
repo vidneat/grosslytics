@@ -3,6 +3,7 @@ import { Copy, KeyRound, LockKeyhole, Plug } from 'lucide-react';
 import { apiFetch, DEFAULT_API, logout, type Connection, type SiteInfo } from './api';
 import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
 import { copyText } from '../../lib/clipboard';
+import { CHECKOUT_CLOUD, CLOUD_PRICE } from '../../lib/checkout';
 
 // Password login needs the API on this site's own domain (the default deploy), so the session cookie is first-party.
 const SAME_ORIGIN_API = !import.meta.env?.PUBLIC_API_URL;
@@ -375,7 +376,6 @@ export function ApiTokens({ conn }: { conn: Connection }) {
 }
 
 interface CloudAccount { id: string; email: string; status: string; trialEndsAt: number; periodEnd: number | null; active: boolean; used: number; cap: number }
-const CHECKOUT_CLOUD = import.meta.env?.PUBLIC_CHECKOUT_CLOUD_URL as string | undefined;
 const BILLING_PORTAL = import.meta.env?.PUBLIC_STRIPE_PORTAL_URL as string | undefined;
 
 /** Hosted Cloud only: trial or plan, this month's events against the cap, and the Stripe links to pay or manage billing. Renders nothing on self-host. */
@@ -390,8 +390,8 @@ export function CloudBilling() {
 	const now = Date.now() / 1000;
 	const daysLeft = Math.max(0, Math.ceil((a.trialEndsAt - now) / 86400));
 	const full = a.used >= a.cap;
-	// Stripe Payment Links accept these two params; the billing webhook uses client_reference_id to find the account
-	const checkout = CHECKOUT_CLOUD && `${CHECKOUT_CLOUD}${CHECKOUT_CLOUD.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(a.id)}&prefilled_email=${encodeURIComponent(a.email)}`;
+	// Dodo links take `email` to prefill and `metadata_*` as custom data; the account id is how a payment finds its account
+	const checkout = `${CHECKOUT_CLOUD}${CHECKOUT_CLOUD.includes('?') ? '&' : '?'}email=${encodeURIComponent(a.email)}&metadata_account_id=${encodeURIComponent(a.id)}`;
 	const subscribed = a.status !== 'trial';
 	const plan = !a.active
 		? a.status === 'trial' ? 'Your free trial has ended. Tracking is paused until you subscribe.' : 'Your subscription has ended. Tracking is paused.'
@@ -407,9 +407,7 @@ export function CloudBilling() {
 				{full && ' (limit reached; tracking resumes on the 1st)'}
 			</span>
 			<span className="ml-auto flex gap-3">
-				{(!subscribed || !a.active) && (checkout
-					? <a className="btn btn-primary !py-1.5 !text-[13px]" href={checkout}>Subscribe, $5/month</a>
-					: <span className="text-ink-3">Checkout isn’t set up on this server.</span>)}
+				{(!subscribed || !a.active) && <a className="btn btn-primary !py-1.5 !text-[13px]" href={checkout}>Subscribe, {CLOUD_PRICE}/month</a>}
 				{subscribed && BILLING_PORTAL && <a className="text-accent hover:underline" href={`${BILLING_PORTAL}${BILLING_PORTAL.includes('?') ? '&' : '?'}prefilled_email=${encodeURIComponent(a.email)}`}>Manage billing</a>}
 			</span>
 		</div>

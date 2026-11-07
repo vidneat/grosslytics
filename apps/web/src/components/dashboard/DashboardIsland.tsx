@@ -17,6 +17,7 @@ import {
 	Radio,
 	Receipt,
 	Route,
+	Settings as SettingsIcon,
 	Share2,
 	StickyNote,
 	Trophy,
@@ -155,7 +156,7 @@ function Workspace(props: {
 	// The /app page gets a full-width sticky toolbar; share pages and the homepage preview sit inside their own box
 	const page = variant === 'full' && source !== 'share';
 	const f = useStore($dashboardFilters);
-	const range = (f.dateRange === 'custom' ? '30d' : f.dateRange) as Range;
+	const range = f.dateRange as Range;
 	const model = f.attributionModel as Model;
 	const mode = f.revenueMode as Mode;
 
@@ -167,6 +168,22 @@ function Workspace(props: {
 	const [sale, setSale] = useState<DashSale | null>(null);
 	const [refresh, setRefresh] = useState(0);
 	const [demoOnline, setDemoOnline] = useState(27);
+	// Owner settings live in their own view, so setup isn't buried under the charts; #settings links straight to it
+	const [view, setViewState] = useState<'dashboard' | 'settings'>(() => (typeof location !== 'undefined' && location.hash === '#settings' ? 'settings' : 'dashboard'));
+	const setView = (v: 'dashboard' | 'settings') => {
+		setViewState(v);
+		history.replaceState(null, '', v === 'settings' ? '#settings' : location.pathname + location.search);
+	};
+	const [notice, setNotice] = useState('');
+	/** Runs an owner action and shows its error instead of failing silently. */
+	const act = async (fn: () => Promise<unknown>) => {
+		setNotice('');
+		try {
+			await fn();
+		} catch (err) {
+			setNotice((err as Error).message || 'That did not save. Try again.');
+		}
+	};
 
 	// Data: demo is computed locally; owner and share pages come from the API.
 	const q = { range, model, mode, filters };
@@ -185,16 +202,25 @@ function Workspace(props: {
 	const online = source === 'demo' ? demoOnline : (live.online ?? 0);
 
 	// Owner view refreshes every minute, and right away when a sale lands.
-	const saleCount = live.entries.filter((e) => e.sale).length;
+	const saleCount = live.sales;
 	const lastSales = useRef(saleCount);
 	useEffect(() => {
 		if (saleCount > lastSales.current) setRefresh((r) => r + 1);
 		lastSales.current = saleCount;
 	}, [saleCount]);
+	// Hidden tabs skip the tick (each refresh is a full set of dashboard queries) and catch up once shown again
 	useEffect(() => {
 		if (source !== 'api') return;
-		const t = setInterval(() => setRefresh((r) => r + 1), 60_000);
-		return () => clearInterval(t);
+		let stale = false;
+		const t = setInterval(() => (document.hidden ? (stale = true) : setRefresh((r) => r + 1)), 60_000);
+		const onShow = () => {
+			if (!document.hidden && stale) (stale = false), setRefresh((r) => r + 1);
+		};
+		document.addEventListener('visibilitychange', onShow);
+		return () => {
+			clearInterval(t);
+			document.removeEventListener('visibilitychange', onShow);
+		};
 	}, [source]);
 
 	const closeSale = useCallback(() => setSale(null), []);
@@ -322,9 +348,58 @@ function Workspace(props: {
 	const addNote = async () => {
 		const label = window.prompt('Add a note to the chart at the current time (e.g. "Launched on Product Hunt"):');
 		if (!label?.trim() || !conn) return;
-		await apiFetch(conn, '/api/stats/annotations', { method: 'POST', body: JSON.stringify({ siteId: conn.siteId, at: Math.floor(Date.now() / 1000), label: label.trim() }) });
-		setRefresh((r) => r + 1);
+		await act(async () => {
+			await apiFetch(conn, '/api/stats/annotations', { method: 'POST', body: JSON.stringify({ siteId: conn.siteId, at: Math.floor(Date.now() / 1000), label: label.trim() }) });
+			setRefresh((r) => r + 1);
+		});
 	};
+	const deleteNote = (id: number) =>
+		conn &&
+		act(async () => {
+			await apiFetch(conn, `/api/stats/annotations/${id}/delete`, { method: 'POST', body: JSON.stringify({ siteId: conn.siteId }) });
+			setRefresh((r) => r + 1);
+		});
+
+	const ownNotes = d.annotations.filter((a) => a.id != null);
+	const settings = isOwner && conn && (
+		<div className="mx-auto max-w-3xl space-y-5">
+			<Panel title="This site" icon={<SettingsIcon size={15} />}>
+				<div className="space-y-3 px-3 pb-2 text-[13px] text-ink-2">
+					{props.onShare && (
+						<label className="flex items-center gap-2">
+							<input type="checkbox" className="accent-[var(--accent)]" checked={!!props.shared} onChange={(e) => act(() => props.onShare!(e.target.checked))} />
+							Public revenue page at <a className="text-accent hover:underline" href={`/share/${site}`}>/share/{site}</a> (no customer emails or journeys)
+						</label>
+					)}
+					{props.onTimezone && props.timezone && (
+						<label className="flex items-center gap-2">
+							Days and hours in
+							<select className="rounded-lg bg-band px-2 py-1 text-[13px] ring-1 ring-line" value={props.timezone} onChange={(e) => act(() => props.onTimezone!(e.target.value))} aria-label="Site timezone">
+								{timeZones(props.timezone).map((tz) => <option key={tz}>{tz}</option>)}
+							</select>
+						</label>
+					)}
+				</div>
+			</Panel>
+			{props.payments && <PaymentWebhooks key={conn.siteId} conn={conn} connected={props.payments} />}
+			<StripeImport conn={conn} onDone={() => setRefresh((r) => r + 1)} />
+			<AdSpendCsv conn={conn} onSaved={() => setRefresh((r) => r + 1)} />
+			<Panel title="Chart notes" icon={<StickyNote size={15} />}>
+				{ownNotes.length === 0 && <p className="px-3 pb-2 text-[13px] text-ink-3">No notes in this period. Add one with “Add note” above the chart.</p>}
+				<ul className="px-1">
+					{ownNotes.map((a) => (
+						<li key={a.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-[13px]">
+							<span className="tnum w-28 shrink-0 text-ink-3">{new Date(a.at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: d.timezone || 'UTC' })}</span>
+							<span className="min-w-0 flex-1 truncate">{a.label}</span>
+							<button type="button" className="text-[12px] text-down hover:underline" onClick={() => deleteNote(a.id!)} aria-label={`Delete note ${a.label}`}>Delete</button>
+						</li>
+					))}
+				</ul>
+			</Panel>
+			<ApiTokens conn={conn} />
+			<Waitlist conn={conn} />
+		</div>
+	);
 
 	return (
 		<CurrencyContext.Provider value={d.currency}>
@@ -377,6 +452,12 @@ function Workspace(props: {
 					<Segmented label="Revenue" value={mode} options={MODES} onChange={setRevenueMode} />
 					<Segmented label="Date range" value={range} options={RANGES} onChange={setDateRange} />
 					{isOwner && (
+						<button type="button" className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] text-ink-2 hover:bg-band hover:text-ink" aria-pressed={view === 'settings'} onClick={() => setView(view === 'settings' ? 'dashboard' : 'settings')}>
+							<SettingsIcon size={14} aria-hidden="true" />
+							{view === 'settings' ? 'Dashboard' : 'Settings'}
+						</button>
+					)}
+					{isOwner && (
 						<button type="button" className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] text-ink-2 hover:bg-band hover:text-ink" onClick={props.onDisconnect}>
 							<LogOut size={14} aria-hidden="true" />
 							Sign out
@@ -388,10 +469,18 @@ function Workspace(props: {
 			</div>
 
 			<div className={page ? 'mx-auto max-w-7xl space-y-5 px-5 pt-6' : 'space-y-5 pt-5'}>
+			{notice && <p className="px-2 text-[13px] text-down" role="alert">{notice}</p>}
 			{remote.error && remote.data && <p className="px-2 text-[13px] text-down" role="alert">Showing the last loaded data: {remote.error}</p>}
+			{view === 'settings' && settings ? settings : (<>
 			{d.excludedCurrencies.length > 0 && <p className="px-2 text-[13px] text-ink-2" role="status">Reporting in {d.currency}. Payments in {d.excludedCurrencies.join(', ')} are excluded; currencies are never added together.</p>}
 			{mode === 'profit' && <p className="px-2 text-[13px] text-ink-2" role="status">{d.adSpendAvailable ? 'Profit includes ad spend in the overview and source breakdowns. Page, campaign, location and technology breakdowns show net revenue.' : 'Ad spend cannot be split by page, country or device. Showing net revenue for this filtered view.'}</p>}
 			{empty && conn && <InstallSnippet siteId={conn.siteId} api={conn.api} />}
+			{empty && conn && (
+				<p className="px-2 text-[13px] text-ink-2">
+					Next, connect your payment provider in{' '}
+					<button type="button" className="text-accent hover:underline" onClick={() => setView('settings')}>Settings</button> so sales are matched to visitors.
+				</p>
+			)}
 
 			{/* KPIs + chart + live */}
 			<div className="grid gap-5 lg:grid-cols-12">
@@ -627,27 +716,9 @@ function Workspace(props: {
 						</div>
 					)}
 
-					{isOwner && props.onShare && (
-						<label className="flex items-center justify-center gap-2 text-[13px] text-ink-2">
-							<input type="checkbox" className="accent-[var(--accent)]" checked={!!props.shared} onChange={(e) => props.onShare!(e.target.checked)} />
-							Public revenue page at <a className="text-accent hover:underline" href={`/share/${site}`}>/share/{site}</a> (no customer emails or journeys)
-						</label>
-					)}
-					{isOwner && props.onTimezone && props.timezone && (
-						<label className="mt-2 flex items-center justify-center gap-2 text-[13px] text-ink-2">
-							Days and hours in
-							<select className="rounded-lg bg-band px-2 py-1 text-[13px] ring-1 ring-line" value={props.timezone} onChange={(e) => props.onTimezone!(e.target.value)} aria-label="Site timezone">
-								{timeZones(props.timezone).map((tz) => <option key={tz}>{tz}</option>)}
-							</select>
-						</label>
-					)}
-					{isOwner && conn && props.payments && <PaymentWebhooks key={conn.siteId} conn={conn} connected={props.payments} />}
-					{isOwner && conn && <StripeImport conn={conn} onDone={() => setRefresh((r) => r + 1)} />}
-					{isOwner && conn && <AdSpendCsv conn={conn} onSaved={() => setRefresh((r) => r + 1)} />}
-					{isOwner && conn && <ApiTokens conn={conn} />}
-					{isOwner && conn && <Waitlist conn={conn} />}
 				</>
 			)}
+			</>)}
 			</div>
 
 			<JourneyDrawer sale={sale} onClose={closeSale} loadJourney={loadJourney} />

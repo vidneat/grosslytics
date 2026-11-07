@@ -72,6 +72,14 @@ name = "WAITLIST_LIMITER"
 namespace_id = "1001"
 simple = { limit = 5, period = 60 }
 
+[[ratelimits]]
+name = "SIGNUP_LIMITER"
+namespace_id = "1002"
+simple = { limit = 5, period = 60 }
+
+[triggers]
+crons = ["17 3 * * *"]
+
 [vars]
 ENVIRONMENT = "production"
 TRACKER_ORIGIN = "https://${s.host}"

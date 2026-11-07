@@ -136,7 +136,7 @@ const SQL = {
 		FROM payments WHERE site_id = ?1 AND status IN ('succeeded', 'refunded') AND upper(currency) = ?11 AND created_at >= ?2 AND created_at < ?3
 		AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR visitor_id IN fv) ORDER BY created_at DESC LIMIT 8`,
 	adSpend: `${CTE} SELECT source AS k, spend_date AS d, SUM(amount_cents) AS a FROM ad_spend WHERE site_id = ?1 AND spend_date >= date(?2 + (SELECT off FROM w), 'unixepoch') AND spend_date <= date(?3 - 1 + (SELECT off FROM w), 'unixepoch') GROUP BY source, spend_date`,
-	annotations: `${CTE} SELECT at, label FROM annotations WHERE site_id = ?1 AND at >= ?2 AND at < ?3 ORDER BY at`,
+	annotations: `${CTE} SELECT id, at, label FROM annotations WHERE site_id = ?1 AND at >= ?2 AND at < ?3 ORDER BY at`,
 } as const;
 
 type Q = keyof typeof SQL;
@@ -203,7 +203,7 @@ const countryName = (cc: string) => {
 };
 export const flagOf = (cc: string) =>
 	/^[A-Z]{2}$/.test(cc) && cc !== 'XX' ? cc.replace(/./g, (c) => String.fromCodePoint(0x1f1a5 + c.charCodeAt(0))) : '';
-const BROWSER_ICON: Record<string, string> = { Chrome: 'google.com', Safari: 'apple.com', Firefox: 'mozilla.org', Edge: 'microsoft.com', Arc: 'arc.net' };
+const BROWSER_ICON: Record<string, string> = { Chrome: 'google.com', Safari: 'apple.com', Firefox: 'mozilla.org', Edge: 'microsoft.com', Opera: 'opera.com', Arc: 'arc.net' };
 const OS_ICON: Record<string, string> = { macOS: 'apple.com', iOS: 'apple.com', Windows: 'microsoft.com', Android: 'android.com', Linux: 'kernel.org' };
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -372,6 +372,6 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 						refunded: x.status === 'refunded',
 					}),
 				),
-		annotations: r.annotations.map((x) => ({ at: Number(x.at), label: String(x.label) })),
+		annotations: q.publicView ? r.annotations.map((x) => ({ at: Number(x.at), label: String(x.label) })) : r.annotations.map((x) => ({ id: Number(x.id), at: Number(x.at), label: String(x.label) })),
 	};
 }

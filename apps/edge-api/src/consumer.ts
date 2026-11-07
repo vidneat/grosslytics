@@ -31,3 +31,15 @@ export async function handleQueueBatch(
 		console.error('Usage count failed:', err);
 	}
 }
+
+/** Queue retries and gateway webhook retries are over within days, so receipts older than this can't stop a duplicate any more. */
+export const RECEIPT_DAYS = 14;
+
+/** Deletes old delivery receipts and expired sign-in sessions, which otherwise grow forever. Run daily. */
+export async function cleanup(db: D1Database, now = Math.floor(Date.now() / 1000)): Promise<void> {
+	await db.batch([
+		db.prepare('DELETE FROM processed_messages WHERE processed_at < ?').bind(now - RECEIPT_DAYS * 86400),
+		db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
+		db.prepare('DELETE FROM account_sessions WHERE expires_at <= ?').bind(now),
+	]);
+}

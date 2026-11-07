@@ -228,6 +228,14 @@ statsRoute.post('/annotations', async (c) => {
 	return c.json({ ok: true }, 201);
 });
 
+// POST /api/stats/annotations/:id/delete {siteId} - remove a chart note; the site must match, so a note id alone can't reach another site
+statsRoute.post('/annotations/:id/delete', async (c) => {
+	const body = (await c.req.json().catch(() => ({}))) as { siteId?: unknown };
+	if (typeof body.siteId !== 'string') return c.json({ error: 'siteId required' }, 400);
+	const res = await c.env.DB.prepare('DELETE FROM annotations WHERE id = ? AND site_id = ?').bind(Number(c.req.param('id')), body.siteId).run();
+	return res.meta.changes ? c.json({ ok: true }) : c.json({ error: 'That note no longer exists.' }, 404);
+});
+
 // API tokens: read-only, one site each, for MCP, scripts or a teammate. Master API_TOKEN only (enforced in requireToken).
 const TokenBody = v.object({
 	siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),

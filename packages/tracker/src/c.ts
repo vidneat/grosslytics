@@ -37,13 +37,13 @@ if (sid && !w.__glc && !navigator.webdriver) {
 			.replace(/\s+/g, ' ')
 			.trim()
 			.slice(0, 60);
-		const [src, cat] = (get(() => sessionStorage, 'gl_src') || 'Direct (Typed/Bookmark)|Direct').split('|');
+		const src = get(() => sessionStorage, 'gl_s') || 'Direct (Typed/Bookmark)'; // the visit's source, kept by g.js
 		const meta = JSON.stringify({ el: label, dead: hit || getComputedStyle(el).cursor === 'pointer' ? 0 : 1, rage: n === 3 ? 1 : 0 });
 		fetch(api, {
 			method: 'POST',
 			keepalive: true,
 			mode: 'no-cors',
-			body: JSON.stringify({ sid, vid, ses: get(() => sessionStorage, 'gl_ses') || vid, t: 'click', n: location.pathname, src, cat, ref: '', sd: 0, dur: 0, meta }),
+			body: JSON.stringify({ sid, vid, ses: get(() => sessionStorage, 'gl_ses') || vid, t: 'click', n: location.pathname, src, ref: '', sd: 0, dur: 0, meta }),
 		}).catch(() => {});
 	}, { capture: true, passive: true });
 }

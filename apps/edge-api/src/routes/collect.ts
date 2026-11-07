@@ -24,23 +24,26 @@ async function computeCookielessVisitorId(
 	return hex.slice(0, 16);
 }
 
-function parseDevice(ua: string): { deviceType: DeviceType; os: string; browser: string } {
+export function parseDevice(ua: string): { deviceType: DeviceType; os: string; browser: string } {
 	let deviceType: DeviceType = 'desktop';
 	if (/Mobi|Android/i.test(ua)) deviceType = 'mobile';
 	else if (/Tablet|iPad/i.test(ua)) deviceType = 'tablet';
 
+	// iPhone UAs say "like Mac OS X" and Android UAs say "Linux", so the specific checks come first
 	let os = 'Unknown';
-	if (/Mac OS/i.test(ua)) os = 'macOS';
-	else if (/Windows/i.test(ua)) os = 'Windows';
+	if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
 	else if (/Android/i.test(ua)) os = 'Android';
-	else if (/iPhone|iPad/i.test(ua)) os = 'iOS';
+	else if (/Mac OS/i.test(ua)) os = 'macOS';
+	else if (/Windows/i.test(ua)) os = 'Windows';
 	else if (/Linux/i.test(ua)) os = 'Linux';
 
+	// Edge ("Edg/") and Opera ("OPR/") also say Chrome; Chrome, Firefox and Edge on iOS are CriOS, FxiOS and EdgiOS
 	let browser = 'Unknown';
-	if (/Chrome/i.test(ua) && !/Edge|OPR/i.test(ua)) browser = 'Chrome';
-	else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
-	else if (/Firefox/i.test(ua)) browser = 'Firefox';
-	else if (/Edge/i.test(ua)) browser = 'Edge';
+	if (/Edg(e|A|iOS)?\//i.test(ua)) browser = 'Edge';
+	else if (/OPR\//i.test(ua)) browser = 'Opera';
+	else if (/Firefox|FxiOS/i.test(ua)) browser = 'Firefox';
+	else if (/Chrome|CriOS/i.test(ua)) browser = 'Chrome';
+	else if (/Safari/i.test(ua)) browser = 'Safari';
 
 	return { deviceType, os, browser };
 }

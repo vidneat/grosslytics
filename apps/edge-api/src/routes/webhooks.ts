@@ -299,10 +299,10 @@ webhooksRoute.post('/:gateway', async (c) => {
 	// Hosted Cloud never falls back to the operator's env secrets: each customer signs with their own
 	const secret = saved?.secret || (isCloud(c.env) ? '' :
 		({
-			stripe: site?.stripeWebhookSecret || c.env.STRIPE_WEBHOOK_SECRET,
-			razorpay: site?.razorpayWebhookSecret || c.env.RAZORPAY_WEBHOOK_SECRET,
-			polar: site?.polarWebhookSecret || c.env.POLAR_WEBHOOK_SECRET,
-			paddle: site?.paddleWebhookSecret || c.env.PADDLE_WEBHOOK_SECRET,
+			stripe: c.env.STRIPE_WEBHOOK_SECRET,
+			razorpay: c.env.RAZORPAY_WEBHOOK_SECRET,
+			polar: c.env.POLAR_WEBHOOK_SECRET,
+			paddle: c.env.PADDLE_WEBHOOK_SECRET,
 			lemonsqueezy: c.env.LEMONSQUEEZY_WEBHOOK_SECRET,
 		} as Partial<Record<PaymentGateway, string>>)[gateway]) || '';
 

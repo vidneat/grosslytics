@@ -23,7 +23,7 @@ Three connections, each pointing at the owner's own API (a Cloudflare Worker):
   - `/share/<domain>`: public revenue page.
   - `/compare/<slug>`: comparison pages.
   - `/badge`, `/og`: badge and social-card images.
-- `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,587 bytes Brotli (the most that rounds to the site's "1.5 KB"); it is currently 1,562. The same build makes the opt-in click script `dist/c.js`; copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
+- `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,587 bytes Brotli (the most that rounds to the site's "1.5 KB"); it is currently 1,560. The same build makes the opt-in click script `dist/c.js`; copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
 - `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–010.
 - `packages/shared`: types and the dashboard contract (`dashboard.ts`).
 - `scripts/db.ts`: local migrate and seed; also migrates the remote database.
@@ -327,7 +327,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 - Ad spend: CSV import card (`POST /api/stats/ad-spend/bulk`, up to 2,000 rows, quoted "$1,200" handled) and MER in "Where the money goes". Meta/Google/X/LinkedIn OAuth not built: Google Ads needs an approved developer token and Meta an app review.
 - Tax: Stripe, Paddle, Polar, Lemon Squeezy and RevenueCat tax is removed from gross; the fee is still computed on the full charge.
 - Gateways: Cashfree (base64 HMAC of timestamp+body), Gumroad (form pings, `&key=` in the URL, refunds), PayPal (verified through PayPal's verify-webhook-signature API; secret `client_id:client_secret:webhook_id[:sandbox]`; real fee), RevenueCat (Authorization header; commission and tax from the event). Tracker tags Gumroad links with `visitor_id`. All four built from documentation only; **no real payload has been run**.
-- Tracker is 1,562 B Brotli; the build limit is now 1,587 B, the most that still rounds to the "1.5 KB" on the site.
+- The build limit is 1,587 B Brotli, the most that still rounds to the "1.5 KB" on the site.
 - Homepage, /docs (switch, AI crawlers, click map sections; new endpoints), llms.txt updated.
 
 **Verified:** 45 tests (6 new API tests, 1 tracker, 1 CSV parser), typecheck in every package, web build, `wrangler deploy --dry-run` shows the rate-limit binding, local migration applied. In the browser (local): waitlist join, Privacy/Terms/Docs render, no overflow at 375px, no console errors; c.js on the test site recorded dead and rage clicks; `/api/crawl` filled `ai_crawls`. Test rows were deleted afterwards.
@@ -340,7 +340,50 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 4. Create support@grosslytics.com in Cloudflare Email Routing.
 5. Push/merge, then deploy. Migration 010 (`ai_crawls`) is already applied to grosslytics.com’s database (339454ee…, 2026-11-07); analytics.vidneat.app’s gets it on its next `bun run setup`.
 
+## Review fixes (2026-11-07, not committed, not deployed)
+
+A full review found the issues below; all "must" and "should" items are fixed. 50 tests pass (6 new); typecheck passes in web, API, CLI, db-d1 and shared; the web build passes; `wrangler deploy --dry-run` shows both rate limiters.
+- **Cloud site takeover:** `requestSite` (`cloud.ts`) reads every place a site can be named (query, path, body, revoked token) and refuses when they disagree. Before, `POST /sites/<theirs>/secrets?siteId=<mine>` passed the ownership check.
+- **Install-wide lists:** `gl_pat_` tokens can no longer read `/api/stats/waitlist` or `/api/stats/sites`, and Cloud sessions can't read the waitlist (`auth.ts`).
+- **Lockout race:** each login claims a try in one `UPDATE … RETURNING` before the PBKDF2 check (`attempt()` in `routes/auth.ts`); 20 parallel wrong guesses check at most 5.
+- **Share/badge cache:** `/api/share/*` is stored in the Cloudflare Cache API for 60s, without CORS headers (`routes/share.ts`). Turning a page off takes up to a minute to show.
+- **Pruning:** daily cron `17 3 * * *` (root `wrangler.toml` and the installer's `apiToml`) deletes `processed_messages` older than 14 days and expired sessions (`cleanup()` in `consumer.ts`). `events` are kept: deleting user data needs a retention setting first.
+- **Live hub:** the eviction alarm runs only while someone is online.
+- **Devices:** iOS before macOS, Android before Linux; Edge (`Edg/`), Opera (`OPR/`), CriOS/FxiOS recognised (`parseDevice`).
+- **SPA page views:** `g.js` wraps `history.pushState` and listens for `popstate`. A path change sends a leave for the old page and a pageview for the new one. To fit the size budget, the tracker no longer sends its own channel guess (`cat`); the server works it out (`classifySourceCategory` now treats any `utm_medium` containing "mail" or "newsletter" as Email). The session key changed from `gl_src` to `gl_s` (c.js too). 1,560 B Brotli. /docs updated.
+- **Cloud sign-up limit:** new `SIGNUP_LIMITER` binding (5/min per IP), in both toml files.
+- **Removed:** `packages/db-clickhouse`, `docker-compose.clickhouse.yml`, the `AnalyticsStorageAdapter` interface, `upsertPayment`, `calculateRPV`/`linearSplitPayment`/`calculateTrueProfit`, unused constants and schemas, and the never-built `custom` date range in the filter store.
+- **Migration 011:** copies the old `sites.*_webhook_secret` values into `site_secrets` and empties the old columns; the API now reads only `site_secrets` (then env secrets on self-host). Applied to the local DB. **Run `bun run db:migrate:remote` (or `bun run setup`) before deploying**, or sites whose secret was only on the old column stop verifying webhooks.
+- **Dashboard:** owner settings moved to a Settings view (toolbar button, `/app#settings`): public page, timezone, payment webhooks, Stripe import, ad-spend CSV, chart notes (new: delete, via `POST /api/stats/annotations/:id/delete` with `siteId`), API tokens, waitlist. Failed saves show the error. The empty dashboard points to Settings for payments. The one-minute refresh skips hidden tabs and catches up when shown.
+- Browser-checked locally (port 4321, via a temporary read-only token, since deleted): dashboard loads, Settings opens at `#settings`, a refused save shows its message, notes list with Delete, no horizontal scroll at 375px. Not clicked with a full owner session (needs your password): timezone, webhooks and a real note delete.
+- Nice-to-haves, also fixed: the dashboard refreshes on every live sale (it used to stop after 8, because it counted the capped live list; `useLiveSocket` now returns a `sales` counter). The MCP tool `compare_buyer_reading_time` now returns the real buyers-vs-everyone-else rows from the dashboard. MCP `range`/`model` are validated and a bad value comes back as an `isError` tool result. A stale size comment was removed from `packages/tracker/build.ts`. MCP covered by the `mcp:` test. The live-sale refresh was not checked with a real sale.
+- Not done (competitor gaps): custom date ranges, goals by name, alerts/email reports, CSV export, team members, refunds outside Stripe.
+
+## Dodo Payments checkout links, Cloud at $5.99 (2026-11-07, not committed, not deployed)
+
+- The user created two Dodo Payments products. Their links are the defaults in `apps/web/src/lib/checkout.ts` (overridable with `PUBLIC_CHECKOUT_LIFETIME_URL` / `PUBLIC_CHECKOUT_CLOUD_URL`):
+  - Lifetime $29: `pdt_0NrRPjE8ZMtW2BNM0a6bm`, redirect `https://grosslytics.com/license`. `/start?plan=lifetime` now shows "Continue to checkout" instead of the waitlist.
+  - Indie Cloud: `pdt_0NrRQDwasogpEvsc1LfyF`, redirect `/app`. The dashboard's Subscribe button adds `email` and `metadata_account_id` (Dodo's prefill and metadata parameters).
+- Indie Cloud is now **$5.99/month** everywhere: homepage pricing and FAQ, /start, the dashboard button, the ROI calculator note, compare pages, Terms, llms.txt and DEPLOY.md. Cloudflare's own "$5/month Workers plan" mention is unchanged. `CLOUD_PRICE` in `checkout.ts` feeds the React views.
+- Dodo fulfilment is built (see "Dodo billing webhook" below).
+- Verified: web typecheck and build, 50 tests, `/start?plan=lifetime` links to the Dodo URL, homepage shows $5.99 with no overflow at 375px.
+
+## Dodo billing webhook (2026-11-07, not committed, not deployed)
+
+- `POST /api/billing/dodo` (`routes/billing.ts`), signed with `DODO_BILLING_WEBHOOK_SECRET` (Standard Webhooks; the check is now shared with Polar as `verifyStandardWebhook` in `verify.ts`).
+  - `payment.succeeded` with no `subscription_id` mints a Lifetime license keyed on the Dodo `payment_id` (optionally only if `product_cart` has `LIFETIME_PRODUCT_ID`).
+  - `subscription.active`/`renewed` → account `active`, matched by `metadata.account_id` (the dashboard's `metadata_account_id`) or the stored subscription id; the Dodo subscription id goes in `stripe_subscription_id` (column name is historical). `on_hold` → `past_due` (still tracking); `cancelled`/`failed`/`expired` → `canceled`, and these only match the account's current subscription, so an old one expiring after a re-subscribe can't switch it off. `next_billing_date` → `current_period_end`.
+  - No event ordering (marked `shortcut:`), no refund handling: a refunded Lifetime key keeps working.
+- `/api/license/claim` takes `payment_id=pay_…` (or Stripe's `session_id=cs_…`); `/license` reads `payment_id` first, and its text no longer says Stripe. DEPLOY.md's Cloud and Lifetime steps now describe Dodo.
+- Verified: 51 tests (new `dodo:` test with signed payloads), edge-api and web typecheck. Not browser-checked (dev servers weren't running).
+- Not verified: Dodo's real payload field names (`payment_id`, `subscription_id`, `product_cart`, `customer.email`, `customer.customer_id`, `metadata.account_id`, `next_billing_date`) come from Dodo's docs, not a live event. Before launch, use Dodo's test mode: send a test event or make a test purchase, and confirm `/license?payment_id=…` shows a key and a Cloud subscription turns the account active.
+- `DODO_BILLING_WEBHOOK_SECRET` is set on the production worker `grosslytics-edge-api` (user ran it 2026-11-07). `LIFETIME_PRODUCT_ID = "pdt_0NrRPjE8ZMtW2BNM0a6bm"` is in `wrangler.toml` `[vars]` (production only, not `env.dev`). Still to deploy: the code itself, and the webhook in Dodo pointing at `https://grosslytics.com/api/billing/dodo`.
+
+## Brand icon files (2026-11-07)
+
+- There was no icon file and no favicon; the mark only existed as inline SVG in `apps/web/src/components/site/Logo.astro`. `brand/` now holds `icon.svg` (white rounded tile), `mark.svg` (bare mark, transparent), `icon-1024.png` and `icon-512.png` (rendered with macOS Quick Look). Made for the Dodo Payments product image. Not wired in as the site favicon yet.
+
 ## Local test-site recipe
 
-- Site `localhost` (`gl_8b5e717a83ac`) plus the sandbox Payment Link. Stripe's test webhook secret is on that site's row (`sites.stripe_webhook_secret`).
+- Site `localhost` (`gl_8b5e717a83ac`) plus the sandbox Payment Link. Stripe's test webhook secret is in `site_secrets` for that site (moved there from `sites.stripe_webhook_secret` by migration 011).
 - Forwarding: `stripe listen --events checkout.session.completed,invoice.paid,invoice_payment.paid,charge.refunded --forward-to "localhost:8787/api/webhooks/stripe?siteId=gl_8b5e717a83ac"`, then `bun run dev:test-site` (port 3000).

@@ -60,11 +60,11 @@ const faqs = [
 	{ question: 'Can I ask an AI agent about my numbers?', answer: 'Yes. Your API includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?”' },
 	{ question: 'Can I track several sites or client sites?', answer: 'Yes. Self-hosting has no site limit; each site has its own ID, currency and timezone.' },
 	{ question: 'I use DataFast. Is switching hard?', answer: 'Swap the script tag and point your payment webhook at your Grosslytics API. Existing data-fast-goal attributes on your buttons keep working.' },
-	{ question: 'Is hosting available, or only self-hosting?', answer: 'Both. Self-hosting is free. Indie Cloud is hosted for you at $5 a month for up to 100,000 events, after a 14-day free trial with no card. Lifetime is $29 once: a license key and one command that installs Grosslytics in your own Cloudflare account and updates it later.' },
+	{ question: 'Is hosting available, or only self-hosting?', answer: 'Both. Self-hosting is free. Indie Cloud is hosted for you at $5.99 a month for up to 100,000 events, after a 14-day free trial with no card. Lifetime is $29 once: a license key and one command that installs Grosslytics in your own Cloudflare account and updates it later.' },
 ];
 const plans = [
 	{ id: 'self', cta: 'Start free', name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.', items: ['Unlimited sites', 'All attribution models', 'MCP server included'] },
-	{ id: 'cloud', cta: 'Get Indie Cloud', name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. 14-day free trial, no card.', items: ['Everything in Self-host', 'Up to 100,000 events a month', 'Unlimited sites, hosted dashboard'], featured: true },
+	{ id: 'cloud', cta: 'Get Indie Cloud', name: 'Indie Cloud', price: '$5.99', unit: 'per month', note: 'We run it. 14-day free trial, no card.', items: ['Everything in Self-host', 'Up to 100,000 events a month', 'Unlimited sites, hosted dashboard'], featured: true },
 	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'One command installs it in your Cloudflare.', items: ['Everything in Self-host', 'No setup by hand: npx grosslytics install', 'Updates with the same command'] },
 ];
 ---

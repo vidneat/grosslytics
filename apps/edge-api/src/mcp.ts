@@ -2,10 +2,12 @@ import { Hono } from 'hono';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { D1StorageAdapter, siteRange } from '@grosslytics/db-d1';
+import { D1StorageAdapter, queryDashboard, siteRange } from '@grosslytics/db-d1';
 import type { Bindings } from './env.js';
 
 export const mcpRoute = new Hono<{ Bindings: Bindings }>();
+
+const RANGES = ['24h', '7d', '30d', '90d'];
 
 export function createMcpServer(env: Bindings, siteId: string) {
 	const server = new Server(
@@ -35,7 +37,7 @@ export function createMcpServer(env: Bindings, siteId: string) {
 					inputSchema: {
 						type: 'object',
 						properties: {
-							range: { type: 'string', enum: ['7d', '30d', '90d'], default: '30d' },
+							range: { type: 'string', enum: ['24h', '7d', '30d', '90d'], default: '30d' },
 						},
 					},
 				},
@@ -45,7 +47,7 @@ export function createMcpServer(env: Bindings, siteId: string) {
 					inputSchema: {
 						type: 'object',
 						properties: {
-							range: { type: 'string', enum: ['7d', '30d', '90d'], default: '30d' },
+							range: { type: 'string', enum: ['24h', '7d', '30d', '90d'], default: '30d' },
 						},
 					},
 				},
@@ -62,11 +64,11 @@ export function createMcpServer(env: Bindings, siteId: string) {
 				},
 				{
 					name: 'compare_buyer_reading_time',
-					description: 'Compare active reading seconds and scroll depth of converting buyers vs non-converting visitors',
+					description: 'Compare buyers with everyone else in the period: time on site, pages per visit, scroll depth and the share who read /pricing',
 					inputSchema: {
 						type: 'object',
 						properties: {
-							range: { type: 'string', enum: ['7d', '30d', '90d'], default: '30d' },
+							range: { type: 'string', enum: ['24h', '7d', '30d', '90d'], default: '30d' },
 						},
 					},
 				},
@@ -76,7 +78,11 @@ export function createMcpServer(env: Bindings, siteId: string) {
 
 	server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		const { name, arguments: args = {} } = request.params;
-		const range = (args.range as '24h' | '7d' | '30d' | '90d') || '30d';
+		const range = (args.range ?? '30d') as '24h' | '7d' | '30d' | '90d';
+		// A tool-level error the assistant can read and correct, rather than a protocol failure
+		const invalid = (text: string) => ({ isError: true, content: [{ type: 'text' as const, text }] });
+		if (!RANGES.includes(range)) return invalid(`range must be one of ${RANGES.join(', ')}`);
+		if (args.model != null && !['first', 'last', 'linear'].includes(args.model as string)) return invalid('model must be first, last or linear');
 		const { start, end } = await siteRange(env.DB, siteId, range);
 
 		if (name === 'query_channel_roas') {
@@ -112,16 +118,10 @@ export function createMcpServer(env: Bindings, siteId: string) {
 		}
 
 		if (name === 'compare_buyer_reading_time') {
-			const stats = await adapter.queryChannelStats(siteId, start, end, 'first');
-			const summary = stats.map((s) => ({
-				channel: s.source,
-				conversions: s.conversions,
-				avgReadSec: s.avgReadSec,
-				avgScrollPct: s.avgScrollPct,
-				rpvCents: s.rpvCents,
-			}));
+			// The same buyers-vs-everyone-else rows as the dashboard panel
+			const d = await queryDashboard(env.DB, siteId, { range, model: 'first', mode: 'net', filters: [] });
 			return {
-				content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }],
+				content: [{ type: 'text', text: JSON.stringify(d.behaviour, null, 2) }],
 			};
 		}
 

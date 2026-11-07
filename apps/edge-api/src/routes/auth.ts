@@ -50,6 +50,27 @@ async function startSession(c: C, accountId?: string) {
 	});
 }
 
+/**
+ * One password attempt against a lockable row (`owner_auth` or `accounts`). The try is counted before the slow PBKDF2 check,
+ * in one statement, so parallel guesses can't all read "0 failures": the 6th concurrent guess is refused without being checked.
+ */
+async function attempt(db: D1Database, table: 'owner_auth' | 'accounts', id: string | number, password: unknown, hash: string): Promise<'ok' | 'wrong' | 'locked'> {
+	const lock = () => db.prepare(`UPDATE ${table} SET failed_count = 0, locked_until = ? WHERE id = ?`).bind(now() + LOCK_SECONDS, id).run();
+	const claimed = await db.prepare(`UPDATE ${table} SET failed_count = failed_count + 1 WHERE id = ? AND locked_until <= ? RETURNING failed_count`).bind(id, now()).first<{ failed_count: number }>();
+	if (!claimed) return 'locked';
+	if (claimed.failed_count > MAX_FAILS) return lock().then(() => 'locked');
+	if (typeof password === 'string' && (await verifyPassword(password, hash))) {
+		await db.prepare(`UPDATE ${table} SET failed_count = 0, locked_until = 0 WHERE id = ?`).bind(id).run();
+		return 'ok';
+	}
+	if (claimed.failed_count >= MAX_FAILS) await lock();
+	return 'wrong';
+}
+const lockedFor = async (db: D1Database, table: 'owner_auth' | 'accounts', id: string | number) => {
+	const row = await db.prepare(`SELECT locked_until FROM ${table} WHERE id = ?`).bind(id).first<{ locked_until: number }>();
+	return Math.max(1, Math.ceil(((row?.locked_until ?? 0) - now()) / 60));
+};
+
 const readBody = async (c: C) => ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
 const owner = (db: D1Database) =>
 	db.prepare('SELECT password_hash, failed_count, locked_until FROM owner_auth WHERE id = 1').first<{ password_hash: string; failed_count: number; locked_until: number }>();
@@ -91,19 +112,12 @@ authRoute.post('/login', async (c) => {
 	const { password } = await readBody(c);
 	const row = await owner(c.env.DB);
 	if (!row) return c.json({ error: 'Set a password first.' }, 409);
-	if (row.locked_until > now()) {
-		return c.json({ error: `Too many wrong passwords. Try again in ${Math.ceil((row.locked_until - now()) / 60)} minutes, or reset it with your API_TOKEN.` }, 429);
+	const result = await attempt(c.env.DB, 'owner_auth', 1, password, row.password_hash);
+	if (result === 'locked') {
+		return c.json({ error: `Too many wrong passwords. Try again in ${await lockedFor(c.env.DB, 'owner_auth', 1)} minutes, or reset it with your API_TOKEN.` }, 429);
 	}
-	if (typeof password !== 'string' || !(await verifyPassword(password, row.password_hash))) {
-		const fails = row.failed_count + 1;
-		const locked = fails >= MAX_FAILS;
-		await c.env.DB.prepare('UPDATE owner_auth SET failed_count = ?, locked_until = ? WHERE id = 1').bind(locked ? 0 : fails, locked ? now() + LOCK_SECONDS : 0).run();
-		return c.json({ error: 'Wrong password.' }, 401);
-	}
-	await c.env.DB.batch([
-		c.env.DB.prepare('UPDATE owner_auth SET failed_count = 0, locked_until = 0 WHERE id = 1'),
-		c.env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now()),
-	]);
+	if (result === 'wrong') return c.json({ error: 'Wrong password.' }, 401);
+	await c.env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now()).run();
 	await startSession(c);
 	return c.json({ ok: true });
 });
@@ -129,6 +143,10 @@ const credentials = async (c: C) => {
 // POST /api/auth/signup {email, password} - Hosted Cloud only
 authRoute.post('/signup', async (c) => {
 	if (!isCloud(c.env)) return c.json({ error: 'Sign-up is only on Hosted Cloud.' }, 404);
+	// Each sign-up is a fresh trial, so cap how fast one address can make them; without the binding there is no limit
+	if (c.env.SIGNUP_LIMITER && !(await c.env.SIGNUP_LIMITER.limit({ key: c.req.header('cf-connecting-ip') || 'unknown' })).success) {
+		return c.json({ error: 'Too many sign-ups from this network. Wait a minute and try again.' }, 429);
+	}
 	const { email, password } = await credentials(c);
 	if (!EMAIL.test(email) || email.length > 254) return c.json({ error: 'Enter a valid email.' }, 400);
 	if (password.length < 10 || password.length > 200) return c.json({ error: 'Use a password of at least 10 characters.' }, 400);
@@ -143,21 +161,12 @@ authRoute.post('/signup', async (c) => {
 
 async function accountLogin(c: C) {
 	const { email, password } = await credentials(c);
-	const row = await c.env.DB.prepare('SELECT id, password_hash, failed_count, locked_until FROM accounts WHERE email = ?')
-		.bind(email)
-		.first<{ id: string; password_hash: string; failed_count: number; locked_until: number }>();
+	const row = await c.env.DB.prepare('SELECT id, password_hash FROM accounts WHERE email = ?').bind(email).first<{ id: string; password_hash: string }>();
 	if (!row) return c.json({ error: 'Wrong email or password.' }, 401);
-	if (row.locked_until > now()) return c.json({ error: `Too many wrong passwords. Try again in ${Math.ceil((row.locked_until - now()) / 60)} minutes.` }, 429);
-	if (!(await verifyPassword(password, row.password_hash))) {
-		const fails = row.failed_count + 1;
-		const locked = fails >= MAX_FAILS;
-		await c.env.DB.prepare('UPDATE accounts SET failed_count = ?, locked_until = ? WHERE id = ?').bind(locked ? 0 : fails, locked ? now() + LOCK_SECONDS : 0, row.id).run();
-		return c.json({ error: 'Wrong email or password.' }, 401);
-	}
-	await c.env.DB.batch([
-		c.env.DB.prepare('UPDATE accounts SET failed_count = 0, locked_until = 0 WHERE id = ?').bind(row.id),
-		c.env.DB.prepare('DELETE FROM account_sessions WHERE expires_at <= ?').bind(now()),
-	]);
+	const result = await attempt(c.env.DB, 'accounts', row.id, password, row.password_hash);
+	if (result === 'locked') return c.json({ error: `Too many wrong passwords. Try again in ${await lockedFor(c.env.DB, 'accounts', row.id)} minutes.` }, 429);
+	if (result === 'wrong') return c.json({ error: 'Wrong email or password.' }, 401);
+	await c.env.DB.prepare('DELETE FROM account_sessions WHERE expires_at <= ?').bind(now()).run();
 	await startSession(c, row.id);
 	return c.json({ ok: true });
 }

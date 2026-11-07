@@ -10,7 +10,7 @@ import { mcpRoute } from './mcp.js';
 import { authRoute } from './routes/auth.js';
 import { billingRoute } from './routes/billing.js';
 import { licenseRoute } from './routes/license.js';
-import { handleQueueBatch } from './consumer.js';
+import { cleanup, handleQueueBatch } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
 import type { Bindings } from './env.js';
 
@@ -55,5 +55,9 @@ export default {
 	fetch: app.fetch,
 	async queue(batch: MessageBatch<EnrichedEvent>, env: Bindings): Promise<void> {
 		await handleQueueBatch(batch, env);
+	},
+	// Daily cron (wrangler.toml [triggers])
+	async scheduled(_event: ScheduledController, env: Bindings): Promise<void> {
+		await cleanup(env.DB);
 	},
 };

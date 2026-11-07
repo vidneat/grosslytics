@@ -59,24 +59,11 @@
       },
       "dependencies": {
         "@clack/prompts": "^0.9.0",
-        "@grosslytics/db-d1": "workspace:*",
-        "@grosslytics/shared": "workspace:*",
         "commander": "^13.1.0",
         "picocolors": "^1.1.1",
       },
       "devDependencies": {
         "@types/node": "^22.0.0",
-        "typescript": "^5.7.0",
-      },
-    },
-    "packages/db-clickhouse": {
-      "name": "@grosslytics/db-clickhouse",
-      "version": "0.1.0",
-      "dependencies": {
-        "@clickhouse/client": "^1.8.0",
-        "@grosslytics/shared": "workspace:*",
-      },
-      "devDependencies": {
         "typescript": "^5.7.0",
       },
     },
@@ -195,8 +182,6 @@
 
     "@clack/prompts": ["@clack/prompts@0.9.1", "", { "dependencies": { "@clack/core": "0.4.1", "picocolors": "^1.0.0", "sisteransi": "^1.0.5" } }, "sha512-JIpyaboYZeWYlyP0H+OoPPxd6nqueG/CmN6ixBiNFsIDHREevjIf0n0Ohh5gr5C8pEDknzgvz+pIJ8dMhzWIeg=="],
 
-    "@clickhouse/client": ["@clickhouse/client@1.25.0", "", {}, "sha512-sxoCDlA8iOEGpGrJzl9SeNvG7II6e5kSeo0JI4Mru2QhwhjydWuDEE55ryZg3vIJ0CSJ1bhn9+Xtnuvf1BZT/w=="],
-
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.5.0", "", {}, "sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg=="],
 
     "@cloudflare/unenv-preset": ["@cloudflare/unenv-preset@2.16.2", "", { "peerDependencies": { "unenv": "2.0.0-rc.24", "workerd": ">1.20260305.0 <2.0.0-0" }, "optionalPeers": ["workerd"] }, "sha512-JBP1+Z7ZSNG/d4mRP+y8VC5dka3tZVMLEZRvS+rzQ4DGV1EoxRFQckcJTTkXbHSQiTj0DtNI01Zwb/V2fX0mvQ=="],
@@ -274,8 +259,6 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.25.12", "", { "os": "win32", "cpu": "ia32" }, "sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
-
-    "@grosslytics/db-clickhouse": ["@grosslytics/db-clickhouse@workspace:packages/db-clickhouse"],
 
     "@grosslytics/db-d1": ["@grosslytics/db-d1@workspace:packages/db-d1"],
 

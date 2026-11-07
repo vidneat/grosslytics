@@ -303,4 +303,18 @@ CREATE TABLE IF NOT EXISTS ai_crawls (
 ) STRICT, WITHOUT ROWID;
 `;
 
-export const ALL_MIGRATIONS = MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS + MIGRATION_005_DELIVERY_RECEIPTS + MIGRATION_006_API_TOKENS + MIGRATION_007_OWNER_LOGIN + MIGRATION_008_CLOUD + MIGRATION_009_LICENSES + MIGRATION_010_AI_CRAWLS;
+/**
+ * Webhook secrets move from the old per-gateway columns on `sites` into `site_secrets`, the one place the API reads.
+ * The old columns are emptied so a later rerun can't bring back a secret the owner removed. They, and the never-used
+ * telegram/discord/cname/stripe_secret_encrypted columns, stay in the table: dropping a column can't be rerun safely.
+ */
+export const MIGRATION_011_SECRETS = `
+INSERT INTO site_secrets (site_id, gateway, secret) SELECT site_id, 'stripe', stripe_webhook_secret FROM sites WHERE stripe_webhook_secret != '' ON CONFLICT DO NOTHING;
+INSERT INTO site_secrets (site_id, gateway, secret) SELECT site_id, 'razorpay', razorpay_webhook_secret FROM sites WHERE razorpay_webhook_secret != '' ON CONFLICT DO NOTHING;
+INSERT INTO site_secrets (site_id, gateway, secret) SELECT site_id, 'polar', polar_webhook_secret FROM sites WHERE polar_webhook_secret != '' ON CONFLICT DO NOTHING;
+INSERT INTO site_secrets (site_id, gateway, secret) SELECT site_id, 'paddle', paddle_webhook_secret FROM sites WHERE paddle_webhook_secret != '' ON CONFLICT DO NOTHING;
+UPDATE sites SET stripe_webhook_secret = NULL, razorpay_webhook_secret = NULL, polar_webhook_secret = NULL, paddle_webhook_secret = NULL
+ WHERE stripe_webhook_secret IS NOT NULL OR razorpay_webhook_secret IS NOT NULL OR polar_webhook_secret IS NOT NULL OR paddle_webhook_secret IS NOT NULL;
+`;
+
+export const ALL_MIGRATIONS = MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS + MIGRATION_005_DELIVERY_RECEIPTS + MIGRATION_006_API_TOKENS + MIGRATION_007_OWNER_LOGIN + MIGRATION_008_CLOUD + MIGRATION_009_LICENSES + MIGRATION_010_AI_CRAWLS + MIGRATION_011_SECRETS;

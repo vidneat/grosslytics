@@ -1,21 +1,21 @@
 import { test, expect } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { Hono } from 'hono';
-import { ALL_MIGRATIONS } from '@grosslytics/db-d1/migrations';
+import { ALL_MIGRATIONS, MIGRATION_011_SECRETS } from '@grosslytics/db-d1/migrations';
 import { requireToken } from './auth.js';
 import { mcpRoute } from './mcp.js';
 import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
 import { shareRoute } from './routes/share.js';
 import { waitlistRoute } from './routes/waitlist.js';
-import { collectRoute, crawlRoute, originAllowed } from './routes/collect.js';
+import { collectRoute, crawlRoute, originAllowed, parseDevice } from './routes/collect.js';
 import { authRoute } from './routes/auth.js';
 import { billingRoute } from './routes/billing.js';
 import { CLOUD_EVENT_CAP, countUsage, usageMonth } from './cloud.js';
 import { licenseRoute } from './routes/license.js';
 import { verifyPassword } from './routes/auth.js';
 import { apiToml, hashPassword as cliHashPassword, isHost, noindex } from '../../../packages/cli/src/install.ts';
-import { handleQueueBatch } from './consumer.js';
+import { cleanup, handleQueueBatch, RECEIPT_DAYS } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
 import { formatMoney } from '@grosslytics/shared/money';
 import { D1StorageAdapter, ingestEvents, queryDashboard, siteRange } from '@grosslytics/db-d1';
@@ -165,6 +165,12 @@ test('mcp: requires token; initialize and tools/list work over Streamable HTTP',
 	expect(((await init.json()) as any).result.serverInfo.name).toBe('grosslytics-mcp');
 	const list = (await (await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json()) as any;
 	expect(list.result.tools.map((t: any) => t.name)).toContain('query_channel_roas');
+	const call = async (name: string, args: object) => ((await (await rpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: args } })).json()) as any).result;
+	const cmp = await call('compare_buyer_reading_time', { range: '7d' });
+	expect(JSON.parse(cmp.content[0].text).map((r: any) => r.label)).toEqual(['Time on site', 'Pages per visit', 'Scroll depth', 'Read /pricing']);
+	const bad = await call('query_channel_roas', { range: '1y' });
+	expect(bad.isError).toBe(true);
+	expect(bad.content[0].text).toContain('range must be one of');
 });
 
 // 2026-03-31 12:00 UTC (a Tuesday)
@@ -229,7 +235,7 @@ test('dashboard: totals, attribution models, filters, pages, funnel and profit a
 	expect(d.behaviour[3]).toEqual({ label: 'Read /pricing', buyers: '100%', others: '0%' });
 	expect(d.sales.find((x) => x.id === 'p1')).toMatchObject({ email: 'm***@hey.com', first: 'x.com (in-app)', visitorId: 'v1', refunded: false });
 	expect(d.sales.find((x) => x.id === 'p0')?.refunded).toBe(true); // listed, while totals above exclude it
-	expect(d.annotations).toEqual([{ at: NOW - 86400, label: 'Launched' }]);
+	expect(d.annotations).toEqual([{ id: 1, at: NOW - 86400, label: 'Launched' }]);
 	expect(d.ltv[0]).toMatchObject({ key: 'x.com (in-app)', ltv: 9680, customers: 1 });
 
 	expect((await q({ mode: 'profit' })).totals.revenue).toBe(7680);
@@ -994,4 +1000,159 @@ test('clicks, bulk ad spend and the waitlist list (owner only, honeypot, rate li
 	const list = ((await (await fetch('/api/stats/waitlist', { headers: bearer })).json()) as any).signups;
 	expect(list.map((x: any) => x.email)).toEqual(['maya@example.com']); // honeypot and rate-limited ones not stored
 	expect((await fetch('/api/stats/waitlist')).status).toBe(401);
+});
+
+test('access: Cloud site ids must agree, owner-only lists, parallel guesses lock, share pages cached', async () => {
+	const app = makeApp({ CLOUD: '1' });
+	const json = { 'content-type': 'application/json' };
+	const post = (url: string, body: object, cookie = '') => app.fetch(url, { method: 'POST', headers: { ...json, cookie }, body: JSON.stringify(body) });
+	const cookieOf = (res: Response) => (res.headers.get('set-cookie') ?? '').split(';')[0]!;
+	const a = cookieOf(await post('/api/auth/signup', { email: 'a@x.io', password: 'correct horse' }));
+	const b = cookieOf(await post('/api/auth/signup', { email: 'b@y.io', password: 'correct horse' }));
+	const siteA = ((await (await post('/api/stats/sites', { domain: 'a.io' }, a)).json()) as any).id;
+	const siteB = ((await (await post('/api/stats/sites', { domain: 'b.io' }, b)).json()) as any).id;
+
+	// Naming your own site in one place and someone else's in another is refused
+	expect((await post(`/api/stats/sites/${siteB}/share?siteId=${siteA}`, { enabled: true }, a)).status).toBe(403);
+	expect((await post(`/api/stats/sites/${siteB}/secrets?siteId=${siteA}`, { gateway: 'stripe', secret: 'attackersecret' }, a)).status).toBe(403);
+	expect((await post(`/api/stats/tokens?siteId=${siteA}`, { siteId: siteB, name: 'x' }, a)).status).toBe(403);
+	expect((await post(`/api/stats/ad-spend?siteId=${siteA}`, { siteId: siteB, source: 'x', date: '2026-11-01', amountCents: 1 }, a)).status).toBe(403);
+	expect(app.sqlite.query('SELECT public_share_enabled p FROM sites WHERE site_id = ?').get(siteB)).toEqual({ p: 0 });
+	expect(app.sqlite.query('SELECT COUNT(*) n FROM site_secrets').get()).toEqual({ n: 0 });
+	expect((await post(`/api/stats/sites/${siteA}/share`, { enabled: true }, a)).status).toBe(200);
+	expect((await app.fetch(`/api/stats/waitlist?siteId=${siteA}`, { headers: { cookie: a } })).status).toBe(403);
+
+	// A read-only token can't reach the install-wide lists, whatever siteId it passes
+	const self = makeApp();
+	const pt = (await (await self.fetch('/api/stats/tokens', { method: 'POST', headers: { authorization: 'Bearer tok', ...json }, body: JSON.stringify({ siteId: 's1', name: 'ro' }) })).json()) as any;
+	const ro = { authorization: `Bearer ${pt.token}` };
+	expect((await self.fetch('/api/stats/waitlist?siteId=s1', { headers: ro })).status).toBe(403);
+	expect((await self.fetch('/api/stats/sites?siteId=s1', { headers: ro })).status).toBe(403);
+	expect((await self.fetch('/api/stats/dashboard?siteId=s1', { headers: ro })).status).toBe(200);
+
+	// Twenty guesses at once: at most five are checked, then the login is locked even for the right password
+	await self.fetch('/api/auth/setup', { method: 'POST', headers: json, body: JSON.stringify({ setupKey: 'tok', password: 'correct horse' }) });
+	const login = (password: string) => self.fetch('/api/auth/login', { method: 'POST', headers: json, body: JSON.stringify({ password }) });
+	const tries = await Promise.all(Array.from({ length: 20 }, () => login('wrong guess!')));
+	expect(tries.filter((r) => r.status === 401).length).toBeLessThanOrEqual(5);
+	expect((await login('correct horse')).status).toBe(429);
+
+	// Share pages: the second view is served from the edge cache, with the caller's own CORS origin
+	const store = new Map<string, Response>();
+	(globalThis as any).caches = { default: { match: async (r: Request) => store.get(r.url)?.clone(), put: async (r: Request, res: Response) => void store.set(r.url, res) } };
+	try {
+		let reads = 0;
+		const counted = { ...self.d1, prepare: (sql: string) => (reads++, self.d1.prepare(sql)), batch: self.d1.batch } as unknown as D1Database;
+		const shareApp = new Hono<any>().use('*', (await import('hono/cors')).cors({ origin: (o) => o || '*' })).route('/api/share', shareRoute);
+		const view = async (origin: string) => {
+			const waits: Promise<unknown>[] = [];
+			const res = await shareApp.fetch(new Request('http://x/api/share/acme.io?range=30d', { headers: { origin } }), { DB: counted }, { waitUntil: (p: Promise<unknown>) => waits.push(p), passThroughOnException() {} } as any);
+			await Promise.all(waits);
+			return res;
+		};
+		const first = await view('https://one.example');
+		const before = reads;
+		const second = await view('https://two.example');
+		expect(first.status).toBe(200);
+		expect(second.status).toBe(200);
+		expect(reads).toBe(before);
+		expect(second.headers.get('access-control-allow-origin')).toBe('https://two.example');
+		expect(await second.json()).toEqual(await first.json());
+	} finally {
+		delete (globalThis as any).caches;
+	}
+});
+
+test('devices: iPhones are iOS, Edge and Opera are not Chrome; cleanup keeps recent receipts', async () => {
+	const ua = {
+		iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1',
+		ipadChrome: 'Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0.6778.73 Mobile/15E148 Safari/604.1',
+		edge: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+		opera: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/115.0.0.0',
+		android: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+		mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15',
+	};
+	expect(parseDevice(ua.iphone)).toEqual({ deviceType: 'mobile', os: 'iOS', browser: 'Safari' });
+	expect(parseDevice(ua.ipadChrome)).toMatchObject({ os: 'iOS', browser: 'Chrome' });
+	expect(parseDevice(ua.edge)).toMatchObject({ os: 'Windows', browser: 'Edge' });
+	expect(parseDevice(ua.opera)).toMatchObject({ os: 'macOS', browser: 'Opera' });
+	expect(parseDevice(ua.android)).toMatchObject({ deviceType: 'mobile', os: 'Android', browser: 'Chrome' });
+	expect(parseDevice(ua.mac)).toEqual({ deviceType: 'desktop', os: 'macOS', browser: 'Safari' });
+
+	const { d1, sqlite } = fakeD1();
+	const now = 2_000_000_000;
+	sqlite.run('INSERT INTO processed_messages (message_id, attempt_id, processed_at) VALUES (?, ?, ?), (?, ?, ?)', ['old', 'a', now - (RECEIPT_DAYS + 1) * 86400, 'new', 'b', now - 86400]);
+	sqlite.run('INSERT INTO sessions (id_hash, expires_at) VALUES (?, ?), (?, ?)', ['gone', now - 1, 'live', now + 60]);
+	await cleanup(d1, now);
+	expect(sqlite.query('SELECT message_id FROM processed_messages').all()).toEqual([{ message_id: 'new' }]);
+	expect(sqlite.query('SELECT id_hash FROM sessions').all()).toEqual([{ id_hash: 'live' }]);
+});
+
+test('migration 011: legacy per-site webhook secrets move to site_secrets, and reruns keep removals', async () => {
+	const { d1, sqlite } = fakeD1();
+	sqlite.run("INSERT INTO sites (site_id, domain, name, stripe_webhook_secret, paddle_webhook_secret) VALUES ('old', 'old.io', 'Old', 'whsec_legacy', '')");
+	sqlite.exec(MIGRATION_011_SECRETS);
+	expect(sqlite.query('SELECT gateway, secret FROM site_secrets').all()).toEqual([{ gateway: 'stripe', secret: 'whsec_legacy' }]);
+	sqlite.run("DELETE FROM site_secrets WHERE site_id = 'old'");
+	sqlite.exec(MIGRATION_011_SECRETS);
+	expect(sqlite.query('SELECT COUNT(*) n FROM site_secrets').get()).toEqual({ n: 0 });
+	expect(await new D1StorageAdapter(d1).getSite('old')).toMatchObject({ siteId: 'old', domain: 'old.io' });
+});
+
+test('chart notes: the owner deletes a note only through its own site; share pages get no ids', async () => {
+	const app = makeApp();
+	const h = { authorization: 'Bearer tok', 'content-type': 'application/json' };
+	const post = (url: string, body: object) => app.fetch(url, { method: 'POST', headers: h, body: JSON.stringify(body) });
+	expect((await post('/api/stats/annotations', { siteId: 's1', at: Math.floor(Date.now() / 1000) - 60, label: 'Launch' })).status).toBe(201);
+	const d = (await (await app.fetch('/api/stats/dashboard?siteId=s1&range=24h', { headers: h })).json()) as any;
+	const id = d.annotations[0].id;
+	expect(d.annotations[0]).toMatchObject({ label: 'Launch' });
+	const shared = (await (await app.fetch('/api/share/acme.io?range=24h')).json()) as any;
+	expect(shared.annotations[0]).toEqual({ at: d.annotations[0].at, label: 'Launch' });
+	expect((await post(`/api/stats/annotations/${id}/delete`, { siteId: 'other' })).status).toBe(404);
+	expect((await post(`/api/stats/annotations/${id}/delete`, { siteId: 's1' })).status).toBe(200);
+	expect(app.sqlite.query('SELECT COUNT(*) n FROM annotations').get()).toEqual({ n: 0 });
+});
+
+test('dodo: signed payments mint Lifetime licenses, subscription events turn Cloud accounts on and off', async () => {
+	const key = btoa('dodo-key-0123456789');
+	const app = makeApp({ CLOUD: '1', DODO_BILLING_WEBHOOK_SECRET: `whsec_${key}`, LICENSE_SECRET: 'lic-secret', LIFETIME_PRODUCT_ID: 'pdt_life' });
+	let n = 0;
+	const dodo = async (type: string, data: object, sign = true) => {
+		const body = JSON.stringify({ business_id: 'bus_1', type, timestamp: new Date().toISOString(), data });
+		const id = `msg_${++n}`;
+		const ts = String(Math.floor(Date.now() / 1000));
+		const k = await crypto.subtle.importKey('raw', Uint8Array.from(atob(key), (ch) => ch.charCodeAt(0)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+		const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(`${id}.${ts}.${body}`)))));
+		return app.fetch('/api/billing/dodo', { method: 'POST', headers: { 'webhook-id': id, 'webhook-timestamp': ts, 'webhook-signature': `v1,${sign ? sig : 'AAAA'}` }, body });
+	};
+	const json = async (r: Response | Promise<Response>) => (await r).json() as Promise<any>;
+
+	// Lifetime
+	const pay = { payment_id: 'pay_2IjeQm4hqU6RA4Z4kw', subscription_id: null, customer: { email: 'buyer@x.io' }, product_cart: [{ product_id: 'pdt_life', quantity: 1 }] };
+	expect((await dodo('payment.succeeded', pay, false)).status).toBe(401);
+	expect((await app.fetch(`/api/license/claim?payment_id=${pay.payment_id}`)).status).toBe(404);
+	expect(await json(dodo('payment.succeeded', { ...pay, product_cart: [{ product_id: 'pdt_other' }] }))).toMatchObject({ ignored: true });
+	expect(await json(dodo('payment.succeeded', { ...pay, subscription_id: 'sub_9' }))).toMatchObject({ ignored: true });
+	expect(await json(dodo('payment.succeeded', pay))).toMatchObject({ license: true });
+	expect(await json(dodo('payment.succeeded', pay))).toMatchObject({ license: true }); // retry: still one license
+	expect((app.sqlite.query('SELECT COUNT(*) AS n FROM licenses').get() as any).n).toBe(1);
+	expect(await json(app.fetch(`/api/license/claim?payment_id=${pay.payment_id}`))).toMatchObject({ key: expect.stringMatching(/^gl_lic_/), email: 'buyer@x.io' });
+
+	// Cloud: the checkout link's metadata names the account
+	app.sqlite.query("INSERT INTO accounts (id, email, password_hash, trial_ends_at) VALUES ('acc_1', 'c@x.io', 'x', 1)").run();
+	const account = () => app.sqlite.query("SELECT status, stripe_subscription_id s, current_period_end p FROM accounts WHERE id = 'acc_1'").get() as any;
+	const sub = (id: string) => ({ subscription_id: id, status: 'active', metadata: { account_id: 'acc_1' }, customer: { customer_id: 'cus_1' }, next_billing_date: '2026-12-07T00:00:00Z' });
+	expect(await json(dodo('subscription.active', sub('sub_1')))).toMatchObject({ matched: true });
+	expect(account()).toEqual({ status: 'active', s: 'sub_1', p: Date.parse('2026-12-07T00:00:00Z') / 1000 });
+	await dodo('subscription.on_hold', sub('sub_1'));
+	expect(account().status).toBe('past_due');
+	await dodo('subscription.cancelled', sub('sub_1'));
+	expect(account().status).toBe('canceled');
+	// Re-subscribing, then the old subscription expiring, keeps the new one on
+	await dodo('subscription.active', sub('sub_2'));
+	expect(await json(dodo('subscription.expired', sub('sub_1')))).toMatchObject({ matched: false });
+	expect(account()).toMatchObject({ status: 'active', s: 'sub_2' });
+	await dodo('subscription.renewed', { ...sub('sub_2'), metadata: {} });
+	expect(account().status).toBe('active');
 });

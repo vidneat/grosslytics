@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { integer, primaryKey, sqliteTable, text, index } from 'drizzle-orm/sqlite-core';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. SITES: Multi-tenant site registry & encrypted integration credentials
+// 1. SITES: one row per tracked website (webhook secrets live in site_secrets)
 // ─────────────────────────────────────────────────────────────────────────────
 export const sites = sqliteTable('sites', {
 	siteId: text('site_id').primaryKey(),
@@ -11,15 +11,6 @@ export const sites = sqliteTable('sites', {
 	timezone: text('timezone').default('UTC'),
 	currency: text('currency').default('USD'),
 	publicShareEnabled: integer('public_share_enabled').default(0),
-	cnameProxyDomain: text('cname_proxy_domain'),
-	stripeSecretEncrypted: text('stripe_secret_encrypted'),
-	stripeWebhookSecret: text('stripe_webhook_secret'),
-	razorpayWebhookSecret: text('razorpay_webhook_secret'),
-	polarWebhookSecret: text('polar_webhook_secret'),
-	paddleWebhookSecret: text('paddle_webhook_secret'),
-	telegramBotToken: text('telegram_bot_token'),
-	telegramChatId: text('telegram_chat_id'),
-	discordWebhookUrl: text('discord_webhook_url'),
 	createdAt: integer('created_at').default(sql`(unixepoch())`),
 });
 

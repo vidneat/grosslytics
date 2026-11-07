@@ -88,7 +88,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 				<p><strong>Site sends a Content-Security-Policy header?</strong> Then the browser blocks the tracker until you allow your analytics domain in two places, and the only sign is an error in the browser console. Add it to <code class={code}>script-src</code> (to load <code class={code}>g.js</code>) and <code class={code}>connect-src</code> (to send events):</p>
 				<pre class={pre}><code>{`Content-Security-Policy: script-src 'self' ${ORIGIN}; connect-src 'self' ${ORIGIN}`}</code></pre>
 				<p>Keep your other entries; only add the domain. If you set <code class={code}>data-api</code> to another host, add that host to <code class={code}>connect-src</code> too.</p>
-				<p><strong>Single-page apps:</strong> the tracker records the page a visit loads on. Client-side route changes (React Router, Next.js links) are not recorded as separate pageviews yet.</p>
+				<p><strong>Single-page apps:</strong> client-side route changes (React Router, Next.js links, the back button) are recorded as page views automatically, each with its own reading time. Only the path counts; changing just the query string or #hash is not a new page.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">

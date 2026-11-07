@@ -5,24 +5,25 @@ import { copyText } from '../../lib/clipboard';
 
 type State = { kind: 'waiting' } | { kind: 'ready'; key: string; email: string | null } | { kind: 'error'; message: string };
 
-/** /license?session_id=… : Stripe's Lifetime checkout returns here. Waits for the payment webhook, then shows the key once it exists. */
+/** /license?payment_id=… : the Lifetime checkout (Dodo; Stripe sends session_id) returns here. Waits for the payment webhook, then shows the key once it exists. */
 export default function LicenseClaim() {
 	const [state, setState] = useState<State>({ kind: 'waiting' });
 	const [copied, setCopied] = useState('');
 
 	useEffect(() => {
-		const sessionId = new URLSearchParams(location.search).get('session_id');
-		if (!sessionId) return setState({ kind: 'error', message: 'This page opens after you buy Lifetime. The link from Stripe includes your purchase.' });
+		const q = new URLSearchParams(location.search);
+		const sessionId = q.get('payment_id') || q.get('session_id');
+		if (!sessionId) return setState({ kind: 'error', message: 'This page opens after you buy Lifetime. The link from the checkout includes your purchase.' });
 		let tries = 0;
 		let timer: ReturnType<typeof setTimeout>;
 		const poll = async () => {
 			try {
-				const res = await fetch(`${DEFAULT_API || location.origin}/api/license/claim?session_id=${encodeURIComponent(sessionId)}`, { cache: 'no-store' });
+				const res = await fetch(`${DEFAULT_API || location.origin}/api/license/claim?payment_id=${encodeURIComponent(sessionId)}`, { cache: 'no-store' });
 				const body = (await res.json().catch(() => ({}))) as { key?: string; email?: string | null; error?: string };
 				if (res.ok && body.key) return setState({ kind: 'ready', key: body.key, email: body.email ?? null });
 				if (res.status !== 404) return setState({ kind: 'error', message: body.error || `Something went wrong (${res.status}).` });
 			} catch {}
-			// Stripe usually confirms within seconds; give it two minutes
+			// Payments usually confirm within seconds; give it two minutes
 			if (++tries < 60) timer = setTimeout(poll, 2000);
 			else setState({ kind: 'error', message: 'Your payment hasn’t been confirmed yet. Reload this page in a few minutes; the key will be here.' });
 		};
@@ -65,7 +66,7 @@ export default function LicenseClaim() {
 				<li>Click <strong className="text-ink">Allow</strong> when Cloudflare asks. The installer creates the database, queues and workers in your account.</li>
 				<li>Open your dashboard, add a site, and paste its script tag.</li>
 			</ol>
-			<p className="text-[13px] text-ink-3">To update later, run the same command again in the same folder. This page keeps working with the link from Stripe if you need the key again.</p>
+			<p className="text-[13px] text-ink-3">To update later, run the same command again in the same folder. This page keeps working with the link from your checkout receipt if you need the key again.</p>
 		</div>
 	);
 }

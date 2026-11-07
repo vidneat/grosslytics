@@ -17,16 +17,12 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 
 	constructor(ctx: DurableObjectState, env: Bindings) {
 		super(ctx, env);
-		// Restore active alarm if none scheduled
 		this.ctx.blockConcurrencyWhile(async () => {
 			// Memory is wiped whenever the hub hibernates, so presence lives in storage
 			for (const v of (await this.ctx.storage.list<VisitorPresence>({ prefix: 'v:' })).values()) {
 				this.visitors.set(v.visitorId, v);
 			}
-			const currentAlarm = await this.ctx.storage.getAlarm();
-			if (currentAlarm === null) {
-				await this.ctx.storage.setAlarm(Date.now() + 60_000);
-			}
+			if (this.visitors.size) await this.armAlarm();
 		});
 	}
 
@@ -52,6 +48,7 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 			const data = (await request.json()) as VisitorPresence;
 			this.visitors.set(data.visitorId, data);
 			await this.ctx.storage.put(`v:${data.visitorId}`, data);
+			await this.armAlarm();
 			this.broadcastPresence();
 			return new Response('OK', { status: 200 });
 		}
@@ -83,8 +80,13 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 			this.broadcastPresence();
 		}
 
-		// Schedule next alarm check in 60s
-		await this.ctx.storage.setAlarm(Date.now() + 60_000);
+		// Only while someone is online: an idle hub must not wake every minute forever
+		if (this.visitors.size) await this.ctx.storage.setAlarm(Date.now() + 60_000);
+	}
+
+	/** Starts the eviction alarm unless one is already pending. */
+	private async armAlarm(): Promise<void> {
+		if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000);
 	}
 
 	webSocketClose(ws: WebSocket): void {

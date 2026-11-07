@@ -3,20 +3,21 @@ import { ArrowRight, Check, Copy, Loader2 } from 'lucide-react';
 import { DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection } from '../dashboard/api';
 import { Connect } from '../dashboard/connect';
 import { copyText } from '../../lib/clipboard';
+import { CHECKOUT_LIFETIME, CLOUD_PRICE } from '../../lib/checkout';
 
 type Plan = 'self' | 'cloud' | 'lifetime';
 
 const PLANS: Array<{ id: Plan; name: string; price: string; unit: string; note: string }> = [
 	{ id: 'self', name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.' },
-	{ id: 'cloud', name: 'Indie Cloud', price: '$5', unit: 'per month', note: 'We run it. You just add the script.' },
+	{ id: 'cloud', name: 'Indie Cloud', price: CLOUD_PRICE, unit: 'per month', note: 'We run it. You just add the script.' },
 	{ id: 'lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'One command installs it in your Cloudflare.' },
 ];
 
-// Lifetime: a Stripe Payment Link, unset = waitlist. Cloud is open when this API runs Hosted Cloud (CLOUD=1):
+// Lifetime: the Dodo checkout link. Cloud is open when this API runs Hosted Cloud (CLOUD=1):
 // people sign up in /app first and pay from there, so the payment is tied to their account.
 const CHECKOUT: Record<Exclude<Plan, 'self'>, string | undefined> = {
 	cloud: undefined,
-	lifetime: import.meta.env.PUBLIC_CHECKOUT_LIFETIME_URL,
+	lifetime: CHECKOUT_LIFETIME,
 };
 const REPO = (import.meta.env.PUBLIC_REPO_URL as string | undefined) || 'https://github.com/vidneat/grosslytics';
 
@@ -70,7 +71,7 @@ function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
 	if (plan === 'cloud' && cloudOpen)
 		return (
 			<div className="rounded-[22px] bg-card p-7 text-center ring-1 ring-line">
-				<p className="text-ink-2">Create your account, add one script tag, and you have 14 days free. No card needed. Then $5/month for up to 100,000 events.</p>
+				<p className="text-ink-2">Create your account, add one script tag, and you have 14 days free. No card needed. Then {CLOUD_PRICE}/month for up to 100,000 events.</p>
 				<a className="btn btn-primary mt-5" href="/app?signup">Start free trial <ArrowRight size={15} aria-hidden="true" /></a>
 			</div>
 		);

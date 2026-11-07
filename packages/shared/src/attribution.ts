@@ -1,45 +1,3 @@
-// Types used by consumers of these utilities
-// import type { AttributionModel, ChannelStats } from './types.js';
-
-/**
- * Calculates Revenue Per Visitor (RPV) for a channel.
- * RPV = DisplayedRevenue / UniqueVisitors
- *
- * @param revenueCents - Revenue in cents (could be gross, net, or profit depending on mode)
- * @param visitors - Number of unique visitors attributed to the channel
- * @returns RPV in cents, or 0 if no visitors
- */
-export function calculateRPV(revenueCents: number, visitors: number): number {
-	if (visitors === 0) return 0;
-	return Math.round(revenueCents / visitors);
-}
-
-/**
- * Splits a payment's revenue between first-touch and last-touch sources
- * using the Linear attribution model (50/50 split).
- *
- * NetProfit(c) = (Σ 0.5 * (G_i - F_i) for first-touch) + (Σ 0.5 * (G_j - F_j) for last-touch) - AdSpend(c)
- */
-export function linearSplitPayment(
-	grossCents: number,
-	feeCents: number,
-): { firstTouchShare: number; lastTouchShare: number } {
-	const netCents = grossCents - feeCents;
-	const half = Math.round(netCents / 2);
-	return {
-		firstTouchShare: half,
-		lastTouchShare: netCents - half, // Handles odd cent rounding
-	};
-}
-
-/**
- * Calculates True Net Profit for a channel.
- * True Profit = Net Revenue (after gateway fees) - Ad Spend
- */
-export function calculateTrueProfit(netRevenueCents: number, adSpendCents: number): number {
-	return netRevenueCents - adSpendCents;
-}
-
 /**
  * Computes time-to-convert in hours from first visit to payment.
  */
@@ -71,7 +29,8 @@ export function classifySourceCategory(source: string, medium = '', reported = '
 	const social =
 		lower.includes('(in-app)') ||
 		SOCIAL_SOURCES.some((name) => lower === name || lower.includes(`${name}.`));
-	if (/^(email|e-mail|newsletter)$/i.test(medium) || reported === 'Email') return 'Email';
+	// Any medium mentioning mail (email, e-mail, mailchimp…) or newsletter; old trackers also reported 'Email' themselves
+	if (/mail|newsletter/i.test(medium) || reported === 'Email') return 'Email';
 	if (/^(cpc|ppc|cpm|paid|paid[_ -]?(search|social)|display|retargeting)$/i.test(medium)) {
 		return social || /social/i.test(medium) ? 'Social (Paid)' : 'Paid Search';
 	}

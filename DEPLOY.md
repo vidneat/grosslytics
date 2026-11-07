@@ -215,9 +215,9 @@ Optional website build settings, set when running `bun run build` in `apps/web`:
 | Variable | Effect |
 |---|---|
 | `PUBLIC_API_URL` | API on a different host than the website |
-| `PUBLIC_CHECKOUT_CLOUD_URL` | Stripe Payment Link for the $5/month Indie Cloud subscription. Used only on Hosted Cloud (see below), from the dashboard's Subscribe button |
+| `PUBLIC_CHECKOUT_CLOUD_URL` | Checkout link for the $5.99/month Indie Cloud subscription. Defaults to Grosslytics' Dodo Payments link (`apps/web/src/lib/checkout.ts`). Used only on Hosted Cloud, from the dashboard's Subscribe button, which adds `email` and `metadata_account_id` |
 | `PUBLIC_STRIPE_PORTAL_URL` | Stripe customer portal login link, for the dashboard's "Manage billing" |
-| `PUBLIC_CHECKOUT_LIFETIME_URL` | Stripe Payment Link for the $29 Lifetime license (see "Selling Lifetime licenses"). Unset, `/start?plan=lifetime` shows a waitlist |
+| `PUBLIC_CHECKOUT_LIFETIME_URL` | Checkout link for the $29 Lifetime license. Defaults to Grosslytics' Dodo Payments link (`apps/web/src/lib/checkout.ts`) |
 | `PUBLIC_REPO_URL` | Repository that `/start` tells people to clone. Defaults to `https://github.com/vidneat/grosslytics` |
 
 Waitlist signups are stored in the `waitlist` table: `bunx wrangler d1 execute grosslytics-db --remote --command "SELECT * FROM waitlist"`.
@@ -315,14 +315,14 @@ For stdio-only clients, run `GROSSLYTICS_API_TOKEN=... npx grosslytics mcp --sit
 
 ---
 
-## Running Hosted Cloud (Indie Cloud, $5/month)
+## Running Hosted Cloud (Indie Cloud, $5.99/month)
 
 This is only for you, the operator selling the hosted plan. Self-hosters skip it. It's the same code with one extra setting. Customers sign up on `/app` with an email and password, get 14 days free with no card, add sites, and can track up to 100,000 events a month. After the trial, or once a subscription ends, tracking pauses: visitors' pages don't notice anything, and the dashboard stays readable.
 
 1. Deploy as in steps 1–10, with `CLOUD = "1"` under `[vars]` in `apps/edge-api/wrangler.toml` (or `--var CLOUD:1`). `API_TOKEN` stays your admin key; customers never see it.
-2. In Stripe (test mode first), create a $5/month product and a **Payment Link** for it. Build the website with `PUBLIC_CHECKOUT_CLOUD_URL=<that link>`. The dashboard adds `client_reference_id=<account id>` and the customer's email to it.
-3. Turn on the **customer portal** (Settings → Billing → Customer portal), copy its login link, and build with `PUBLIC_STRIPE_PORTAL_URL=<that link>`.
-4. Add a Stripe webhook to `https://yourdomain.com/api/billing/stripe` with the events `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`. Then run `bunx wrangler secret put STRIPE_BILLING_WEBHOOK_SECRET` (its `whsec_…`).
+2. In Dodo Payments (test mode first), create a $5.99/month subscription product and copy its checkout link. Build the website with `PUBLIC_CHECKOUT_CLOUD_URL=<that link>` (Grosslytics' own link is the default). The dashboard adds `metadata_account_id=<account id>` and the customer's email to it.
+3. Optionally build with `PUBLIC_STRIPE_PORTAL_URL=<your billing portal link>` (any provider's customer portal; the name is historical) so customers can manage their subscription.
+4. In Dodo, go to Developer → Webhooks and add `https://yourdomain.com/api/billing/dodo` with the events `payment.succeeded`, `subscription.active`, `subscription.renewed`, `subscription.on_hold`, `subscription.cancelled`, `subscription.failed` and `subscription.expired`. Then run `bunx wrangler secret put DODO_BILLING_WEBHOOK_SECRET` with its signing secret (`whsec_…`). Stripe still works instead: a webhook to `/api/billing/stripe` (`checkout.session.completed`, `customer.subscription.updated`, `.deleted`) with `STRIPE_BILLING_WEBHOOK_SECRET`, and a Payment Link the dashboard opens with `client_reference_id`.
 5. Customers connect their own payment providers on `/app` → Payments. Each site stores its own webhook signing secret. On Cloud, your `STRIPE_WEBHOOK_SECRET` and the other env secrets are never used for customer sites.
 
 Not built yet for Cloud: password reset by email (Grosslytics sends no email), a plan above 100,000 events, and account deletion. Usage is counted per calendar month (UTC).
@@ -341,8 +341,8 @@ This is also only for you, the operator. A buyer pays, gets a license key on `/l
    bucket_name = "grosslytics-releases"
    ```
 2. Set the key that license keys are derived from. It must never change, or old keys stop working: `openssl rand -hex 32`, then `bunx wrangler secret put LICENSE_SECRET`.
-3. In Stripe (test mode first), create a $29 one-time product and a **Payment Link**. Under *After payment*, choose "Don't show confirmation page" and redirect to `https://grosslytics.com/license?session_id={CHECKOUT_SESSION_ID}`. Build the website with `PUBLIC_CHECKOUT_LIFETIME_URL=<that link>`. Optionally set the var `LIFETIME_PAYMENT_LINK_ID=plink_…` so that only this link creates licenses.
-4. The billing webhook from the Hosted Cloud section (`/api/billing/stripe`, with `checkout.session.completed`) also creates licenses. Without Cloud, create that webhook with just this event and set `STRIPE_BILLING_WEBHOOK_SECRET`.
+3. In Dodo Payments (test mode first), create a $29 one-time product. Its checkout link must redirect to `https://grosslytics.com/license` (add `&redirect_url=https://grosslytics.com%2Flicense`); Dodo appends `?payment_id=…`. Build the website with `PUBLIC_CHECKOUT_LIFETIME_URL=<that link>` (Grosslytics' own link is the default). Optionally set the var `LIFETIME_PRODUCT_ID=pdt_…` so that only this product creates licenses.
+4. The Dodo webhook from the Hosted Cloud section (`/api/billing/dodo`, with `payment.succeeded`) creates licenses. Without Cloud, create that webhook with just this event and set `DODO_BILLING_WEBHOOK_SECRET`. (Stripe instead: a Payment Link redirecting to `/license?session_id={CHECKOUT_SESSION_ID}`, the `/api/billing/stripe` webhook with `checkout.session.completed`, and optionally `LIFETIME_PAYMENT_LINK_ID=plink_…`.)
 5. Publish a release, and repeat this after every change you want buyers to get:
    ```bash
    bun scripts/release.ts --upload
@@ -355,7 +355,7 @@ Limits: the installer runs on macOS and Linux (not Windows), and needs Node 18+.
 ## Not production-ready yet
 
 - **Self-hosted `/app` has one owner password, not user accounts.** Hosted Cloud (`CLOUD=1`) has email accounts, but no email password reset yet.
-- **The dashboard and channel/MCP APIs query raw events on every load.** D1 no longer uses additive unique-visitor rollups, because those overcounted repeat visitors. At higher traffic volumes, measure query cost and use mergeable distinct-count aggregates or complete the ClickHouse dashboard implementation.
+- **The dashboard and channel/MCP APIs query raw events on every load.** D1 no longer uses additive unique-visitor rollups, because those overcounted repeat visitors. At higher traffic volumes, measure query cost and use mergeable distinct-count aggregates (the old, never-finished ClickHouse backend was removed on 2026-11-07).
 - **Ad spend is entered by hand** (the dashboard's "Add ad spend" button, or `POST /api/stats/ad-spend`). There's no Google or Meta Ads import.
 - **No historical Stripe import, and no Telegram/Discord alerts.**
 - **The Paddle, Polar and LemonSqueezy field mapping is untested against real payloads.** Send a real test event and check the `payments` row (amount, currency, `visitor_id`) before you rely on those numbers.

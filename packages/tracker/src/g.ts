@@ -26,30 +26,26 @@ if (!w.__gl && !n.webdriver) {
 		const ses = get('gl_ses', true);
 		const ua = n.userAgent || '';
 		const ref = d.referrer || '';
-		const pth = l.pathname;
+		let pth = l.pathname;
 		const own = (ref + '/').startsWith(l.origin + '/');
 		const sp = new URLSearchParams(l.search);
 		const [us, um, uc] = ['source', 'medium', 'campaign'].map((k) => sp.get('utm_' + k) || void 0);
 		// A tagged link (?utm_source=, ?ref=, ?via=) names its source even when the referrer is stripped (email, ads, apps)
 		const tag = us || sp.get('ref') || sp.get('via');
+		// The channel (search, social, email…) is worked out on the server from the source and utm_medium
 		let src = '';
-		let cat = 'Direct';
 
 		const m = /insta|fba|linked|byted|music|tele|twitt|x-cl/i.exec(ua);
 		if (m) {
 			const k = m[0].toLowerCase();
 			const C = '.com (in-app)';
 			src = k[0] === 'i' ? 'instagram' + C : k[0] === 'f' ? 'facebook' + C : k[0] === 'l' ? 'linkedin' + C : k[0] === 'b' || k[0] === 'm' ? 'tiktok' + C : k[1] === 'e' ? 'telegram.org (in-app)' : 'x' + C;
-			cat = 'Social (Organic)';
 		} else if (tag) {
 			src = tag.slice(0, 50);
-			cat = /mail/i.test(um || '') ? 'Email' : 'Referral';
 		} else if (ref) {
 			try {
 				const h = new URL(ref).hostname.replace(/^www\./, '');
-				const ai = /chatgpt|perplexity|claude|gemini|copilot/i.test(h);
-				src = h + (ai ? ' (AI)' : '');
-				cat = ai ? 'AI Search' : 'Referral';
+				src = h + (/chatgpt|perplexity|claude|gemini|copilot/i.test(h) ? ' (AI)' : '');
 			} catch {
 				src = ref.slice(0, 50);
 			}
@@ -59,7 +55,7 @@ if (!w.__gl && !n.webdriver) {
 		// Clicking between your own pages keeps the source the visit arrived with, so your site never takes credit for itself
 		try {
 			const ss = sessionStorage;
-			own && !tag && !m ? ([src, cat] = (ss.gl_src || 'Direct (Typed/Bookmark)|Direct').split('|')) : (ss.gl_src = src + '|' + cat);
+			own && !tag && !m ? (src = ss.gl_s || 'Direct (Typed/Bookmark)') : (ss.gl_s = src);
 		} catch {}
 
 		const now = () => performance.now();
@@ -100,7 +96,7 @@ if (!w.__gl && !n.webdriver) {
 			const body = JSON.stringify({
 				sid, vid, ses, t,
 				n: nme.slice(0, 100),
-				src, cat,
+				src,
 				ref: ref.slice(0, 100),
 				sd, dur,
 				us, um, uc, meta,
@@ -155,5 +151,17 @@ if (!w.__gl && !n.webdriver) {
 
 		send('pageview', pth);
 		on(w, 'pagehide', leave);
+
+		// Single-page apps change the path without reloading: close the old page, count the new one
+		const nav = () => {
+			if (l.pathname !== pth) leave(), (pth = l.pathname), (ms = sent = left = sd = 0), (last = now()), send('pageview', pth);
+		};
+		const h = history as any;
+		const push = h.pushState;
+		h.pushState = function (this: any) {
+			push.apply(this, arguments);
+			nav();
+		};
+		on(w, 'popstate', nav);
 	}
 }

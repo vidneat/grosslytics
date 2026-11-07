@@ -126,29 +126,9 @@ export type LiveUpdate = LivePresenceUpdate | LiveSaleUpdate;
 
 /** Dashboard filter state shared across Astro Islands via Nanostores */
 export interface DashboardFilterState {
-	siteId: string;
-	dateRange: '24h' | '7d' | '30d' | '90d' | 'custom';
-	customStart?: string;
-	customEnd?: string;
+	dateRange: '24h' | '7d' | '30d' | '90d';
 	attributionModel: AttributionModel;
 	revenueMode: 'gross' | 'net' | 'profit';
-	selectedSources?: string[];
-	selectedCountries?: string[];
-}
-
-/** Unified StorageAdapter interface for dual-engine support */
-export interface AnalyticsStorageAdapter {
-	/** Insert or deduplicate a payment */
-	upsertPayment(payment: PaymentRecord): Promise<boolean>;
-	/** Query channel stats for dashboard */
-	queryChannelStats(
-		siteId: string,
-		startTime: number,
-		endTime: number,
-		model: AttributionModel,
-	): Promise<ChannelStats[]>;
-	/** Get buyer journey for a specific visitor */
-	getBuyerJourney(siteId: string, visitorId: string): Promise<BuyerJourneyEvent[]>;
 }
 
 /** Payment record for upsert */

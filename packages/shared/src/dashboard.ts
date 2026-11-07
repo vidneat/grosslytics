@@ -97,7 +97,8 @@ export interface DashboardData {
 	ltv: Array<{ key: string; icon: string; ltv: number; customers: number }>;
 	direct: Array<{ key: string; icon: string; share: number }>;
 	sales: DashSale[];
-	annotations: Array<{ at: number; label: string }>;
+	/** `id` is set for real notes (the owner can delete them), not for demo data */
+	annotations: Array<{ id?: number; at: number; label: string }>;
 }
 
 /** 'x.com (in-app)' -> 'x.com'; Direct and Unattributed have no favicon. */

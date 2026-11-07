@@ -6,9 +6,6 @@ import {
 	maskEmail,
 } from './fees.js';
 import {
-	calculateRPV,
-	linearSplitPayment,
-	calculateTrueProfit,
 	timeToConvertHours,
 	classifySourceCategory,
 	toHourBucket,
@@ -29,18 +26,7 @@ test('fees: calculates Stripe and Razorpay accurately', () => {
 	expect(maskEmail('alex@grosslytics.com')).toBe('a***@grosslytics.com');
 });
 
-test('attribution: linear 50/50 split and RPV calculation', () => {
-	const split = linearSplitPayment(10000, 320); // Net = 9680
-	expect(split.firstTouchShare).toBe(4840);
-	expect(split.lastTouchShare).toBe(4840);
-
-	// True Net Profit = Net Revenue - Ad Spend
-	expect(calculateTrueProfit(9680, 2000)).toBe(7680);
-
-	// RPV: $96.80 net over 10 visitors = $9.68 (968 cents)
-	expect(calculateRPV(9680, 10)).toBe(968);
-	expect(calculateRPV(9680, 0)).toBe(0);
-
+test('attribution: time to convert and hour buckets', () => {
 	// Time to convert in hours
 	expect(timeToConvertHours(1700000000, 1700007200)).toBe(2);
 
