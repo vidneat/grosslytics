@@ -88,6 +88,14 @@ directory = "./dist"
 `;
 }
 
+/** Self-hosted copies must not compete with grosslytics.com in search or leak a private dashboard into results. */
+export function noindex(host: string, dist: string): void {
+	if (host === 'grosslytics.com') return;
+	// Crawling stays allowed so search engines can see the noindex header; the header covers every static page and asset
+	writeFileSync(join(dist, '_headers'), '/*\n  X-Robots-Tag: noindex, nofollow\n');
+	writeFileSync(join(dist, 'robots.txt'), 'User-agent: *\nAllow: /\n');
+}
+
 // shortcut: runs `npx` without a shell, which Windows can't resolve; macOS and Linux only until someone needs Windows.
 // Runs inside DIR by default, so a wrangler.toml in the user's own folder is never read or edited.
 // Quiet steps get no stdin: a prompt fails instead of waiting invisibly.

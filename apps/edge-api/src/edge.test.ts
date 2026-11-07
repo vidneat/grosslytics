@@ -14,7 +14,7 @@ import { billingRoute } from './routes/billing.js';
 import { CLOUD_EVENT_CAP, countUsage, usageMonth } from './cloud.js';
 import { licenseRoute } from './routes/license.js';
 import { verifyPassword } from './routes/auth.js';
-import { apiToml, hashPassword as cliHashPassword, isHost } from '../../../packages/cli/src/install.ts';
+import { apiToml, hashPassword as cliHashPassword, isHost, noindex } from '../../../packages/cli/src/install.ts';
 import { handleQueueBatch } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
 import { formatMoney } from '@grosslytics/shared/money';
@@ -839,4 +839,16 @@ test('lifetime: a paid one-time checkout mints a license, the buyer claims it, a
 	expect(await verifyPassword('wrong', cliHashPassword('correct horse'))).toBe(false);
 	expect(apiToml({ host: 'analytics.acme.io', zone: 'acme.io' }, 'db-1')).toContain('pattern = "analytics.acme.io/api/*", zone_name = "acme.io"');
 	expect([isHost('analytics.acme.io'), isHost('acme'), isHost('a.b/c')]).toEqual([true, false, false]);
+});
+
+test('installer: self-hosted copies are noindex, grosslytics.com is not', async () => {
+	const { mkdtempSync, readFileSync, existsSync } = await import('node:fs');
+	const { tmpdir } = await import('node:os');
+	const self = mkdtempSync(`${tmpdir()}/gl-noindex-`);
+	noindex('analytics.example.com', self);
+	expect(readFileSync(`${self}/_headers`, 'utf8')).toContain('X-Robots-Tag: noindex');
+	expect(readFileSync(`${self}/robots.txt`, 'utf8')).not.toContain('Sitemap');
+	const ours = mkdtempSync(`${tmpdir()}/gl-noindex-`);
+	noindex('grosslytics.com', ours);
+	expect(existsSync(`${ours}/_headers`)).toBe(false);
 });

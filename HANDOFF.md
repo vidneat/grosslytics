@@ -202,6 +202,20 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 - /start step 1 is now `git clone` + `bun install` + `bun run setup`, with notes about the workers.dev subdomain and existing DNS records. Step 2 sends people to their own `/app`, or a `Connect remote` form (API URL + token). `/docs` self-hosting and DEPLOY.md "Quick setup" match.
 - **Not live yet:** the auto-mode classifier blocked further production deploys, so these /start, /docs and copy changes are built locally but not deployed. Fresh clones still get the old broken code until it is committed and pushed.
 
+## Live panel empty on analytics.vidneat.app (2026-11-07)
+
+- Cause 1: vidneat.app's CSP (`~/Applications/VidNeatWeb/public/_headers`) blocked `https://analytics.vidneat.app/g.js`, so no events reached the API. Added the host to `script-src` and `connect-src`. Deployed 2026-11-07 from a clean worktree of VidNeatWeb HEAD `0149366` plus only `_headers` (version `335dad76`); the folder's other uncommitted work was not shipped. Verified: g.js loads and `/api/event` returns 202. `_headers` is still uncommitted in VidNeatWeb.
+- Cause 2: `SiteLiveHub` kept online visitors only in memory, lost whenever the Durable Object hibernated. Presence is now stored under `v:<visitorId>` and reloaded in the constructor. 26 API tests and typecheck pass. Not committed or deployed.
+- CSP note added: /docs §1 (example header), /start step 3 and the /app "No visits yet" box name the host to add to `script-src` and `connect-src`. Web typecheck and build pass; /docs checked in the browser. Not deployed.
+
+## Self-hosted copies are noindex (2026-11-07)
+
+- Every host except grosslytics.com is kept out of search results, so buyers' copies of the marketing pages don't compete with grosslytics.com and private dashboards stay unlisted.
+- The installer's `noindex(host, dist)` (`packages/cli/src/install.ts`, called before the web deploy) writes `dist/_headers` with `X-Robots-Tag: noindex, nofollow` for all static pages, and a robots.txt that allows crawling (so the header is seen) with no sitemap.
+- `apps/web/src/middleware.ts` adds the same header to pages rendered on request (`/app`, `/share`, `/og`, `/badge`), since `_headers` only covers static assets.
+- Verified: new `installer:` test (27 API tests pass), CLI/web typecheck, web build; dev server (localhost) sends the header on `/`, `/app`, `/share/acme.io`. Not deployed: analytics.vidneat.app gets it on its next `bun run setup` in `/Users/raviair/grosslytics`.
+- `CLAUDE.md` now tells every session to read and update this file.
+
 ## Where things stand
 
 **Done and verified locally**

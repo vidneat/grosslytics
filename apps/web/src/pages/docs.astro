@@ -73,6 +73,9 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 				<pre class={pre}><code>{`<script defer src="${ORIGIN}/g.js" data-site-id="YOUR_SITE_ID"></script>`}</code></pre>
 				<p>Self-hosting? Use your own domain in <code class={code}>src</code>. The tracker sends events to the same domain it was loaded from, at <code class={code}>/api/event</code>. To send them somewhere else, add <code class={code}>data-api="https://your-api/api/event"</code>.</p>
 				<p>Events are only accepted from the site’s own domain, its subdomains, and <code class={code}>localhost</code>. The tracker records a pageview when the page loads, plus reading time and scroll depth when the visitor leaves.</p>
+				<p><strong>Site sends a Content-Security-Policy header?</strong> Then the browser blocks the tracker until you allow your analytics domain in two places, and the only sign is an error in the browser console. Add it to <code class={code}>script-src</code> (to load <code class={code}>g.js</code>) and <code class={code}>connect-src</code> (to send events):</p>
+				<pre class={pre}><code>{`Content-Security-Policy: script-src 'self' ${ORIGIN}; connect-src 'self' ${ORIGIN}`}</code></pre>
+				<p>Keep your other entries; only add the domain. If you set <code class={code}>data-api</code> to another host, add that host to <code class={code}>connect-src</code> too.</p>
 				<p><strong>Single-page apps:</strong> the tracker records the page a visit loads on. Client-side route changes (React Router, Next.js links) are not recorded as separate pageviews yet.</p>
 			</section>
 

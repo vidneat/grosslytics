@@ -279,6 +279,9 @@ export function InstallSnippet({ siteId, api }: { siteId: string; api: string })
 				</button>
 			</div>
 			<p className="mt-3 text-[13px] text-ink-2">
+				Already added it? If your site sends a Content-Security-Policy header, add <code className="font-mono text-[12.5px]">{api.replace(/\/$/, '') || origin}</code> to its <code className="font-mono text-[12.5px]">script-src</code> and <code className="font-mono text-[12.5px]">connect-src</code>, or the browser blocks the tracker.
+			</p>
+			<p className="mt-3 text-[13px] text-ink-2">
 				Then point your payment webhooks at <code className="font-mono text-[12.5px]">{api.replace(/\/$/, '')}/api/webhooks/stripe?siteId={siteId}</code> (or razorpay, paddle, polar, lemonsqueezy).
 			</p>
 		</section>

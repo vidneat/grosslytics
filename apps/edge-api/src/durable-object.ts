@@ -19,6 +19,10 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 		super(ctx, env);
 		// Restore active alarm if none scheduled
 		this.ctx.blockConcurrencyWhile(async () => {
+			// Memory is wiped whenever the hub hibernates, so presence lives in storage
+			for (const v of (await this.ctx.storage.list<VisitorPresence>({ prefix: 'v:' })).values()) {
+				this.visitors.set(v.visitorId, v);
+			}
 			const currentAlarm = await this.ctx.storage.getAlarm();
 			if (currentAlarm === null) {
 				await this.ctx.storage.setAlarm(Date.now() + 60_000);
@@ -47,6 +51,7 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 		if (url.pathname === '/internal/presence' && request.method === 'POST') {
 			const data = (await request.json()) as VisitorPresence;
 			this.visitors.set(data.visitorId, data);
+			await this.ctx.storage.put(`v:${data.visitorId}`, data);
 			this.broadcastPresence();
 			return new Response('OK', { status: 200 });
 		}
@@ -69,6 +74,7 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 		for (const [id, v] of this.visitors.entries()) {
 			if (v.timestamp < cutoff) {
 				this.visitors.delete(id);
+				await this.ctx.storage.delete(`v:${id}`);
 				changed = true;
 			}
 		}

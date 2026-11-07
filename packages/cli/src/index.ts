@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { apiToml, databaseId, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, saveState, unpack, webToml, wrangler } from './install.js';
+import { apiToml, databaseId, DIR, download, ensure, guessZone, hashPassword, isHost, loadState, noindex, saveState, unpack, webToml, wrangler } from './install.js';
 
 const program = new Command();
 
@@ -96,6 +96,7 @@ program
 		const web = join(DIR, 'release', 'web');
 		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone }, dbId));
 		writeFileSync(join(web, 'wrangler.toml'), webToml({ host }));
+		noindex(host, join(web, 'dist'));
 		await step('Deploying the API', () => wrangler(['deploy'], { cwd: api, quiet: true }));
 		await step('Deploying the dashboard', () => wrangler(['deploy'], { cwd: web, quiet: true }));
 
