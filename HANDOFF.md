@@ -338,7 +338,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 2. Make `vidneat/grosslytics` public, or publish the CLI to npm; `/start` and /docs tell visitors to clone a private repo.
 3. Open a paid plan: `LICENSE_SECRET`, R2 bucket + release, Stripe Payment Link + billing webhook, `PUBLIC_CHECKOUT_LIFETIME_URL`.
 4. Create support@grosslytics.com in Cloudflare Email Routing.
-5. Push/merge, run `bun run db:migrate:remote` (migration 010), then deploy.
+5. Push/merge, then deploy. Migration 010 (`ai_crawls`) is already applied to grosslytics.com’s database (339454ee…, 2026-11-07); analytics.vidneat.app’s gets it on its next `bun run setup`.
 
 ## Local test-site recipe
 
