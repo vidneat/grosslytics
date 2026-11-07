@@ -398,7 +398,7 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 
 - The user removed the vidneat.app install from Cloudflare account ravi923615 (`a54e52e1…`): workers `grosslytics-web` (with the `analytics.vidneat.app` custom domain) and `grosslytics-edge-api`, queues `grosslytics-ingest` and `grosslytics-ingest-dlq`, and D1 `grosslytics-db` (`7d4d7f88…`, its data is gone). Checked: none listed any more; `analytics.vidneat.app` no longer resolves; grosslytics.com unaffected.
 - Lesson: run wrangler for the vidneat account from outside this repo (`cd ~ && CLOUDFLARE_ACCOUNT_ID=a54e52e1… npx wrangler …`). Inside the repo, `node_modules/.cache/wrangler` pins the grosslytics.com account (`f6883459…`); several deletes went there and only failed because wrangler was signed in to the other account.
-- Not done: vidneat.app still loads the tracker (`~/Applications/VidNeatWeb`: `src/layouts/BaseLayout.astro` script tag, `public/_headers` CSP, `src/pages/legal/privacy-policy.astro`). `/Users/raviair/grosslytics` (the clone it was installed from) still exists. Wrangler is signed in to **ravi923615**; switch back to ravi88927615 before grosslytics.com deploys.
+- Not done: vidneat.app still loads the tracker (`~/Applications/VidNeatWeb`: `src/layouts/BaseLayout.astro` script tag, `public/_headers` CSP, `src/pages/legal/privacy-policy.astro`). Wrangler is signed in to **ravi923615**; switch back to ravi88927615 before grosslytics.com deploys.
 
 ## Brand icon files (2026-11-07)
 
