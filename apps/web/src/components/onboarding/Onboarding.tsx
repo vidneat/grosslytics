@@ -8,9 +8,9 @@ import { CHECKOUT_LIFETIME, CLOUD_PRICE } from '../../lib/checkout';
 type Plan = 'self' | 'cloud' | 'lifetime';
 
 const PLANS: Array<{ id: Plan; name: string; price: string; unit: string; note: string }> = [
-	{ id: 'self', name: 'Self-host', price: '$0', unit: 'forever', note: 'Runs on your own Cloudflare free tier.' },
+	{ id: 'self', name: 'Self-host', price: '$0', unit: 'forever', note: 'Open source (AGPL), on your own Cloudflare.' },
 	{ id: 'cloud', name: 'Indie Cloud', price: CLOUD_PRICE, unit: 'per month', note: 'We run it. You just add the script.' },
-	{ id: 'lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'One command installs it in your Cloudflare.' },
+	{ id: 'lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'One-command install, priority support, commercial license.' },
 ];
 
 // Lifetime: the Dodo checkout link. Cloud is open when this API runs Hosted Cloud (CLOUD=1):
@@ -79,7 +79,7 @@ function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
 	if (url)
 		return (
 			<div className="rounded-[22px] bg-card p-7 text-center ring-1 ring-line">
-				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once. You get a license key, then run npx grosslytics install: it signs in to your Cloudflare, creates everything and deploys it. The same command updates it later.' : 'Pay, then add one script tag. We host everything else.'}</p>
+				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once. You get a license key, then run npx grosslytics install: it signs in to your Cloudflare, creates everything and deploys it, with no git or Bun. The same command updates it later. Lifetime also includes priority email support and a commercial license (no AGPL obligations).' : 'Pay, then add one script tag. We host everything else.'}</p>
 				<a className="btn btn-primary mt-5" href={url}>Continue to checkout <ArrowRight size={15} aria-hidden="true" /></a>
 			</div>
 		);

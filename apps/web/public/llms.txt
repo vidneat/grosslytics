@@ -28,9 +28,9 @@
 - MCP (Streamable HTTP): `/api/mcp?site=YOUR_SITE_ID`. Tools: query_channel_roas, inspect_unmasked_direct, get_ai_search_citations, get_buyer_journeys, compare_buyer_reading_time.
 
 ## Pricing
-- Self-host: $0 (your Cloudflare account)
+- Self-host: $0, open source (AGPL-3.0), your own Cloudflare account
 - Indie Cloud: $5.99/month
-- Lifetime self-hosted license: $29 one time
+- Lifetime: $29 one time. One-command installer and updates (no git or Bun), priority email support, and a commercial license without AGPL obligations
 
 ## Compared with alternatives (competitor facts from their websites, checked 2026-11-06)
 - DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.5 KB.
