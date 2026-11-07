@@ -386,12 +386,13 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
   - `CLOUD` is off, so no one can sign up for Indie Cloud and a subscription has no account to switch on.
   - The Dodo webhook endpoint in Dodo's dashboard: unknown whether the user has added it.
 
-## Open source (AGPL) + Lifetime extras (2026-11-07, committed, not deployed, repo still private)
+## Open source (AGPL) + Lifetime extras (2026-11-07, public, merged to main, deployed)
 
 - Decision (user): option 2. Code becomes public under AGPL-3.0; self-host stays free with every feature. Lifetime ($29) = one-command installer/updates (no git or Bun) + priority email support (support@grosslytics.com) + a commercial license (modify and run it for yourself or clients without AGPL's publish-your-changes rule; no reselling or public hosted service), framed as backing the project.
 - Added `LICENSE` (official AGPL-3.0 text from gnu.org), `README.md`, `"license": "AGPL-3.0-only"` in package.json. Copy updated: homepage pricing cards, hero/CTA lines, FAQ (new "Is it open source?" and "Why buy Lifetime?"), /start plan notes and Lifetime checkout text, compare pages (Grosslytics now "open source"), Terms (AGPL, Lifetime commercial license terms, Dodo as merchant of record instead of Stripe), llms.txt.
 - Verified: web typecheck, build, 51 tests; pricing cards checked in the browser from the built pages at 1024px.
-- **Not done:** repo `vidneat/grosslytics` is still PRIVATE (so /start's `git clone` 404s), the branch isn't pushed or merged to main, the copy isn't deployed. Before going public: HANDOFF.md (and its git history) contains personal emails and Cloudflare account IDs; no keys or secret files were ever committed (history scanned). The commercial-license wording in Terms is plain-English, not lawyer-reviewed. `npx grosslytics` (Lifetime installer) is still not published on npm.
+- Done 2026-11-07 (user approved all three): `feat/dodo-billing` fast-forwarded into `main` and pushed (origin/main = 56b0959); repo `vidneat/grosslytics` made **public** (anonymous `git ls-remote` works, GitHub page 200); grosslytics.com redeployed as `2026-11-07-56b0959`. Checked live: `/`, `/start/`, `/terms/`, compare pages, `/app`, API 200; new pricing/FAQ/Terms text is up; README is on GitHub.
+- Still open: HANDOFF.md (public, with history) shows personal emails and Cloudflare account IDs (user was told, chose to go ahead). The commercial-license wording in Terms is not lawyer-reviewed. `npx grosslytics` is not on npm, so Lifetime's installer doesn't work for buyers yet. The R2 release (`latest.tgz`) is still f05e372; re-run `bun scripts/release.ts --upload` so buyers get the new copy. GitHub hadn't detected the license yet right after the switch (`licenseInfo` empty).
 
 ## Brand icon files (2026-11-07)
 
