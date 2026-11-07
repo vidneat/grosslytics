@@ -311,10 +311,10 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 
 - **Never fake anything:** no simulated payments or data passed off as real. If something needs a real website or account, say so plainly.
 - Plain, non-technical explanations. The user tests in the browser.
-- Commit only when asked. `origin/main` is at `08125e5`; this branch is 3 commits ahead (see the plan below).
+- Commit only when asked. `origin/main` is at `08125e5`; branch `fix/live-csp-noindex` is 4 commits ahead, not pushed.
 - Deploy later, when the user asks.
 
-## Gaps and features pass (2026-11-07, not committed, not deployed)
+## Gaps and features pass (2026-11-07, committed a845a05, not pushed or deployed)
 
 **Waitlist.** The form posts to `/api/waitlist`, which stores `(email, plan, created_at)` in D1 `waitlist`. Now: owner-only `GET /api/stats/waitlist` and a "Waitlist (n)" card at the bottom of `/app` with CSV download; a hidden honeypot field (`website`); and a Workers Rate Limiting binding `WAITLIST_LIMITER` (5/min per IP) in `wrangler.toml` and the installer's `apiToml`. Nothing emails signers or the owner; the card says to write to them by hand. Production count on 2026-11-07: 0 signups (`339454ee…`); analytics.vidneat.app's copy (`7d4d7f88…`, other account) had one test row. Both databases are named `grosslytics-db`; check the id in wrangler's output.
 
@@ -338,7 +338,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 2. Make `vidneat/grosslytics` public, or publish the CLI to npm; `/start` and /docs tell visitors to clone a private repo.
 3. Open a paid plan: `LICENSE_SECRET`, R2 bucket + release, Stripe Payment Link + billing webhook, `PUBLIC_CHECKOUT_LIFETIME_URL`.
 4. Create support@grosslytics.com in Cloudflare Email Routing.
-5. Commit, push/merge, run `bun run db:migrate:remote` (migration 010), then deploy.
+5. Push/merge, run `bun run db:migrate:remote` (migration 010), then deploy.
 
 ## Local test-site recipe
 
