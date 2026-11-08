@@ -1,0 +1,82 @@
+{
+  "datafast": {
+    "product": "DataFast",
+    "file": "datafast-public-demo-2026-11-08.jpg",
+    "sourceUrl": "https://datafa.st/demo",
+    "capturedOn": "2026-11-08",
+    "pageType": "Public demo",
+    "alt": "DataFast public demo showing visitors, attributed revenue and a daily traffic chart.",
+    "width": 1265,
+    "height": 712
+  },
+  "databull": {
+    "product": "DataBull",
+    "file": "databull-homepage-demo-2026-11-08.jpg",
+    "sourceUrl": "https://databull.app/#demo",
+    "capturedOn": "2026-11-08",
+    "pageType": "Homepage sample dashboard",
+    "alt": "DataBull homepage sample dashboard showing traffic, revenue and referrer reports.",
+    "width": 1265,
+    "height": 712
+  },
+  "umami": {
+    "product": "Umami",
+    "file": "umami-homepage-preview-2026-11-08.jpg",
+    "sourceUrl": "https://umami.is/",
+    "capturedOn": "2026-11-08",
+    "pageType": "Homepage product preview",
+    "alt": "Umami homepage dashboard preview showing traffic metrics, pageviews and referrers.",
+    "width": 620,
+    "height": 526
+  },
+  "grosslytics": {
+    "product": "Grosslytics",
+    "file": "grosslytics-public-demo-2026-11-08.jpg",
+    "sourceUrl": "https://grosslytics.com/app/demo",
+    "capturedOn": "2026-11-08",
+    "pageType": "Public demo with sample data",
+    "alt": "Grosslytics public demo showing first-touch net revenue, a daily chart and source reports.",
+    "width": 1010,
+    "height": 1209
+  },
+  "seline": {
+    "product": "Seline",
+    "file": "seline-public-demo-2026-11-08.jpg",
+    "sourceUrl": "https://app.seline.com/share/edain.io",
+    "capturedOn": "2026-11-08",
+    "pageType": "Public shared demo",
+    "alt": "Seline public demo for edain.io showing visits, unique visitors and pageview charts.",
+    "width": 1265,
+    "height": 712
+  },
+  "plausible": {
+    "product": "Plausible",
+    "file": "plausible-public-demo-2026-11-08.jpg",
+    "sourceUrl": "https://plausible.io/plausible.io",
+    "capturedOn": "2026-11-08",
+    "pageType": "Public live demo",
+    "alt": "Plausible public demo showing visitors, pageviews and a daily traffic chart.",
+    "width": 1265,
+    "height": 712
+  },
+  "posthog": {
+    "product": "PostHog",
+    "file": "posthog-homepage-2026-11-08.jpg",
+    "sourceUrl": "https://posthog.com/",
+    "capturedOn": "2026-11-08",
+    "pageType": "Homepage with illustrative sample data",
+    "alt": "PostHog homepage showing its platform overview and illustrative AI analysis with sample data.",
+    "width": 1025,
+    "height": 1226
+  },
+  "simple-analytics": {
+    "product": "Simple Analytics",
+    "file": "simple-analytics-public-demo-2026-11-08.jpg",
+    "sourceUrl": "https://dashboard.simpleanalytics.com/simpleanalytics.com?from=landing",
+    "capturedOn": "2026-11-08",
+    "pageType": "Limited public demo",
+    "alt": "Simple Analytics public demo showing visitors, a traffic chart, referrals and top pages.",
+    "width": 1010,
+    "height": 1209
+  }
+}

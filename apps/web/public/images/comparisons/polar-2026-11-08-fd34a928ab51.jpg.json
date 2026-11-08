@@ -1,0 +1,13 @@
+{
+  "product": "Polar",
+  "sourceUrl": "https://polar.sh/docs/features/checkout/links#attribution-and-reference-metadata",
+  "capturedOn": "2026-11-08",
+  "pageType": "documentation",
+  "alt": "Polar checkout-link documentation showing reference_id and UTM metadata parameters.",
+  "caption": "Public Polar documentation showing reference metadata carried by a checkout link.",
+  "file": "polar-2026-11-08-fd34a928ab51.jpg",
+  "width": 1265,
+  "height": 712,
+  "sha256": "fd34a928ab51461a5f9306e2b012f8b1fda64630abde4b8c2e0af7935680d5c1",
+  "captureMethod": "browser-screenshot"
+}

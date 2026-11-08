@@ -1,0 +1,13 @@
+{
+  "product": "Paddle",
+  "sourceUrl": "https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout",
+  "capturedOn": "2026-11-08",
+  "pageType": "documentation",
+  "alt": "Paddle documentation showing customData in the Checkout open method instructions.",
+  "caption": "Public Paddle documentation explaining customData on Paddle.Checkout.open; the code shown is a vendor example.",
+  "file": "paddle-2026-11-08-a31e49cd3ad1.jpg",
+  "width": 1265,
+  "height": 712,
+  "sha256": "a31e49cd3ad1b7594d1122bd8d0d4ad58abbb87e2a3883397cc77f1c0c535d16",
+  "captureMethod": "browser-screenshot"
+}

@@ -5,10 +5,11 @@ interface Props {
 	description?: string;
 	datePublished?: string;
 	dateModified?: string;
+	author?: Record<string, unknown>;
 	faqs?: Array<{ question: string; answer: string }>;
 }
 
-const { type, title, description, datePublished, dateModified, faqs = [] } = Astro.props;
+const { type, title, description, datePublished, dateModified, author, faqs = [] } = Astro.props;
 
 let schemaObj: Record<string, unknown> = {};
 
@@ -49,12 +50,13 @@ if (type === 'software') {
 		'@type': 'TechArticle',
 		headline: title,
 		description: description,
-		author: {
+		author: author || {
 			'@type': 'Organization',
-			name: 'Grosslytics Architecture Team',
+			name: 'Grosslytics',
+			url: 'https://grosslytics.com',
 		},
-		datePublished: datePublished || '2025-01-01',
-		dateModified: dateModified || new Date().toISOString().split('T')[0],
+		...(datePublished ? { datePublished } : {}),
+		...((dateModified || datePublished) ? { dateModified: dateModified || datePublished } : {}),
 	};
 } else if (type === 'faq' && faqs.length > 0) {
 	schemaObj = {

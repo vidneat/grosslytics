@@ -1,0 +1,13 @@
+{
+  "product": "Razorpay",
+  "sourceUrl": "https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps#2-integrate-with-checkout-on-client-side",
+  "capturedOn": "2026-11-08",
+  "pageType": "documentation",
+  "alt": "Razorpay integration documentation showing the client-side Checkout setup section.",
+  "caption": "Public Razorpay Standard Checkout instructions distinguishing the client checkout callback from the webhook URL.",
+  "file": "razorpay-2026-11-08-d36efcde0745.jpg",
+  "width": 1265,
+  "height": 712,
+  "sha256": "d36efcde0745ed91ef450fa90e91757d7adf49c69c7e29cce95b9215f58946de",
+  "captureMethod": "browser-screenshot"
+}

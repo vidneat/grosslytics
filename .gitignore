@@ -12,3 +12,4 @@ dist/
 grosslytics-install/
 .secrets/
 .DS_Store
+.mcp.json

@@ -1,0 +1,18 @@
+---
+import type { MarkdownInstance } from 'astro';
+import Page from '../../layouts/Page.astro';
+const articles = Object.values(import.meta.glob<MarkdownInstance<{title: string; description: string}>>('./*.md', { eager: true }))
+    .sort((a, b) => a.frontmatter.title.localeCompare(b.frontmatter.title));
+---
+<Page title="Revenue attribution guides | Grosslytics" description="Implementation guides for connecting payment events to acquisition channels, with code examples and current limitations.">
+    <main class="mx-auto max-w-3xl px-5 py-16">
+        <h1 class="text-4xl font-semibold tracking-tight">Revenue attribution guides</h1>
+        <p class="mt-4 text-ink-2">Implementation guides for connecting payment events to acquisition channels, with code examples and current limitations.</p>
+        <ul class="mt-8">
+            {articles.map(article => <li class="border-b border-line py-6">
+                <h2 class="text-xl font-semibold"><a class="underline" href={article.url}>{article.frontmatter.title}</a></h2>
+                <p class="mt-2 text-ink-2">{article.frontmatter.description}</p>
+            </li>)}
+        </ul>
+    </main>
+</Page>

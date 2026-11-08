@@ -1,0 +1,13 @@
+{
+  "product": "Stripe",
+  "sourceUrl": "https://docs.stripe.com/payment-links/url-parameters#streamline-reconciliation-with-a-url-parameter",
+  "capturedOn": "2026-11-08",
+  "pageType": "documentation",
+  "alt": "Stripe documentation showing client_reference_id for Payment Link reconciliation.",
+  "caption": "Public Stripe documentation for the client reference field used to connect a Payment Link checkout to a visitor.",
+  "file": "stripe-2026-11-08-2e93d133b219.jpg",
+  "width": 1280,
+  "height": 720,
+  "sha256": "2e93d133b219f66889bd40bc588fb525d04c771f3051afec561cc57604d3dae7",
+  "captureMethod": "browser-screenshot"
+}

@@ -52,6 +52,13 @@ Checks:
 - This repo's local git config sets the vidneat identity. Do not add AI attribution lines to commits or PRs.
 - Any other clone made before the rewrite has stale commit IDs: re-clone it or run `git reset --hard origin/main`.
 
+## Blog, comparison hub and SEO MCP committed (2026-11-08, not pushed or deployed)
+
+- Committed the previously uncommitted SEO work: `/blog/` with 5 articles, `/authors/david-mill/`, `/compare/` index plus the DataFast, DataBull, Plausible, PostHog and DataFast-vs-DataBull pages, `Article.astro`, schema/sitemap/llms.txt/robots.txt changes, `public/_headers`, comparison screenshots, and `packages/seo-mcp`.
+- `.mcp.json` is now gitignored (it holds local paths). `packages/seo-mcp/README.md` uses `/path/to/grosslytics` instead of local paths.
+- `astro build` passes and outputs every blog and compare page. None of it is on grosslytics.com until a deploy; `/blog/`, `/compare/` and `/compare/posthog-alternative/` return 404 there today.
+- The running local dev server (started 11:19) lost these routes when the files were stashed during the history rewrite; restart `bun run dev:web` to see them.
+
 ## README and GitHub star button (2026-11-08, not committed or deployed)
 
 - `README.md` rewritten for GitHub: hero screenshot, badges, why, features, payment provider table, how it works, self-host, MCP, pricing, tech stack, compare links, contributing, star call-out. The README links were checked against the live site.

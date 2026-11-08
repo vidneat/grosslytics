@@ -1,0 +1,13 @@
+{
+  "product": "Cloudflare D1",
+  "sourceUrl": "https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics",
+  "capturedOn": "2026-11-08",
+  "pageType": "documentation",
+  "alt": "Cloudflare D1 billing table showing free daily reads, writes and total storage limits.",
+  "caption": "Cloudflare’s public D1 pricing documentation shows the database allowance. This covers D1 only; the complete analytics stack also uses Workers, Queues and Durable Objects.",
+  "file": "cloudflare-d1-2026-11-08-d799dbdce4a1.jpg",
+  "width": 1269,
+  "height": 714,
+  "sha256": "d799dbdce4a1c4f93ea9e3d8e30d7e234afa2813402b9aeb46dcc707a0055387",
+  "captureMethod": "browser-screenshot"
+}

@@ -21,6 +21,10 @@ export default defineConfig({
 				!page.includes('/app/') &&
 				!page.includes('/api/') &&
 				!page.includes('/badge/') && !page.includes('/license'),
+			serialize: (item) => ({
+				...item,
+				url: new URL(item.url).pathname === '/' ? item.url : item.url.replace(/\/+$/, ''),
+			}),
 		}),
 	],
 	vite: {

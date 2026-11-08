@@ -1,0 +1,13 @@
+{
+  "product": "Grosslytics",
+  "sourceUrl": "https://grosslytics.com/app/demo",
+  "capturedOn": "2026-11-08",
+  "pageType": "public-demo",
+  "alt": "Grosslytics public demo with sample visitor, net revenue and traffic-source charts.",
+  "caption": "The Grosslytics public demo illustrates the dashboard layout with sample data. These figures are illustrative and do not measure this installation’s throughput, deployment time or customer results.",
+  "file": "grosslytics-2026-11-08-4f4bddd90794.jpg",
+  "width": 1265,
+  "height": 712,
+  "sha256": "4f4bddd90794e575d18eb9aefae633ceec838d54097c800317c8c4b94d4c7b6d",
+  "captureMethod": "browser-screenshot"
+}
