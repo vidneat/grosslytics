@@ -46,6 +46,12 @@ Checks:
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
 
+## Git identity (2026-11-08)
+
+- All history was rewritten so every commit's author and committer is `vidneat <344886770+vidneat@users.noreply.github.com>`. Claude `Co-Authored-By` lines were removed. `main` and `fix/live-csp-noindex` were force-pushed, and GitHub's contributor list now shows only vidneat (40 commits). The local branch `feat/dodo-billing` was rewritten too.
+- This repo's local git config sets the vidneat identity. Do not add AI attribution lines to commits or PRs.
+- Any other clone made before the rewrite has stale commit IDs: re-clone it or run `git reset --hard origin/main`.
+
 ## High-priority review fixes (2026-11-07)
 
 - Queue receipts, raw events, visitor counters and delayed-payment attribution commit atomically in five SQL statements per batch. D1 rollups were retired from active reads/writes in the F07–F13 pass below. Retried message IDs do not increment counters again.
