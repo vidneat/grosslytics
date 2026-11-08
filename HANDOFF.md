@@ -52,6 +52,12 @@ Checks:
 - This repo's local git config sets the vidneat identity. Do not add AI attribution lines to commits or PRs.
 - Any other clone made before the rewrite has stale commit IDs: re-clone it or run `git reset --hard origin/main`.
 
+## README and GitHub star button (2026-11-08, not committed or deployed)
+
+- `README.md` rewritten for GitHub: hero screenshot, badges, why, features, payment provider table, how it works, self-host, MCP, pricing, tech stack, compare links, contributing, star call-out. The README links were checked against the live site.
+- `docs/screenshots/*.png` are real captures of grosslytics.com and `/app/demo`, taken with headless Chrome at 2x and downscaled to 1600px wide. The demo shows sample data, and the README says so. To refresh them, capture `/app/demo` at a 1440px-wide window and crop.
+- `apps/web/src/layouts/Page.astro`: a GitHub "Star" pill in the header of the marketing pages (icon only on phones). There is no live star count. Checked on the local dev server at desktop and 375px widths; `astro build` not re-run.
+
 ## High-priority review fixes (2026-11-07)
 
 - Queue receipts, raw events, visitor counters and delayed-payment attribution commit atomically in five SQL statements per batch. D1 rollups were retired from active reads/writes in the F07–F13 pass below. Retried message IDs do not increment counters again.
