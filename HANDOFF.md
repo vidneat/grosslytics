@@ -52,6 +52,12 @@ Checks:
 - This repo's local git config sets the vidneat identity. Do not add AI attribution lines to commits or PRs.
 - Any other clone made before the rewrite has stale commit IDs: re-clone it or run `git reset --hard origin/main`.
 
+## Dashboard toolbar flicker (2026-11-08, committed, not deployed)
+
+- The user saw the sticky dashboard toolbar (site, attribution, revenue, range) flicker in place. Likely cause: the always-pulsing green "online" dot (`animate-ping`) sits inside a translucent bar with `backdrop-blur-xl`, so the browser recomputes the blur every frame.
+- Fix in `DashboardIsland.tsx`: the toolbar is solid `bg-canvas`, no backdrop blur. `astro build` passes. The user confirmed the flicker is gone.
+- The local dev server started at 11:19 is broken ("Outdated Optimize Dep", islands fail to hydrate, blog routes 404). Restart `bun run dev:web`.
+
 ## Blog, comparison hub and SEO MCP committed (2026-11-08, not pushed or deployed)
 
 - Committed the previously uncommitted SEO work: `/blog/` with 5 articles, `/authors/david-mill/`, `/compare/` index plus the DataFast, DataBull, Plausible, PostHog and DataFast-vs-DataBull pages, `Article.astro`, schema/sitemap/llms.txt/robots.txt changes, `public/_headers`, comparison screenshots, and `packages/seo-mcp`.

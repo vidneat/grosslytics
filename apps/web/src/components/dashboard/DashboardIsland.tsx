@@ -405,7 +405,7 @@ function Workspace(props: {
 		<CurrencyContext.Provider value={d.currency}>
 		<div className="text-ink">
 			{/* Toolbar: sticks under the site header */}
-			<div className={page ? 'sticky top-12 z-40 border-b border-line bg-canvas/85 backdrop-blur-xl backdrop-saturate-150' : ''}>
+			<div className={page ? 'sticky top-12 z-40 border-b border-line bg-canvas' : ''}>
 			<div className={`flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between ${page ? 'mx-auto max-w-7xl px-5 py-3' : 'rounded-xl bg-card px-4 py-3 ring-1 ring-line'}`}>
 				<div className="flex flex-wrap items-center gap-3">
 					<span className="flex items-center gap-2 text-[15px] font-semibold">
