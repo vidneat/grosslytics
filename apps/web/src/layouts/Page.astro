@@ -12,6 +12,8 @@ interface Props {
 }
 
 const { title, description, noindex = false, app = false } = Astro.props;
+// Set only when building grosslytics.com; buyers' releases are built without PUBLIC_* so they never report here
+const ownSiteId = import.meta.env.PUBLIC_OWN_SITE_ID;
 const currentSection = (href: string) => !href.includes('#') && Astro.url.pathname.startsWith(href);
 const nav = [
 	{ href: '/#product', label: 'Product' },
@@ -26,6 +28,7 @@ const nav = [
 	<head>
 		<BaseHead title={title} description={description} noindex={noindex} />
 		<slot name="head" />
+		{ownSiteId && !app && <script is:inline defer src="/g.js" data-site-id={ownSiteId}></script>}
 		<!-- Light unless this browser chose dark; runs before paint so there is no flash -->
 		<script is:inline>
 			try {

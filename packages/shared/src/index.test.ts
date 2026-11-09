@@ -36,6 +36,12 @@ test('attribution: time to convert and hour buckets', () => {
 
 test('attribution: unmasking source categories', () => {
 	expect(classifySourceCategory('chatgpt.com (AI)')).toBe('AI Search');
+	// ChatGPT tags its links, and the tag replaces the referrer-based "(AI)" label
+	expect(classifySourceCategory('chatgpt.com')).toBe('AI Search');
+	expect(classifySourceCategory('perplexity')).toBe('AI Search');
+	expect(classifySourceCategory('gemini.google.com')).toBe('AI Search');
+	expect(classifySourceCategory('chatgpt.com', 'cpc')).toBe('Paid Search');
+	expect(classifySourceCategory('myclaude-blog.com')).toBe('Referral');
 	expect(classifySourceCategory('instagram.com (in-app)')).toBe('Social (Organic)');
 	expect(classifySourceCategory('google.com')).toBe('Organic Search');
 	expect(classifySourceCategory('Direct (Shared Link)')).toBe('Direct');

@@ -2,6 +2,17 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cheerio from 'cheerio';
 
+// Which site this server writes for. Unset means Grosslytics and articles under src/pages.
+export const site = {
+	url: (process.env.SEO_SITE_URL ?? 'https://grosslytics.com').replace(/\/$/, ''),
+	name: process.env.SEO_SITE_NAME ?? 'Grosslytics',
+	// Astro content collections holding the articles; new ones go in the first.
+	collections: (process.env.SEO_CONTENT_COLLECTIONS ?? '')
+		.split(',')
+		.map((name) => name.trim())
+		.filter(Boolean),
+};
+
 const googleDocs = 'https://developers.google.com/search/docs/';
 export const seoGuidance = {
 	reviewedOn: '2026-11-08',
@@ -53,13 +64,14 @@ export const seoGuidance = {
 export async function articleInventory(webDir: string) {
 	const pages: Array<{ url: string; title: string; description: string; primaryKeyword: string }> =
 		[];
-	for (const collection of ['blog', 'guides', 'compare']) {
-		const directory = path.join(webDir, 'src/pages', collection);
+	const usesCollections = site.collections.length > 0;
+	for (const collection of usesCollections ? site.collections : ['blog', 'guides', 'compare']) {
+		const directory = path.join(webDir, usesCollections ? 'src/content' : 'src/pages', collection);
 		const files = await fs.readdir(directory).catch((error: NodeJS.ErrnoException) => {
 			if (error.code === 'ENOENT') return [];
 			throw error;
 		});
-		for (const file of files.filter((file) => /^[a-z0-9-]+\.md$/.test(file))) {
+		for (const file of files.filter((file) => /^[a-z0-9-]+\.mdx?$/.test(file))) {
 			const content = await fs.readFile(path.join(directory, file), 'utf8');
 			const field = (name: string) => {
 				const value = content.match(new RegExp(`^${name}: (.+)$`, 'm'))?.[1];
@@ -71,7 +83,7 @@ export async function articleInventory(webDir: string) {
 				}
 			};
 			pages.push({
-				url: `/${collection}/${file.slice(0, -3)}/`,
+				url: `/${collection}/${file.replace(/\.mdx?$/, '')}/`,
 				title: field('title'),
 				description: field('description'),
 				primaryKeyword: field('primaryKeyword'),
@@ -139,6 +151,14 @@ async function destination(webDir: string, pathname: string) {
 		if (stat?.isFile()) return file;
 	}
 	const segments = relative.split('/');
+	// A catch-all route would accept any slug, so check the collection entry itself.
+	if (segments.length === 2 && site.collections.includes(segments[0] ?? '')) {
+		for (const ext of ['md', 'mdx']) {
+			const entry = path.join(webDir, 'src/content', `${relative}.${ext}`);
+			if (await fs.stat(entry).catch(() => null)) return entry;
+		}
+		return null;
+	}
 	for (let depth = segments.length - 1; depth >= 0; depth--) {
 		const directory = path.join(webDir, 'src/pages', ...segments.slice(0, depth));
 		const files = await fs.readdir(directory).catch((error: NodeJS.ErrnoException) => {
@@ -164,7 +184,7 @@ export async function auditSeoContent(webDir: string, markdown: string, articleP
 	for (const link of links) {
 		let url: URL;
 		try {
-			url = new URL(link.href, `https://grosslytics.com${articlePath}`);
+			url = new URL(link.href, `${site.url}${articlePath}`);
 		} catch {
 			errors.push(`Invalid link URL: ${link.href}`);
 			continue;
@@ -177,7 +197,7 @@ export async function auditSeoContent(webDir: string, markdown: string, articleP
 			suggestions.push(
 				`Use descriptive anchor text where context does not explain this link: ${link.href}`,
 			);
-		if (url.origin !== 'https://grosslytics.com') {
+		if (url.origin !== site.url) {
 			if (/^https?:$/.test(url.protocol)) externalLinks++;
 			continue;
 		}
@@ -216,7 +236,7 @@ export async function auditSeoContent(webDir: string, markdown: string, articleP
 export async function markdownCanonicalHeader(webDir: string, collection: string, slug: string) {
 	const headersPath = path.join(webDir, 'public/_headers');
 	const route = `/${collection}/${slug}.md`;
-	const canonical = `https://grosslytics.com/${collection}/${slug}`;
+	const canonical = `${site.url}/${collection}/${slug}`;
 	const rule = `${route}\n  Link: <${canonical}>; rel="canonical"\n`;
 	const existing = await fs.readFile(headersPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
 		if (error.code === 'ENOENT') return '';
@@ -232,4 +252,72 @@ export async function markdownCanonicalHeader(webDir: string, collection: string
 		rule: `${existing.endsWith('\n') || !existing ? '' : '\n'}${rule}`,
 		canonical,
 	};
+}
+
+// In an .mdx file these either run as code at build time or stop the build.
+export function mdxProblems(body: string) {
+	const prose = body.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+	const problems: string[] = [];
+	if (/^(import|export)\s/m.test(prose))
+		problems.push('Remove import/export lines; add site components by editing the file afterwards.');
+	if (/[{}]/.test(prose)) problems.push('Put { and } inside code formatting.');
+	if (/<(?![a-zA-Z/])|<https?:/.test(prose))
+		problems.push('Write a literal < as &lt;, use [text](url) links and no HTML comments.');
+	return problems;
+}
+
+type RelatedLink = string | { href: string; title: string; description: string };
+
+export async function writeCollectionArticle(
+	webDir: string,
+	article: {
+		slug: string;
+		title: string;
+		seoTitle?: string;
+		description: string;
+		category?: string;
+		author?: string;
+		related: RelatedLink[];
+		body: string;
+		publishedAt: string;
+	},
+) {
+	const collection = site.collections[0] ?? '';
+	const directory = path.join(webDir, 'src/content', collection);
+	if (!article.category) throw new Error('category is required for this site.');
+	const authors = (await fs.readdir(path.join(webDir, 'src/content/authors'))).map((file) =>
+		file.replace(/\.json$/, ''),
+	);
+	if (!article.author || !authors.includes(article.author))
+		throw new Error(`author must be one of: ${authors.join(', ')}.`);
+	const exists = (slug: string) =>
+		Promise.all(
+			['md', 'mdx'].map((ext) =>
+				fs.stat(path.join(directory, `${slug}.${ext}`)).catch(() => null),
+			),
+		).then((found) => found.some(Boolean));
+	if (await exists(article.slug)) throw new Error(`Page already exists: ${collection}/${article.slug}`);
+	for (const item of article.related)
+		if (typeof item === 'string' && !(await exists(item)))
+			throw new Error(`Related article does not exist: ${item}`);
+	const words = article.body.split(/\s+/).filter(Boolean).length;
+	const metadata = {
+		title: article.title,
+		...(article.seoTitle ? { seoTitle: article.seoTitle } : {}),
+		description: article.description,
+		category: article.category,
+		readTime: `${Math.max(1, Math.round(words / 275))} min read`,
+		publishedAt: article.publishedAt,
+		author: article.author,
+		related: article.related,
+	};
+	const pagePath = path.join(directory, `${article.slug}.mdx`);
+	await fs.writeFile(
+		pagePath,
+		`---\n${Object.entries(metadata)
+			.map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+			.join('\n')}\n---\n\n${article.body}`,
+		{ flag: 'wx' },
+	);
+	return pagePath;
 }

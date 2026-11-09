@@ -6,7 +6,15 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
-import { seoGuidance, planInternalLinks, auditSeoContent, markdownCanonicalHeader } from './seo.js';
+import {
+	seoGuidance,
+	planInternalLinks,
+	auditSeoContent,
+	markdownCanonicalHeader,
+	mdxProblems,
+	site,
+	writeCollectionArticle,
+} from './seo.js';
 import {
 	auditVisuals,
 	planArticleVisuals,
@@ -278,7 +286,7 @@ server.registerTool(
 								'Answer the reader directly, with prerequisites and tradeoffs.',
 								'Choose headings, paragraph lengths, tables, lists and examples that help this reader; no fixed quotas.',
 								'Support consequential claims with accurate primary sources or reproducible evidence. Never invent hands-on tests.',
-								'Rank alternatives by stated criteria and disclose Grosslytics ownership; do not automatically put Grosslytics first.',
+								`Rank alternatives by stated criteria and disclose ${site.name} ownership; do not automatically put ${site.name} first.`,
 								'Use contextual internal links and ensure the article has a crawlable incoming link.',
 							],
 						},
@@ -386,7 +394,7 @@ server.registerTool(
 		const linkReview = await auditSeoContent(
 			webAppDir,
 			markdownBody,
-			slug.startsWith('/') ? slug : `/blog/${slug}/`,
+			slug.startsWith('/') ? slug : `/${site.collections[0] ?? 'blog'}/${slug}/`,
 		);
 		const { internalLinks, externalLinks: externalPrimaryLinks } = linkReview;
 		proofErrors.push(...linkReview.errors);
@@ -443,7 +451,7 @@ server.registerTool(
 	'publish_outrank_astro_post',
 	{
 		description:
-			'Writes a NEW local Astro Markdown article, raw Markdown copy and llms.txt entry. Call plan_article_visuals first; capture helpful real public screenshots with the connected browser and register/embed them, or explain their omission in visualReview. Validates referenced screenshots before writing. Does not deploy, overwrite pages or verify factual claims. Markdown/HTML only, not MDX components.',
+			'Writes a NEW local Astro Markdown article, raw Markdown copy and llms.txt entry. Call plan_article_visuals first; capture helpful real public screenshots with the connected browser and register/embed them, or explain their omission in visualReview. Validates referenced screenshots before writing. Does not deploy, overwrite pages or verify factual claims. Markdown/HTML only, not MDX components. On a content-collection site (SEO_CONTENT_COLLECTIONS) it writes one .mdx guide in that collection instead, ignores `collection`, and requires category and author.',
 		inputSchema: {
 			slug: z
 				.string()
@@ -458,12 +466,32 @@ server.registerTool(
 			primaryKeyword: z.string().min(1),
 			visualReview: visualReviewSchema,
 			answerFirstIntro: z.string().min(1),
-			keyTakeaways: z.array(z.string()).max(5).default([]),
+			keyTakeaways: z.array(z.string()).max(6).default([]),
 			mdxBodySections: z.string().min(1).describe('Markdown only; executable MDX is not supported'),
 			faqs: z
 				.array(z.object({ question: z.string(), answer: z.string() }))
-				.max(6)
+				.max(10)
 				.default([]),
+			seoTitle: z.string().max(60).optional().describe('Content-collection sites: short <title>'),
+			category: z.string().min(1).max(60).optional().describe('Content-collection sites: required'),
+			author: z
+				.string()
+				.regex(/^[a-z0-9-]+$/)
+				.optional()
+				.describe('Content-collection sites: required slug from src/content/authors'),
+			related: z
+				.array(
+					z.union([
+						z.string().regex(/^[a-z0-9-]+$/),
+						z.object({
+							href: z.string().regex(/^\//),
+							title: z.string().min(1),
+							description: z.string().min(1),
+						}),
+					]),
+				)
+				.default([])
+				.describe('Content-collection sites: article slugs or internal pages for Related guides'),
 		},
 	},
 	async ({
@@ -478,15 +506,17 @@ server.registerTool(
 		keyTakeaways,
 		mdxBodySections,
 		faqs,
+		seoTitle,
+		category,
+		author,
+		related,
 	}) => {
 		if (/<[A-Z][A-Za-z]*\b/.test(mdxBodySections))
 			throw new Error('Use plain Markdown instead of MDX components.');
-		const today = new Date().toISOString().split('T')[0];
-		const canonicalHeader = await markdownCanonicalHeader(webAppDir, collection, slug);
-		const canonicalUrl = canonicalHeader.canonical;
-		const markdownTwinUrl = `https://grosslytics.com/${collection}/${slug}.md`;
-		const pagesDir = path.join(webAppDir, 'src/pages', collection);
-		const publicDir = path.join(webAppDir, 'public', collection);
+		const today = new Date().toISOString().slice(0, 10);
+		const usesCollections = site.collections.length > 0;
+		const route = site.collections[0] ?? collection;
+		const pagesDir = path.join(webAppDir, 'src/pages', route);
 		// Refuse collisions with existing hand-written pages and generated comparison routes.
 		for (const ext of ['md', 'mdx', 'astro', 'ts']) {
 			try {
@@ -495,12 +525,12 @@ server.registerTool(
 				if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
 				throw error;
 			}
-			throw new Error(`Page already exists: ${collection}/${slug}`);
+			throw new Error(`Page already exists: ${route}/${slug}`);
 		}
 		try {
 			const routes = await fs.readFile(path.join(pagesDir, '[slug].astro'), 'utf8');
 			if (routes.includes(`slug: '${slug}'`) || routes.includes(`slug: "${slug}"`))
-				throw new Error(`Generated route already exists: ${collection}/${slug}`);
+				throw new Error(`Generated route already exists: ${route}/${slug}`);
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 		}
@@ -508,21 +538,67 @@ server.registerTool(
 			[
 				answerFirstIntro,
 				...(keyTakeaways.length
-					? [`## Key takeaways\n\n${keyTakeaways.map((item) => `- ${item}`).join('\n')}`]
+					? [
+							`${usesCollections ? '**Key takeaways:**' : '## Key takeaways'}\n\n${keyTakeaways.map((item) => `- ${item}`).join('\n')}`,
+						]
 					: []),
 				mdxBodySections,
 				...(faqs.length
 					? [
-							`## Frequently asked questions\n\n${faqs.map((faq) => `### ${faq.question}\n\n${faq.answer}`).join('\n\n')}`,
+							`## ${usesCollections ? 'Common questions' : 'Frequently asked questions'}\n\n${faqs.map((faq) => `### ${faq.question}\n\n${faq.answer}`).join('\n\n')}`,
 						]
 					: []),
 			].join('\n\n') + '\n';
-		const linkReview = await auditSeoContent(webAppDir, body, `/${collection}/${slug}/`);
+		const linkReview = await auditSeoContent(webAppDir, body, `/${route}/${slug}/`);
 		if (linkReview.errors.length)
 			throw new Error(`Article link/markup check failed: ${linkReview.errors.join(' ')}`);
 		const visualEvidence = await auditVisuals(webAppDir, body, visualReview);
 		if (visualEvidence.issues.length)
 			throw new Error(`Visual evidence check failed: ${visualEvidence.issues.join(' ')}`);
+		if (usesCollections) {
+			const problems = mdxProblems(body);
+			if (problems.length) throw new Error(`MDX check failed: ${problems.join(' ')}`);
+			const pagePath = await writeCollectionArticle(webAppDir, {
+				slug,
+				title,
+				seoTitle,
+				description,
+				category,
+				author,
+				related,
+				body,
+				publishedAt: today,
+			});
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify(
+							{
+								status: 'written_locally',
+								pagePath,
+								canonicalUrl: `${site.url}/${route}/${slug}/`,
+								internalLinkPlan: await planInternalLinks(
+									webAppDir,
+									primaryKeyword,
+									`/${route}/${slug}/`,
+								),
+								linkReview,
+								visualEvidence,
+								nextStep:
+									'Review facts and publisher disclosure, add this article to related lists of sibling articles, set ogImage if the site makes per-article cards, then build the site. Nothing has been deployed. Local checks are not Google certification.',
+							},
+							null,
+							2,
+						),
+					},
+				],
+			};
+		}
+		const canonicalHeader = await markdownCanonicalHeader(webAppDir, collection, slug);
+		const canonicalUrl = canonicalHeader.canonical;
+		const markdownTwinUrl = `${site.url}/${collection}/${slug}.md`;
+		const publicDir = path.join(webAppDir, 'public', collection);
 		const metadata = {
 			layout: '../../layouts/Article.astro',
 			title,
@@ -564,7 +640,7 @@ server.registerTool(
 		if (!llmsContent.includes(markdownTwinUrl)) {
 			await fs.appendFile(
 				llmsTxtPath,
-				`${llmsContent ? (llmsContent.endsWith('\n') ? '' : '\n') : '# Grosslytics\n\n## Articles\n'}- [${title.replace(/[\r\n]/g, ' ')}](${markdownTwinUrl}): ${description.replace(/[\r\n]/g, ' ')}\n`,
+				`${llmsContent ? (llmsContent.endsWith('\n') ? '' : '\n') : `# ${site.name}\n\n## Articles\n`}- [${title.replace(/[\r\n]/g, ' ')}](${markdownTwinUrl}): ${description.replace(/[\r\n]/g, ' ')}\n`,
 			);
 		}
 		return {

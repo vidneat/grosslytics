@@ -12,6 +12,13 @@ import { ALL_MIGRATIONS } from '../packages/db-d1/src/migrations.ts';
 const OUT = '.release';
 const run = (cmd: string, args: string[], env?: NodeJS.ProcessEnv) => execFileSync(cmd, args, { stdio: 'inherit', env });
 
+// A wrong ID still deploys cleanly, then silently records no visits. Format matches the IDs from POST /api/stats/sites
+const ownSiteId = process.argv.includes('--keep-env') && process.env.PUBLIC_OWN_SITE_ID;
+if (ownSiteId && !/^gl_[0-9a-f]{12}$/.test(ownSiteId)) {
+	console.error(`PUBLIC_OWN_SITE_ID "${ownSiteId}" is not a real site ID. Copy it from the site's script tag on /app (gl_ followed by 12 letters and digits). Nothing was built or deployed.`);
+	process.exit(1);
+}
+
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(`${OUT}/bundle/web`, { recursive: true });
 

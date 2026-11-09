@@ -25,6 +25,11 @@ Add this server to an MCP client's configuration (use the path to your own copy 
 }
 ```
 
+To use it on another Astro site, point `GROSSLYTICS_WEB_DIR` at that site and add:
+
+- `SEO_SITE_URL` and `SEO_SITE_NAME`: its address and the publisher name used in disclosure advice.
+- `SEO_CONTENT_COLLECTIONS` (for example `guides,tools,docs`): collections under `src/content`, each served at `/<name>/<slug>/`. Internal-link planning reads all of them. Publishing writes one `.mdx` file to the first and needs `category` and `author`; it adds no Markdown copy, `_headers` rule or `llms.txt` entry. Add MDX components by editing the file afterwards.
+
 For development, run `bun packages/seo-mcp/src/index.ts`. The process waits for an MCP client on stdin; stdout is reserved for JSON-RPC.
 
 Tools:

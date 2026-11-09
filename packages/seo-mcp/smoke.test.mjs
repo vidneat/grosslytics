@@ -365,3 +365,85 @@ test('stdio tools research, audit and write articles without overwriting work', 
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test('content-collection sites get guides in their own format and domain', async () => {
+	const root = await mkdtemp(path.join(tmpdir(), 'collection-seo-'));
+	const client = new Client({ name: 'seo-collection-test', version: '1.0.0' });
+	try {
+		const guides = path.join(root, 'src/content/guides');
+		await mkdir(guides, { recursive: true });
+		await mkdir(path.join(root, 'src/content/authors'), { recursive: true });
+		await mkdir(path.join(root, 'src/pages/guides'), { recursive: true });
+		await writeFile(path.join(root, 'src/pages/guides/[...slug].astro'), '');
+		await writeFile(path.join(root, 'src/content/authors/jane-doe.json'), '{}');
+		await writeFile(
+			path.join(guides, 'trim-video-mac.mdx'),
+			'---\ntitle: "Trim video on a Mac"\n---\n',
+		);
+		await client.connect(
+			new StdioClientTransport({
+				command: process.execPath,
+				args: [path.join(packageDir, 'dist/index.js')],
+				env: {
+					...process.env,
+					GROSSLYTICS_WEB_DIR: root,
+					SEO_SITE_URL: 'https://example.app/',
+					SEO_SITE_NAME: 'Example',
+					SEO_CONTENT_COLLECTIONS: 'guides,tools',
+				},
+				stderr: 'pipe',
+			}),
+		);
+		const call = (name, args) => client.callTool({ name, arguments: args });
+		const links = JSON.parse(
+			(await call('plan_internal_links', { keyword: 'trim video' })).content[0].text,
+		);
+		assert.equal(links.candidates[0].url, '/guides/trim-video-mac/');
+		const article = {
+			slug: 'cut-audio-mac',
+			title: 'Cut audio on a Mac',
+			description: 'A short guide.',
+			primaryKeyword: 'cut audio',
+			category: 'How-to',
+			author: 'jane-doe',
+			related: ['trim-video-mac'],
+			visualReview: {
+				decision: 'not-needed',
+				reason: 'This short text guide has no interface to show.',
+			},
+			answerFirstIntro: 'Use the [trim guide](https://example.app/guides/trim-video-mac/).',
+			keyTakeaways: ['One fact.'],
+			mdxBodySections: '## How?\n\nRun `a {b}` in code.',
+			faqs: [{ question: 'Is it free?', answer: 'Yes.' }],
+		};
+		const refused = async (override) => {
+			const result = await call('publish_outrank_astro_post', { ...article, ...override });
+			assert.equal(result.isError, true, JSON.stringify(override));
+		};
+		await refused({ slug: 'a', answerFirstIntro: '[Gone](/guides/missing-guide/)' });
+		await refused({ slug: 'b', author: 'nobody' });
+		await refused({ slug: 'c', category: undefined });
+		await refused({ slug: 'd', related: ['missing-guide'] });
+		await refused({ slug: 'e', mdxBodySections: 'export const x = 1' });
+		await refused({ slug: 'f', mdxBodySections: 'Costs {price}' });
+		await refused({ slug: 'g', mdxBodySections: 'Use 2 < 3' });
+		const published = await call('publish_outrank_astro_post', article);
+		assert.equal(published.isError, undefined, JSON.stringify(published));
+		const result = JSON.parse(published.content[0].text);
+		assert.equal(result.canonicalUrl, 'https://example.app/guides/cut-audio-mac/');
+		assert.equal(result.linkReview.internalLinks, 1);
+		const page = await readFile(path.join(guides, 'cut-audio-mac.mdx'), 'utf8');
+		assert.match(page, /^author: "jane-doe"$/m);
+		assert.match(page, /^readTime: "1 min read"$/m);
+		assert.match(page, /\*\*Key takeaways:\*\*/);
+		assert.match(page, /## Common questions/);
+		assert.doesNotMatch(page, /layout:/);
+		await assert.rejects(readFile(path.join(root, 'public/llms.txt')), { code: 'ENOENT' });
+		await assert.rejects(readFile(path.join(root, 'public/_headers')), { code: 'ENOENT' });
+		await refused({});
+		assert.equal(await readFile(path.join(guides, 'cut-audio-mac.mdx'), 'utf8'), page);
+	} finally {
+		await client.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});

@@ -1,6 +1,6 @@
 # Handoff
 
-The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-07.
+The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-09.
 
 ## What this is
 
@@ -42,9 +42,30 @@ bun run dev:test-site   # port 3000, after filling examples/test-site/config.js
 `.dev.vars` (gitignored) holds `API_TOKEN` and `STRIPE_WEBHOOK_SECRET`. **Never read or print it**; the user pastes the token into `/app` themselves.
 
 Checks:
-- `bun test packages apps`: 45 tests pass.
+- `bun test packages apps`: 54 tests pass.
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
+
+## Content and AI-search plan (2026-11-09, committed on `chore/own-tracking-ai-sources`, not pushed)
+
+- `docs/content-and-aiseo-plan.md` holds the keyword map, competitor page counts, a 12-week calendar, and the AI-citation evidence and actions. The repo is public, so pushing the branch publishes the plan.
+- Measured: Google autocomplete, 17 competitor sitemaps, DuckDuckGo ranking samples, and live AI crawler access (all 200). Not measured: search volumes, keyword difficulty, backlinks, Google rankings, or actual answers from AI chats.
+- Deployed 2026-11-09 as version `2026-11-09-4f1dea7`, from what was then the uncommitted working tree, so the version label does not include these changes and the live site is ahead of GitHub until the branch is pushed and merged. grosslytics.com is registered as site `gl_ee5c6c8cdca1`, and the dashboard password is set. Every deploy needs `PUBLIC_OWN_SITE_ID=gl_ee5c6c8cdca1 CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`, or the tag disappears. Checked live: `/`, `/blog/`, `/docs/` carry the real ID; a browser visit to `/blog/` got a 202 from `/api/event` with no console errors, so the site's data includes one check visit from Claude (source "Direct (Shared Link)"). An earlier deploy the same day used the placeholder `gl_YOUR_ID`; that is replaced.
+- Guard added (runs at build time): with `--keep-env`, `scripts/release.ts` exits before building if `PUBLIC_OWN_SITE_ID` is set but isn't `gl_` plus 12 lowercase hex characters, so `bun run setup` stops before deploying. Run against 3 bad IDs (exit 1), a valid-format ID (built, tag present) and a buyer build (placeholder ignored, no tag). It checks the format only, not that the site exists, and leaving the variable out still deploys without the tag, because self-hosters have no such ID. `bun run setup` itself was not run with a bad ID, to avoid any risk to production.
+- Fixed:
+  - AI classification: `AI_SOURCES` in `packages/shared/src/attribution.ts`, also used by the SQL fallback in `dashboard.ts`, so `utm_source=chatgpt.com` counts as AI Search. Events already stored as Referral keep that category, and a tagged visit is listed as `chatgpt.com`, a separate source row from `chatgpt.com (AI)`.
+  - Own tracking: `Page.astro` adds `g.js` to non-dashboard pages when built with `PUBLIC_OWN_SITE_ID`. Releases for buyers strip `PUBLIC_*`, so they never get it.
+  - To go live: add grosslytics.com as a site on `/app`, then deploy with `PUBLIC_OWN_SITE_ID=<its gl_ id> CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`. Every later deploy needs the variable too, or the tag disappears.
+  - Verified: 54 tests, web and db-d1 typecheck, builds with and without the variable (20 of 20 static pages vs 0). In a local browser, `/blog/?utm_source=chatgpt.com` got a 202 from `/api/event` and the event was stored as AI Search; `/app/demo` has no tag. The test visit was deleted. Not checked on the live site.
+- Found, not fixed: `AI_CRAWLER_AGENTS` lacks `Claude-SearchBot`, `Claude-User`, `Perplexity-User`. `llms.txt` lists the demo as `/app/`.
+- For the user: connect Search Console and Bing Webmaster, decide on turning `CLOUD` on, and confirm the David Mill LinkedIn and X links in the author schema are genuine.
+
+## SEO MCP on VidNeatWeb (2026-11-08, committed on `chore/own-tracking-ai-sources`, not pushed)
+
+- `packages/seo-mcp` now takes `SEO_SITE_URL`, `SEO_SITE_NAME` and `SEO_CONTENT_COLLECTIONS`. Unset, it behaves as before for Grosslytics. With collections set, link planning reads `src/content/<name>`, links to `/<collection>/<slug>/` are checked against real entries, and publishing writes one `.mdx` guide in the first collection (VidNeat's frontmatter, `**Key takeaways:**`, `## Common questions`, read time at 275 words a minute). It refuses unknown authors, missing `related` slugs, and text MDX would run or choke on. No Markdown copy, `_headers` or `llms.txt` changes.
+- Installed as `vidneat-seo` in `~/Applications/VidNeatWeb/.mcp.json` (gitignored there, also uncommitted). It starts when a new Claude session opens in that folder. After changing the MCP, run `bun run --cwd packages/seo-mcp build`.
+- Verified: 2 smoke tests, typecheck; a throwaway guide published through the real server into a disposable copy of VidNeatWeb, then `astro build` (69 pages), `astro check` (0 errors) and `check:links` passed, with title, canonical, author, figure, FAQ heading and related links in the built page. The real VidNeatWeb had no article written and was not deployed.
+- Not done: MDX components (`DemoLoop`, `Screenshot`) are added by editing the guide after publishing. Link planning does not see `.astro` pages such as `/vs/*`. `ogImage` needs a card in VidNeat's `scripts/build-og.mjs`. VidNeat's house rules live in its `rank-ready-article` skill, not in the MCP.
 
 ## Git identity (2026-11-08)
 
@@ -52,20 +73,26 @@ Checks:
 - This repo's local git config sets the vidneat identity. Do not add AI attribution lines to commits or PRs.
 - Any other clone made before the rewrite has stale commit IDs: re-clone it or run `git reset --hard origin/main`.
 
-## Dashboard toolbar flicker (2026-11-08, committed, not deployed)
+## Deploy of 4f1dea7 to grosslytics.com (2026-11-08)
+
+- Wrangler was signed in to ravi923615 (the vidneat account); the user switched it to ravi88927615 (`f6883459…`), and it stays signed in there. Deployed with `CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup` (version `2026-11-08-4f1dea7`). Since the last deploy, only website files had changed.
+- Checked live: `/`, `/app/`, `/app/demo`, `/g.js`, `/api/auth/status`, `/blog/` and all 5 posts, `/authors/david-mill/`, `/compare/` and the comparison pages (including PostHog and DataFast vs DataBull), and `/sitemap-index.xml` all return 200. There is no `X-Robots-Tag`, and the header Star button is live. On the demo toolbar, `backdrop-filter` is `none`. The deploy log shows `TRACKER_ORIGIN` = https://grosslytics.com.
+- README: the PostHog comparison link can be added back now that the page is live.
+
+## Dashboard toolbar flicker (2026-11-08, deployed)
 
 - The user saw the sticky dashboard toolbar (site, attribution, revenue, range) flicker in place. Likely cause: the always-pulsing green "online" dot (`animate-ping`) sits inside a translucent bar with `backdrop-blur-xl`, so the browser recomputes the blur every frame.
 - Fix in `DashboardIsland.tsx`: the toolbar is solid `bg-canvas`, no backdrop blur. `astro build` passes. The user confirmed the flicker is gone.
 - The local dev server started at 11:19 is broken ("Outdated Optimize Dep", islands fail to hydrate, blog routes 404). Restart `bun run dev:web`.
 
-## Blog, comparison hub and SEO MCP committed (2026-11-08, not pushed or deployed)
+## Blog, comparison hub and SEO MCP (2026-11-08, pushed and deployed)
 
 - Committed the previously uncommitted SEO work: `/blog/` with 5 articles, `/authors/david-mill/`, `/compare/` index plus the DataFast, DataBull, Plausible, PostHog and DataFast-vs-DataBull pages, `Article.astro`, schema/sitemap/llms.txt/robots.txt changes, `public/_headers`, comparison screenshots, and `packages/seo-mcp`.
 - `.mcp.json` is now gitignored (it holds local paths). `packages/seo-mcp/README.md` uses `/path/to/grosslytics` instead of local paths.
-- `astro build` passes and outputs every blog and compare page. None of it is on grosslytics.com until a deploy; `/blog/`, `/compare/` and `/compare/posthog-alternative/` return 404 there today.
+- `astro build` passes and outputs every blog and compare page. Live on grosslytics.com since the 4f1dea7 deploy.
 - The running local dev server (started 11:19) lost these routes when the files were stashed during the history rewrite; restart `bun run dev:web` to see them.
 
-## README and GitHub star button (2026-11-08, not committed or deployed)
+## README and GitHub star button (2026-11-08, pushed and deployed)
 
 - `README.md` rewritten for GitHub: hero screenshot, badges, why, features, payment provider table, how it works, self-host, MCP, pricing, tech stack, compare links, contributing, star call-out. The README links were checked against the live site.
 - `docs/screenshots/*.png` are real captures of grosslytics.com and `/app/demo`, taken with headless Chrome at 2x and downscaled to 1600px wide. The demo shows sample data, and the README says so. To refresh them, capture `/app/demo` at a 1440px-wide window and crop.

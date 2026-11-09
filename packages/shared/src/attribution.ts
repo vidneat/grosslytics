@@ -24,6 +24,9 @@ export const SOCIAL_SOURCES = [
 	'bsky',
 ];
 
+/** AI chats, matched by name so a tag like utm_source=chatgpt.com counts without the tracker's "(AI)" label */
+export const AI_SOURCES = ['chatgpt', 'openai', 'perplexity', 'claude', 'gemini', 'copilot'];
+
 export function classifySourceCategory(source: string, medium = '', reported = ''): string {
 	const lower = source.toLowerCase();
 	const social =
@@ -35,7 +38,7 @@ export function classifySourceCategory(source: string, medium = '', reported = '
 		return social || /social/i.test(medium) ? 'Social (Paid)' : 'Paid Search';
 	}
 	if (reported === 'Paid Search' || reported === 'Social (Paid)') return reported;
-	if (lower.includes('(ai)')) return 'AI Search';
+	if (lower.includes('(ai)') || AI_SOURCES.some((name) => lower === name || lower.includes(`${name}.`))) return 'AI Search';
 	if (lower.includes('ai_crawl')) return 'AI Crawler';
 	if (social) return 'Social (Organic)';
 	if (lower.startsWith('direct')) return 'Direct';

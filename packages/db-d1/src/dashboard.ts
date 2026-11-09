@@ -1,5 +1,5 @@
 import { reportingCurrency } from '@grosslytics/shared/money';
-import { classifySourceCategory, dateRangeToTimestamps, tzOffsetSec, SEARCH_SOURCES, SOCIAL_SOURCES } from '@grosslytics/shared/attribution';
+import { classifySourceCategory, dateRangeToTimestamps, tzOffsetSec, AI_SOURCES, SEARCH_SOURCES, SOCIAL_SOURCES } from '@grosslytics/shared/attribution';
 import type { AttributionModel, ChannelStats } from '@grosslytics/shared/types';
 import { allocateAdSpend } from './ad-spend.js';
 import { formatDuration, sourceIcon } from '@grosslytics/shared/dashboard';
@@ -18,7 +18,7 @@ export interface DashboardQuery {
 
 // Historical events without stored dimensions use the same source-only fallback as ingestion.
 const sourceCategory = (source: string) => `CASE
- WHEN lower(${source}) LIKE '%(ai)%' THEN 'AI Search'
+ WHEN lower(${source}) LIKE '%(ai)%' OR ${AI_SOURCES.map((name) => `(lower(${source}) = '${name}' OR lower(${source}) LIKE '%${name}.%')`).join(' OR ')} THEN 'AI Search'
  WHEN lower(${source}) LIKE '%ai_crawl%' THEN 'AI Crawler'
  WHEN lower(${source}) LIKE '%(in-app)%' THEN 'Social (Organic)'
  WHEN lower(${source}) LIKE 'direct%' THEN 'Direct'
