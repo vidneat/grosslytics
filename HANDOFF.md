@@ -46,6 +46,14 @@ Checks:
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
 
+## ChatGPT revenue article (2026-11-09, not committed or deployed)
+
+- New post `/blog/track-chatgpt-traffic-revenue` (week 2 of the plan), written through the SEO MCP. It also added the Markdown copy, `llms.txt` entry, `_headers` canonical and a registered screenshot of the public demo's Sources panel (sample data, labelled).
+- Evidence in the article is a real local run on 2026-11-09: `?utm_source=chatgpt.com` on the test site, Stripe sandbox Payment Link, test card, `stripe listen`. Sale `pi_3UZnUSGX7aKuUifN1mwRcOES` ($9.00, fee $0.56, net $8.44) has first and last touch `chatgpt.com`, category AI Search. It remains in the local database. The article says plainly that the URL was typed, not a real ChatGPT click. The return from Stripe logged as Direct (Shared Link).
+- Verified: MCP audit passes, production build, canonical, TechArticle schema, listed in `/blog/` and the sitemap, docs anchors exist, image loads, no overflow at 375px, no console errors.
+- Not verified: the OpenAI FAQ link redirected to an unrelated Atlas page in the browser pane, so its `utm_source` wording comes from the search index copy of that FAQ. Clickport's and Seoworks' figures are attributed, not checked at source.
+- Deploy with `PUBLIC_OWN_SITE_ID=gl_ee5c6c8cdca1 CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`.
+
 ## Content and AI-search plan (2026-11-09, on `main`, pushed and deployed)
 
 - `docs/content-and-aiseo-plan.md` holds the keyword map, competitor page counts, a 12-week calendar, and the AI-citation evidence and actions. The repo is public, so the plan is publicly readable.

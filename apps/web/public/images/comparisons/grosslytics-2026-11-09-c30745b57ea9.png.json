@@ -1,0 +1,13 @@
+{
+  "product": "Grosslytics",
+  "sourceUrl": "https://grosslytics.com/app/demo",
+  "capturedOn": "2026-11-09",
+  "pageType": "public-demo",
+  "alt": "Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor.",
+  "caption": "The Sources panel of the Grosslytics public demo, which uses sample data. The figures illustrate the layout and say nothing about how ChatGPT traffic performs.",
+  "file": "grosslytics-2026-11-09-c30745b57ea9.png",
+  "width": 1232,
+  "height": 830,
+  "sha256": "c30745b57ea97f4ea7c946628a25280d5a476b12b99e9e2462c667efcbc781c4",
+  "captureMethod": "browser-screenshot"
+}
