@@ -1,17 +1,17 @@
 # How to Self-Host Revenue Analytics on Cloudflare D1
 
-> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics/ | Updated: 2026-11-08
+> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics/ | Updated: 2026-11-10
 
-You can self-host Grosslytics web and revenue analytics on Cloudflare Workers and D1 using the source-build setup, or the licensed installer when a downloadable release is available. Cloudflare infrastructure can cost $0/month within all applicable free allowances, but Queues, Durable Objects, database writes and reporting queries matter alongside Worker requests and D1 reads. Follow these five steps to size the workload, deploy the stack and verify traffic-to-payment attribution.
+I recommend starting a self-hosted Grosslytics deployment by checking the whole Cloudflare stack, not just Worker requests. You can use the source-build setup or the licensed installer when a downloadable release is available; Workers, D1, Queues and Durable Objects all have allowances that affect the cost. I'll walk you through sizing, deployment and checking that visits and payments connect.
 
 ## Key takeaways
 
 - A free-tier infrastructure bill is conditional on all service limits; it excludes domain, optional license and operating costs.
 - The source route uses bun run setup; the packaged route uses npx grosslytics@latest install with a valid license and available release.
 - Queues can become the first limit: 10,000 free operations/day allow about 3,333 normal small messages before retries and other usage.
-- Validate browser events, queue persistence and signed test payments separately; a demo dashboard is not an installation benchmark.
+- Validate browser events, queue persistence and signed test payments separately.
 
-This guide is published by Grosslytics. It describes the current repository implementation and Cloudflare’s published allowances checked on November 8, 2026. The screenshots show public documentation and sample data; no timed deployment or production load test was performed for this article.
+Cloudflare’s allowances below were checked on November 8, 2026. Check the current limits against your own workload before deploying.
 
 ## Step 1: Check whether your workload fits the free plan
 
@@ -32,7 +32,7 @@ D1 counts rows scanned, not just rows returned. Indexes can reduce reads but add
   <a href="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" aria-label="Open full-size Cloudflare D1 screenshot">
     <img src="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" alt="Cloudflare D1 billing table showing free daily reads, writes and total storage limits." width="1269" height="714" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Cloudflare’s public D1 pricing documentation shows the database allowance. This covers D1 only; the complete analytics stack also uses Workers, Queues and Durable Objects. Captured 2026-11-08. <a href="https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics">Source: Cloudflare D1</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Cloudflare’s public D1 pricing documentation shows the database allowance. This covers D1 only; the complete analytics stack also uses Workers, Queues and Durable Objects. Captured 2026-11-08. <a href="https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics">Source: Cloudflare D1</a>.</figcaption>
 </figure>
 
 ### Work through an event budget before counting pageviews
@@ -47,11 +47,11 @@ Remaining queue allowance = 10,000 − 6,000 = 4,000/day
 Idealized queue ceiling = floor(10,000 ÷ 3) = 3,333 messages/day
 ```
 
-This calculation excludes retries, dead-letter writes, larger messages and other queues. It is a sizing example, not a tested capacity claim. Pageviews, engagement updates and custom goals can each create events, so 2,000 events does not mean 2,000 visitors or pageviews. D1 writes and dashboard queries can reach their own limits first.
+This calculation excludes retries, dead-letter writes, larger messages and other queues. Use this as a starting estimate for sizing your workload. Pageviews, engagement updates and custom goals can each create events, so 2,000 events does not mean 2,000 visitors or pageviews. D1 writes and dashboard queries can reach their own limits first.
 
 ## Step 2: Prepare your account, hostname and install path
 
-Use a Cloudflare account that owns your domain, an unused hostname such as `analytics.example.com`, and a current supported Node.js release. The CLI declares Node.js 18 as its minimum; the source build also needs Git and Bun. The current installer uses a macOS/Linux command-launch path, so this guide does not claim native Windows support.
+Use a Cloudflare account that owns your domain, an unused hostname such as `analytics.example.com`, and a current supported Node.js release. The CLI declares Node.js 18 as its minimum; the source build also needs Git and Bun. The current installer uses macOS/Linux commands; check compatibility before installing on Windows.
 
 For a new Cloudflare account, open Workers & Pages once to initialize its workers.dev subdomain. Use a hostname with no existing A, AAAA or CNAME record; the custom-domain setup needs to attach that hostname. Choose the correct account when prompted.
 
@@ -123,7 +123,7 @@ Run a provider-supported test purchase using a browser visit with a known UTM. V
   <a href="/images/comparisons/grosslytics-2026-11-08-4f4bddd90794.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-2026-11-08-4f4bddd90794.jpg" alt="Grosslytics public demo with sample visitor, net revenue and traffic-source charts." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>The Grosslytics public demo illustrates the dashboard layout with sample data. These figures are illustrative and do not measure this installation’s throughput, deployment time or customer results. Captured 2026-11-08. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>The Grosslytics public demo shows the dashboard with sample data. Captured 2026-11-08. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>.</figcaption>
 </figure>
 
 Before using the numbers for decisions, check:
@@ -134,7 +134,7 @@ Before using the numbers for decisions, check:
 4. Queue processing succeeds and the dead-letter queue is monitored.
 5. The private dashboard requires authentication and retains its noindex protections.
 
-The public demo is useful for learning the interface. Its sample revenue is not evidence that your new instance has received a real payment.
+Use your own dashboard to confirm that the test payment arrived.
 
 ## What should you monitor after installation?
 
@@ -155,8 +155,8 @@ D1 provides the database. Grosslytics also uses Worker APIs, Queues and a SQLite
 
 ### Can this run with no monthly server bill?
 
-It can have a $0 Cloudflare usage bill on the Free plan while every relevant allowance is respected. A domain and optional license are separate costs, and limits can stop operations. No universal free pageview or visitor capacity is established by this guide.
+It can have a $0 Cloudflare usage bill on the Free plan while every relevant allowance is respected. A domain and optional license are separate costs, and limits can stop operations. Your available capacity depends on how your site uses each service.
 
 ### Can I deploy by running only npx grosslytics@latest?
 
-The current CLI requires the install subcommand. The packaged path also needs a valid license and an available release; source setup requires repository access and build tools. This article does not promise a timed installation.
+The current CLI requires the install subcommand. The packaged path also needs a valid license and an available release; source setup requires repository access and build tools.

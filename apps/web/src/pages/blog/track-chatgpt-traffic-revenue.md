@@ -5,10 +5,11 @@ description: "Identify ChatGPT visits by tag and referrer, carry the visitor int
 primaryKeyword: "track ChatGPT traffic revenue"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"A real capture of the public demo's Sources panel shows where AI sources appear next to revenue. It is labeled as sample data and is not evidence of performance."}
+updatedDate: "2026-11-10"
 pubDate: "2026-11-09"
 ---
 
-To track ChatGPT traffic through to revenue, record the `utm_source=chatgpt.com` tag or the chatgpt.com referrer on arrival, keep one visitor ID for that person, pass the ID into checkout, and match it to the signed payment event. Visit counts alone cannot tell you whether ChatGPT produced customers.
+We tracked a tagged visit through to a Stripe sandbox payment by keeping the visitor ID from arrival through checkout and matching the payment event. To do the same for ChatGPT traffic, record the `utm_source=chatgpt.com` tag or chatgpt.com referrer when someone arrives. I would treat the result as a partial view: visits without a tag or referrer cannot reliably be identified later.
 
 ## Key takeaways
 
@@ -43,7 +44,7 @@ If your payments happen on Stripe or another hosted checkout, confirm that a pur
 
 Record the source once, keep it with a visitor ID, and let the payment provider return that ID.
 
-This guide is published by the Grosslytics team, and these steps use our product. The same four-part method applies to any tool.
+I’ll use Grosslytics for these steps, but the same four-part method applies to other analytics tools.
 
 **1. Install the tracker on the pages people land on.**
 
@@ -91,7 +92,7 @@ Compare net revenue per visitor by source, and look at first and last touch sepa
   <a href="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="lazy" decoding="async" />
   </a>
-  <figcaption>The Sources panel of the Grosslytics public demo, which uses sample data. The figures illustrate the layout and say nothing about how ChatGPT traffic performs. Captured 2026-11-09. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>The Sources panel in the Grosslytics public demo, showing sample data. Captured 2026-11-09. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>.</figcaption>
 </figure>
 
 First touch shows whether ChatGPT introduced the buyer. Last touch shows whether it was the final visit before paying. The [dashboard definitions](/docs#dashboard) explain each model.

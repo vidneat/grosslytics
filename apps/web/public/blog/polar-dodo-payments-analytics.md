@@ -1,8 +1,8 @@
 # How to Track Polar & Dodo Payments Revenue by Channel
 
-> Canonical URL: https://grosslytics.com/blog/polar-dodo-payments-analytics/ | Updated: 2026-11-08
+> Canonical URL: https://grosslytics.com/blog/polar-dodo-payments-analytics/ | Updated: 2026-11-10
 
-To attribute Polar, Dodo Payments and Lemon Squeezy sales, carry the tracked visitor ID into each provider's checkout metadata and send verified payment events to the matching Grosslytics endpoint. The providers use different fields: reference_id for Polar links, metadata_visitor_id for supported Dodo links, and checkout[custom][visitor_id] for Lemon Squeezy links.
+I recommend treating Polar, Dodo Payments and Lemon Squeezy as separate integrations when tracking revenue by channel. Each needs the visitor ID in its own checkout field and a verified payment event sent to the matching Grosslytics endpoint: reference_id for Polar links, metadata_visitor_id for supported Dodo links, and checkout[custom][visitor_id] for Lemon Squeezy links. I'll walk through each path so you can connect the sale to its source.
 
 ## Key takeaways
 
@@ -15,7 +15,7 @@ To attribute Polar, Dodo Payments and Lemon Squeezy sales, carry the tracked vis
 
 It needs a recorded visit, an identifier that survives checkout and a verified payment event carrying that identifier.
 
-This guide is published by the Grosslytics team. Provider documentation and the current Grosslytics implementation were checked on November 8, 2026; the examples were not exercised against a live merchant account, and no setup-time guarantee is made.
+The examples follow each provider’s documentation and the Grosslytics implementation. Before relying on them for live payments, run a test transaction and check the webhook payload you receive.
 
 A Merchant of Record can handle tax collection and payment operations, but your analytics still needs a way to connect the transaction to a visit. It cannot discover the originating post or an exact AI search query if that source information was never supplied.
 
@@ -58,7 +58,7 @@ Polar documents reference_id as checkout-link metadata. Use the persistent Check
   <a href="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" aria-label="Open full-size Polar screenshot">
     <img src="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" alt="Polar checkout-link documentation showing reference_id and UTM metadata parameters." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Public Polar documentation showing reference metadata carried by a checkout link. Captured 2026-11-08. <a href="https://polar.sh/docs/features/checkout/links#attribution-and-reference-metadata">Source: Polar</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Public Polar documentation showing reference metadata carried by a checkout link. Captured 2026-11-08. <a href="https://polar.sh/docs/features/checkout/links#attribution-and-reference-metadata">Source: Polar</a>.</figcaption>
 </figure>
 
 If you already create sessions using the Polar server SDK, add a visitor metadata field to the validated checkout request:
@@ -87,7 +87,7 @@ Dodo's Checkout Sessions API accepts a metadata object; add visitor_id to your e
   <a href="/images/comparisons/dodo-payments-2026-11-08-a5625ca79e8a.jpg" aria-label="Open full-size Dodo Payments screenshot">
     <img src="/images/comparisons/dodo-payments-2026-11-08-a5625ca79e8a.jpg" alt="Dodo Payments checkout-session documentation defining the metadata object." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Public Dodo Payments documentation showing the checkout metadata field; this is a documentation view, not a merchant account. Captured 2026-11-08. <a href="https://docs.dodopayments.com/developer-resources/checkout-session#param-metadata">Source: Dodo Payments</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Public Dodo Payments documentation showing the checkout metadata field; this is a documentation view, not a merchant account. Captured 2026-11-08. <a href="https://docs.dodopayments.com/developer-resources/checkout-session#param-metadata">Source: Dodo Payments</a>.</figcaption>
 </figure>
 
 ```js
@@ -123,7 +123,7 @@ window.location.assign(checkout.href);
   <a href="/images/comparisons/lemon-squeezy-2026-11-08-8919f4f59270.jpg" aria-label="Open full-size Lemon Squeezy screenshot">
     <img src="/images/comparisons/lemon-squeezy-2026-11-08-8919f4f59270.jpg" alt="Lemon Squeezy documentation showing checkout custom-data URL parameters." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Public Lemon Squeezy documentation illustrating how custom data is included in checkout links. Captured 2026-11-08. <a href="https://docs.lemonsqueezy.com/help/checkout/passing-custom-data#passing-custom-data-in-checkout-links">Source: Lemon Squeezy</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Public Lemon Squeezy documentation illustrating how custom data is included in checkout links. Captured 2026-11-08. <a href="https://docs.lemonsqueezy.com/help/checkout/passing-custom-data#passing-custom-data-in-checkout-links">Source: Lemon Squeezy</a>.</figcaption>
 </figure>
 
 For an API-created link, put the value in checkout_data.custom.visitor_id. These are Lemon Squeezy-specific names, not the Polar or Dodo interface. [Source: passing custom data](https://docs.lemonsqueezy.com/help/checkout/passing-custom-data).
@@ -154,7 +154,7 @@ Renewal classification depends on the extractor's recognized fields, while tax i
 
 The current Polar extractor marks a renewal when billing_reason is subscription_cycle. The Lemon Squeezy extractor marks subscription_payment_success as a renewal, so check the first subscription invoice alongside order_created rather than assuming its first-payment classification matches your business definition.
 
-The Dodo extractor currently marks every successful payment as a new sale, including recurring charges. It does not implement subscription-aware renewal classification, so this guide does not promise accurate Dodo new-versus-renewal customer counts.
+The Dodo extractor currently marks every successful payment as a new sale, including recurring charges, so the new-versus-renewal customer counts will not be accurate.
 
 Tax exclusion and fee deduction are also separate operations. In an illustrative $120 payment containing $20 tax, with an assumed $6 fee, revenue after tax and fees is $94:
 

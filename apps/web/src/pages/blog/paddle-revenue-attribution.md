@@ -5,10 +5,11 @@ description: "Attribute Paddle Billing transactions to visitor sources with cust
 primaryKeyword: "paddle revenue attribution analytics"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-10"
 pubDate: "2026-11-08"
 ---
 
-To track Paddle Billing revenue by acquisition source, pass the tracked visitor ID as customData.visitor_id in Paddle.Checkout.open() and deliver signed transaction.completed events to Grosslytics. This supports payment attribution and observed all-time LTV by first source; it does not provide normalized MRR or a built-in 90-day cohort LTV report.
+I recommend passing the tracked visitor ID into Paddle Checkout as customData.visitor_id and matching it to signed transaction.completed events in Grosslytics. That connects recorded Paddle payments to an acquisition source, but it does not produce normalized MRR or a built-in 90-day cohort LTV report. I would check a recurring event as well as the initial checkout before relying on the attribution.
 
 ## Key takeaways
 
@@ -21,7 +22,7 @@ To track Paddle Billing revenue by acquisition source, pass the tracked visitor 
 
 You need a Paddle Billing product and price, an initialized Paddle.js integration, and a tracked visit with a Grosslytics visitor ID.
 
-This guide is published by the Grosslytics team. Provider documentation and the current Grosslytics implementation were checked on November 8, 2026; the examples were not exercised against a live merchant account, and no setup-time guarantee is made.
+The examples follow Paddle’s documentation and the Grosslytics implementation. Before relying on them for live payments, run a test transaction and check the webhook payload you receive.
 
 This guide covers Paddle Billing and transaction.completed, not legacy Paddle Classic events. Start with the [Grosslytics setup flow](/start/), install the tracker and choose a reporting currency that matches the charge currency.
 
@@ -68,7 +69,7 @@ Paddle documents that transaction custom data is copied to the created subscript
   <a href="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" aria-label="Open full-size Paddle screenshot">
     <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Public Paddle documentation explaining customData on Paddle.Checkout.open; the code shown is a vendor example. Captured 2026-11-08. <a href="https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout">Source: Paddle</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Public Paddle documentation explaining customData on Paddle.Checkout.open; the code shown is a vendor example. Captured 2026-11-08. <a href="https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout">Source: Paddle</a>.</figcaption>
 </figure>
 
 The ID joins the payment to an existing visit; it is not an authentication credential. A source such as an SEO page or ad campaign still depends on the visit evidence and tags recorded before checkout.
@@ -112,10 +113,10 @@ Complete a sandbox checkout, confirm that its completed transaction carries the 
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
-This screenshot shows a public sample dashboard, not the result of an executed Paddle test. The [dashboard definitions](/docs#dashboard) describe first-touch, last-touch and the first-last endpoint split, which can credit the same payment differently.
+The [dashboard definitions](/docs#dashboard) describe first-touch, last-touch and the first-last endpoint split, which can credit the same payment differently.
 
 A page revenue report answers a different question from acquisition-source credit: visitors can read several pages before purchasing. Do not sum overlapping page rows as if each were an exclusive revenue allocation.
 

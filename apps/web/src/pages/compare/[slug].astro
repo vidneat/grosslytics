@@ -38,7 +38,7 @@ export function getStaticPaths() {
 				title: 'GA4 Alternative for SaaS: 1.5 KB, Cookie-Free, Revenue',
 				description: 'A lightweight GA4 alternative for SaaS founders: a 1.5 KB cookie-free script that credits each Stripe or Paddle sale to the channel that brought it.',
 				h1: 'The lightweight GA4 alternative that follows the money.',
-				answer: 'Google Analytics 4 is free and very deep, but its script is about 125 KB, it uses cookies, and revenue only appears if you send ecommerce events yourself. Grosslytics is a 1.5 KB, cookie-free tracker that receives your payment webhooks and shows which channel brought each paying customer, after fees. Keep GA4 if you rely on Google Ads and Search Console integration; switch if you want a one-page answer to “which channels make money?”',
+				answer: 'We recommend keeping Google Analytics 4 if you rely on its Google Ads and Search Console integrations. If you want a focused answer to which channels bring in revenue, consider Grosslytics: its 1.5 KB cookie-free tracker works with payment webhooks to attribute sales after fees. GA4 is free and offers deeper reporting, but its script is about 125 KB and revenue requires ecommerce events to be sent to it.',
 				whatIs: 'Google Analytics 4 is Google’s free web and app analytics. It is event-based, integrates with Google Ads, Search Console and BigQuery, and offers explorations, audiences and multiple attribution settings. It uses cookies, so many regions need a consent banner. User-level data in standard properties is kept for 2 or 14 months, set by you.',
 				rows: [
 					['Tracker size (Brotli)', '125 KB (gtag.js)', US.tracker],
@@ -218,7 +218,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 				<ol class="mt-4 list-decimal space-y-3 pl-6">
 					{switching.map((step) => <li>{step}</li>)}
 				</ol>
-				<p class="mt-4">Setup takes about five minutes. <a class="text-accent hover:underline" href="/start/">Start the setup ›</a></p>
+				<p class="mt-4">Allow time to configure and verify the integration. <a class="text-accent hover:underline" href="/start/">Start the setup ›</a></p>
 			</section>
 
 			<section class="prose-g mt-16 text-[19px] leading-relaxed">

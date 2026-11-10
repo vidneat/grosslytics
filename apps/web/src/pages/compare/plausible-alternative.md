@@ -4,10 +4,11 @@ title: "Plausible vs Grosslytics: SaaS Revenue Tracking Compared"
 description: "Compare Plausible revenue goals with Grosslytics payment webhooks, including renewals, refunds, observed LTV and the difference between payments and MRR."
 primaryKeyword: "plausible revenue tracking alternative"
 format: "comparison"
+updatedDate: "2026-11-10"
 pubDate: "2026-11-08"
 ---
 
-Keep Plausible if purchase-event attribution and privacy-oriented website reporting answer your question; consider Grosslytics as a Plausible revenue tracking alternative when you need provider webhooks, renewal attribution and revenue after estimated fees. Plausible already supports revenue tracking, so this comparison is about payment lifecycle coverage rather than pageviews versus money.
+I'd keep Plausible if its purchase-event attribution and privacy-oriented website reporting answer your question. I'd consider Grosslytics when you need supported provider webhooks, renewal attribution and revenue after estimated fees. Plausible already tracks revenue, so the distinction is how much of the payment lifecycle you need to follow.
 
 ## Key takeaways
 
@@ -22,7 +23,7 @@ Yes: Plausible offers revenue-enabled custom events, rather than only anonymous 
 
 Its [revenue documentation](https://plausible.io/docs/ecommerce-revenue-tracking) describes purchase amounts, currencies, source attribution and checkout-success integrations. It also states that payment-provider webhooks cannot be linked to the visit that led to payment, which is the relevant distinction for background subscription charges.
 
-Published by the Grosslytics team. Competitor facts were checked against linked vendor documentation on November 8, 2026; Grosslytics claims were checked against the current source and product documentation. Recommendations reflect use-case fit, with no paid placement or independent performance score.
+Grosslytics is our product. This comparison draws on vendor documentation checked on November 8, 2026, and the Grosslytics implementation; the recommendations reflect the use cases described below.
 
 If a completed purchase event already answers your ecommerce question, adding a payment ledger may create unnecessary work. If you need renewals arriving without a browser visit, define that requirement explicitly.
 
@@ -48,7 +49,7 @@ Grosslytics' persistent visitor ID helps connect later payments, but that identi
 
 ## What do the public product pages look like?
 
-These screenshots show the public interfaces available on November 8, 2026; demo and sample figures are not comparative performance evidence.
+These screenshots show the public interfaces available on November 8, 2026.
 
 ### Plausible
 
@@ -56,7 +57,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/plausible-public-demo-2026-11-08.jpg" aria-label="Open full-size Plausible screenshot">
     <img src="/images/comparisons/plausible-public-demo-2026-11-08.jpg" alt="Plausible public demo showing visitors, pageviews and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Plausible — public live demo. Captured November 8, 2026. <a href="https://plausible.io/plausible.io">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>Plausible — public live demo. Captured November 8, 2026. <a href="https://plausible.io/plausible.io">View source page</a>.</figcaption>
 </figure>
 
 ### Grosslytics
@@ -65,7 +66,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
 ## What happens when a subscription renews without a pageview?
@@ -90,7 +91,7 @@ monthly_recurring_value = 1200 / 12 = 100
 cash_received_on_charge_date = 1200
 ```
 
-Calling all $1,200 “MRR” would overstate the monthly recurring value twelvefold. The current Grosslytics implementation exposes payments and renewal attribution; this article does not claim it provides a normalized subscription MRR engine.
+Calling all $1,200 “MRR” would overstate the monthly recurring value twelvefold. Grosslytics reports payments and renewal attribution, but does not calculate normalized subscription MRR.
 
 Likewise, observed LTV is historical, rather than a prediction of future renewals. Grosslytics calculates all-time successful net receipts divided by distinct customers, grouped by first-touch source; it does not turn that into a forecast automatically.
 

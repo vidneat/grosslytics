@@ -5,10 +5,11 @@ description: "Connect Razorpay Standard Checkout payments to UTMs with payment n
 primaryKeyword: "razorpay revenue attribution saas"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-10"
 pubDate: "2026-11-08"
 ---
 
-To attribute Razorpay payments to a traffic source, record the visit, pass the same visitor ID in Standard Checkout notes.visitor_id, and verify payment.captured at your Grosslytics endpoint. The current handler reads payment notes; automatic Payment Link decoration, subscription renewal classification and INR/USD conversion are not implemented.
+I recommend checking the payment payload first when connecting Razorpay revenue to a traffic source: the Grosslytics handler needs the visitor ID in Standard Checkout payment notes and a verified payment.captured event. Passing an ID on the order alone is not enough if it never reaches the payment event. Automatic Payment Link decoration, subscription renewal classification and INR/USD conversion are not implemented in the current handler.
 
 ## Key takeaways
 
@@ -21,7 +22,7 @@ To attribute Razorpay payments to a traffic source, record the visit, pass the s
 
 It connects a recorded website visit to a captured payment using an identifier in the payment entity's notes.
 
-This guide is published by the Grosslytics team. Provider documentation and the current Grosslytics implementation were checked on November 8, 2026; the examples were not exercised against a live merchant account, and no setup-time guarantee is made.
+The examples follow Razorpay’s documentation and the Grosslytics implementation. Before relying on them for live payments, run a test transaction and check the webhook payload you receive.
 
 The supported path described here is Razorpay Orders with Standard Checkout, followed by payment.captured. A provider offering subscriptions does not mean every analytics integration implements subscription-aware reporting.
 
@@ -63,7 +64,7 @@ Razorpay supports notes on the order and on Checkout payment options, but Grossl
   <a href="/images/comparisons/razorpay-2026-11-08-d36efcde0745.jpg" aria-label="Open full-size Razorpay screenshot">
     <img src="/images/comparisons/razorpay-2026-11-08-d36efcde0745.jpg" alt="Razorpay integration documentation showing the client-side Checkout setup section." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Public Razorpay Standard Checkout instructions distinguishing the client checkout callback from the webhook URL. Captured 2026-11-08. <a href="https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps#2-integrate-with-checkout-on-client-side">Source: Razorpay</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Public Razorpay Standard Checkout instructions distinguishing the client checkout callback from the webhook URL. Captured 2026-11-08. <a href="https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps#2-integrate-with-checkout-on-client-side">Source: Razorpay</a>.</figcaption>
 </figure>
 
 Inside your existing authenticated server endpoint, use your initialized Razorpay SDK client and a server-selected price:

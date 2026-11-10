@@ -1,8 +1,8 @@
 # PostHog vs Grosslytics: Focused Revenue Attribution
 
-> Canonical URL: https://grosslytics.com/compare/posthog-alternative/ | Updated: 2026-11-08
+> Canonical URL: https://grosslytics.com/compare/posthog-alternative/ | Updated: 2026-11-10
 
-Choose PostHog when revenue analysis needs to sit alongside product behavior, experiments or replay; choose Grosslytics when a focused source-to-payment dashboard and fee-adjusted revenue are the main requirements. PostHog can connect Stripe data, and you do not need to assume every report requires handwritten SQL before deciding whether a smaller tool fits.
+I'd choose PostHog when revenue analysis needs to sit alongside product behavior, experiments or replay. I'd consider Grosslytics for a focused source-to-payment dashboard and fee-adjusted revenue, provided you can do without those broader tools. PostHog can connect Stripe data, and not every report requires handwritten SQL.
 
 ## Key takeaways
 
@@ -15,7 +15,7 @@ Choose PostHog when revenue analysis needs to sit alongside product behavior, ex
 
 A focused tool is enough when your recurring question is which source brought paying customers and what remained after specified costs.
 
-Published by the Grosslytics team. Competitor facts were checked against linked vendor documentation on November 8, 2026; Grosslytics claims were checked against the current source and product documentation. Recommendations reflect use-case fit, with no paid placement or independent performance score.
+Grosslytics is our product. This comparison draws on vendor documentation checked on November 8, 2026, and the Grosslytics implementation; the recommendations reflect the use cases described below.
 
 Write the report you want before choosing the SDK: for example, paid customers, recorded revenue, estimated fees and entered ad spend by source. If that is the entire workflow, a broader product analytics stack may create configuration you do not need.
 
@@ -44,7 +44,7 @@ The row marked “local main build” is our measurement of the current checkout
 
 ## What do the public product pages look like?
 
-These screenshots show the public interfaces available on November 8, 2026; demo and sample figures are not comparative performance evidence.
+These screenshots show the public interfaces available on November 8, 2026.
 
 ### PostHog
 
@@ -52,7 +52,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/posthog-homepage-2026-11-08.jpg" aria-label="Open full-size PostHog screenshot">
     <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="lazy" decoding="async" />
   </a>
-  <figcaption>PostHog — homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>PostHog — homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
 </figure>
 
 ### Grosslytics
@@ -61,7 +61,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
 ## Does PostHog force you to write HogQL for revenue reporting?
@@ -83,7 +83,7 @@ bun install
 bun run --cwd packages/tracker build
 ```
 
-The optional click-map script is separate. The proposed 1.14 KB Grosslytics and approximately 52 KB PostHog comparison is not used because we have not measured equivalent builds and configurations.
+The optional click-map script is separate. A fair size comparison would require equivalent builds and configurations.
 
 PostHog exposes configuration controls for autocapture, session recording and other behavior. Those choices matter when evaluating your actual deployment. [Source: JavaScript configuration](https://posthog.com/docs/libraries/js/config).
 
@@ -148,7 +148,7 @@ No. PostHog includes one million free analytics events per month, while Grosslyt
 
 ### Is Grosslytics a full replacement for PostHog?
 
-Only if your requirements fit its narrower scope. This article does not claim equivalent session replay, experimentation or feature-flag capabilities.
+Only if your requirements fit its narrower scope. Grosslytics does not offer equivalent session replay, experimentation or feature-flag capabilities.
 
 ### Can Grosslytics reveal every AI search query that caused a sale?
 

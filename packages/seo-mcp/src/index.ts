@@ -28,6 +28,9 @@ const webAppDir = path.resolve(
 	process.env.GROSSLYTICS_WEB_DIR ?? fileURLToPath(new URL('../../../apps/web', import.meta.url)),
 );
 
+const editorialVoice =
+	'Open every article by directly answering the reader’s question in a personal first-person voice. Lead with the author’s relevant, verifiable experience or observation and explain what it means for the reader; use I or we naturally throughout to share specific reasoning, tradeoffs and practical guidance. Use I only for the named author and we only for the people actually involved. Say “I read” or “I tested” only when that author actually did so and the claim can be supported; distinguish documentation from hands-on use. If first-hand experience is unavailable, open with an honest editorial assessment grounded in the available evidence and do not imply a test or experience took place. Avoid forced anecdotes, repetitive pronouns, generic filler and internal audit language. Do not imply AI-generated work is human experience.';
+
 const server = new McpServer(
 	{
 		name: 'grosslytics-outrank-seo-engine',
@@ -35,7 +38,7 @@ const server = new McpServer(
 	},
 	{
 		instructions:
-			'Read get_google_seo_guidance and call plan_internal_links before drafting. Google guidance takes priority over editorial heuristics: no link/word/image quotas, fabricated testing, self-serving rankings, keyword stuffing or ranking guarantees. Fact-check claims and disclose publisher interests. Ensure an incoming link from a useful page or collection index. Before creating an article, call plan_article_visuals. Where UI evidence helps, use the connected browser to inspect and capture real public home/demo/pricing/docs pages, then register_article_screenshot and embed its figureMarkdown near the relevant claim. Do not fabricate dashboards or use images to imply human authorship. Explain unnecessary or unavailable screenshots in visualReview. Audit the final body and verify the built page. This server imports captures; it does not control a browser or bypass login/challenges.',
+			`Read get_google_seo_guidance and call plan_internal_links before drafting. Google guidance takes priority over editorial heuristics: no link/word/image quotas, fabricated testing, self-serving rankings, keyword stuffing or ranking guarantees. ${editorialVoice} Fact-check claims and disclose publisher interests. Ensure an incoming link from a useful page or collection index. Before creating an article, call plan_article_visuals. Where UI evidence helps, use the connected browser to inspect and capture real public home/demo/pricing/docs pages, then register_article_screenshot and embed its figureMarkdown near the relevant claim. Do not fabricate dashboards or use images to imply human authorship. Explain unnecessary or unavailable screenshots in visualReview. Audit the final body and verify the built page. This server imports captures; it does not control a browser or bypass login/challenges.`,
 	},
 );
 
@@ -57,7 +60,7 @@ function detectOutrankFormat(keyword: string) {
 			'Editorial suggestion only: answer the query directly, cite primary sources, and include original examples. No ranking or AI-citation guarantee.',
 		templateSkeleton: [
 			"H1: A specific title matching the reader's question",
-			'Intro: Answer the question directly; explain prerequisites or tradeoffs',
+			'Intro: Answer the question in first person with relevant verified experience or an honest evidence-based assessment and a practical tradeoff',
 			'Key takeaways: 3–5 supported points',
 			'H2: Definition, steps, or a fair comparison appropriate to the query',
 			'H2: Worked example with reproducible inputs and primary sources',
@@ -283,6 +286,7 @@ server.registerTool(
 							googleSearchGuidance: seoGuidance,
 							internalLinkPlan: await planInternalLinks(webAppDir, keyword),
 							editorialSuggestionsNotGoogleRequirements: [
+								editorialVoice,
 								'Answer the reader directly, with prerequisites and tradeoffs.',
 								'Choose headings, paragraph lengths, tables, lists and examples that help this reader; no fixed quotas.',
 								'Support consequential claims with accurate primary sources or reproducible evidence. Never invent hands-on tests.',
@@ -418,7 +422,7 @@ server.registerTool(
 							passedAllOutrankChecks: passedAllPasses,
 							limitations: seoGuidance.limitations,
 							linkReview,
-							editorialSuggestions: [...structureErrors, ...lineErrors, ...linkReview.suggestions],
+							editorialSuggestions: [editorialVoice, ...structureErrors, ...lineErrors, ...linkReview.suggestions],
 							primaryKeyword,
 							title,
 							description,
@@ -465,7 +469,7 @@ server.registerTool(
 			description: z.string().min(1).max(500),
 			primaryKeyword: z.string().min(1),
 			visualReview: visualReviewSchema,
-			answerFirstIntro: z.string().min(1),
+			answerFirstIntro: z.string().min(1).describe('Answer the reader directly in a personal first-person voice, using verified experience or an honest evidence-based assessment; never invent first-hand testing.'),
 			keyTakeaways: z.array(z.string()).max(6).default([]),
 			mdxBodySections: z.string().min(1).describe('Markdown only; executable MDX is not supported'),
 			faqs: z

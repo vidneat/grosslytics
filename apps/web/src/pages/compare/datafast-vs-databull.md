@@ -4,25 +4,26 @@ title: "DataFast vs DataBull vs Grosslytics: Costs & Features"
 description: "Compare DataFast, DataBull and Grosslytics across 12 practical criteria, with annual cost scenarios, attribution definitions and a measured local tracker build."
 primaryKeyword: "datafast vs databull"
 format: "comparison"
+updatedDate: "2026-11-10"
 pubDate: "2026-11-08"
 ---
 
-Choose DataFast for a managed revenue attribution service, DataBull for a proprietary self-hosted Cloudflare installation, or Grosslytics for open-source self-hosting and reporting after estimated gateway fees and supplied ad spend. The right choice depends on your payment provider and operating preferences, not a universal feature winner.
+I'd choose between DataFast, DataBull and Grosslytics by first asking who should operate the software and which payment providers you use. DataFast is a managed revenue attribution service, DataBull is a proprietary self-hosted Cloudflare installation, and Grosslytics offers open-source self-hosting and reporting after estimated gateway fees and supplied ad spend. Those tradeoffs matter more than a universal feature winner.
 
 ## Key takeaways
 
 - Compare DataFast at your actual event volume and billing selection; a starting price is not a fixed bill at every traffic level.
 - DataBull offers a $49 self-hosted license plus infrastructure, with a hosted beta also available.
 - Grosslytics lists $5.99/month for 100,000 hosted events, free source self-hosting and a $29 Lifetime option.
-- The comparison below contains 12 specification criteria and cost calculations; it is not a live database performance test.
+- Compare the specifications and cost scenarios against the traffic and integrations you expect to use.
 
 ## What are we comparing?
 
 We compare purchase terms, payment integration and reporting behavior for a founder choosing a revenue attribution tool.
 
-Published by the Grosslytics team. Competitor facts were checked against linked vendor documentation on November 8, 2026; Grosslytics claims were checked against the current source and product documentation. Recommendations reflect use-case fit, with no paid placement or independent performance score.
+Grosslytics is our product. This comparison draws on vendor documentation checked on November 8, 2026, and the Grosslytics implementation; the recommendations reflect the use cases described below.
 
-No live D1 latency or concurrency benchmark was performed. Features, a local script build measurement and hypothetical annual costs are labeled separately so they do not imply a controlled three-product performance test.
+The costs below are scenarios, and the tracker size comes from a local Grosslytics build; the three products were not performance tested.
 
 ## How do the three tools compare across 12 criteria?
 
@@ -49,7 +50,7 @@ Sources: [DataFast features and plans](https://datafa.st/), [DataBull product an
 
 ## What do the public product pages look like?
 
-These screenshots show the public interfaces available on November 8, 2026; demo and sample figures are not comparative performance evidence.
+These screenshots show the public interfaces available on November 8, 2026.
 
 ### DataFast
 
@@ -57,7 +58,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/datafast-public-demo-2026-11-08.jpg" aria-label="Open full-size DataFast screenshot">
     <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>DataFast — public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>DataFast — public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
 </figure>
 
 ### DataBull
@@ -66,7 +67,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/databull-homepage-demo-2026-11-08.jpg" aria-label="Open full-size DataBull screenshot">
     <img src="/images/comparisons/databull-homepage-demo-2026-11-08.jpg" alt="DataBull homepage sample dashboard showing traffic, revenue and referrer reports." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>DataBull — homepage sample dashboard. Captured November 8, 2026. <a href="https://databull.app/#demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>DataBull — homepage sample dashboard. Captured November 8, 2026. <a href="https://databull.app/#demo">View source page</a>.</figcaption>
 </figure>
 
 ### Grosslytics
@@ -75,7 +76,7 @@ These screenshots show the public interfaces available on November 8, 2026; demo
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
 ## What could you pay over twelve months?

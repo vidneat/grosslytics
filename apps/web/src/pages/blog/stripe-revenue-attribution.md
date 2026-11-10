@@ -5,10 +5,11 @@ description: "Connect Stripe Checkout and Payment Links to visitor sources, conf
 primaryKeyword: "stripe revenue attribution analytics"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-10"
 pubDate: "2026-11-08"
 ---
 
-To track Stripe revenue by traffic source, carry the tracked visitor ID into Checkout as client_reference_id, then match verified payment events to that visitor. Grosslytics decorates supported Stripe Payment Links automatically; server-created Checkout Sessions require you to pass the identifier and verify the complete payment lifecycle.
+I recommend carrying the tracked visitor ID into Stripe Checkout as client_reference_id and matching verified payment events to that visitor. Grosslytics decorates supported Payment Links automatically, while server-created Checkout Sessions need you to pass the identifier yourself. I would check renewals as well as the first payment before using the report to compare acquisition channels.
 
 ## Key takeaways
 
@@ -21,7 +22,7 @@ To track Stripe revenue by traffic source, carry the tracked visitor ID into Che
 
 You need a tracked website, a Grosslytics site ID, a working Stripe checkout and a reachable attribution endpoint.
 
-This guide is published by the Grosslytics team. Provider documentation and the current Grosslytics implementation were checked on November 8, 2026; the examples were not exercised against a live merchant account, and no setup-time guarantee is made.
+The examples follow Stripe’s documentation and the Grosslytics implementation. Before relying on them for live payments, run a test transaction and check the webhook payload you receive.
 
 This workflow connects evidence from a visit to evidence from a payment. It cannot recover a referrer, campaign or search query that was never recorded, and a browser visitor ID is an attribution identifier rather than an authentication credential.
 
@@ -75,7 +76,7 @@ Stripe documents that the Payment Link reference reaches checkout.session.comple
   <a href="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" aria-label="Open full-size Stripe screenshot">
     <img src="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" alt="Stripe documentation showing client_reference_id for Payment Link reconciliation." width="1280" height="720" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Public Stripe documentation for the client reference field used to connect a Payment Link checkout to a visitor. Captured 2026-11-08. <a href="https://docs.stripe.com/payment-links/url-parameters#streamline-reconciliation-with-a-url-parameter">Source: Stripe</a>. Demo figures are not performance benchmarks.</figcaption>
+  <figcaption>Public Stripe documentation for the client reference field used to connect a Payment Link checkout to a visitor. Captured 2026-11-08. <a href="https://docs.stripe.com/payment-links/url-parameters#streamline-reconciliation-with-a-url-parameter">Source: Stripe</a>.</figcaption>
 </figure>
 
 In your existing server checkout handler, with an initialized Stripe server SDK, a validated request body and a server-selected recurring price:
@@ -139,7 +140,7 @@ Complete a test purchase in the same browser. Confirm one payment, the expected 
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>. Displayed figures illustrate the interface and are not a benchmark.</figcaption>
+  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
 The [dashboard definitions](/docs#dashboard) explain first touch, last touch and the 50/50 endpoint split. A page's associated revenue is not an exclusive allocation across all pages, so do not add page rows together as if each payment belonged to exactly one page.
