@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, Check, Copy, Loader2 } from 'lucide-react';
-import { DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection } from '../dashboard/api';
-import { Connect } from '../dashboard/connect';
+import { apiFetch, DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from '../dashboard/api';
+import { Connect, FooterGate, FOOTER_SNIPPET } from '../dashboard/connect';
 import { copyText } from '../../lib/clipboard';
 import { CHECKOUT_LIFETIME, CLOUD_PRICE } from '../../lib/checkout';
 
@@ -215,6 +215,9 @@ type Gateway = keyof typeof GATEWAYS;
 
 function SelfHost() {
 	const [conn, setConn] = useState<Connection | null>(null);
+	const [site, setSite] = useState<SiteInfo | null>(null);
+	const [siteError, setSiteError] = useState('');
+	const [siteRetry, setSiteRetry] = useState(0);
 	const [deployed, setDeployed] = useState(false);
 	const [where, setWhere] = useState<'cloudflare' | 'local'>('cloudflare');
 	const [gateway, setGateway] = useState<Gateway>('stripe');
@@ -229,12 +232,44 @@ function SelfHost() {
 		}
 	}, []);
 
+	useEffect(() => {
+		if (!conn) return;
+		const ctl = new AbortController();
+		apiFetch<{ sites: SiteInfo[] }>(conn, '/api/stats/sites', { signal: ctl.signal })
+			.then(({ sites }) => {
+				const selected = sites.find((s) => s.id === conn.siteId);
+				if (!selected) throw new Error('This site is no longer available. Choose another site.');
+				if (!ctl.signal.aborted) setSite(selected);
+			})
+			.catch((error: Error) => {
+				if (!ctl.signal.aborted) setSiteError(error.message);
+			});
+		return () => ctl.abort();
+	}, [conn, siteRetry]);
+
+	const changeSite = (connection: Connection | null) => {
+		saveConnection(connection);
+		setConn(connection);
+		setSite(null);
+		setSiteError('');
+		setOpen(null);
+	};
+
+	const canReadStats = !!site && !site.locked;
 	// Real checks: poll the site's own data until a visit and a sale have arrived
-	const { data } = useRemoteDashboard(conn ? { conn } : null, { range: '30d', model: 'first', mode: 'gross', filters: [] }, tick);
-	const live = useLiveSocket(conn);
-	const hasVisit = (data?.totals.visitors ?? 0) > 0 || (live.online ?? 0) > 0;
-	const hasSale = (data?.sales.length ?? 0) > 0 || (data?.ltv.length ?? 0) > 0 || live.entries.some((e) => e.sale);
-	const waiting = !!conn && (!hasVisit || !hasSale);
+	const { data, footer } = useRemoteDashboard(conn && canReadStats ? { conn } : null, { range: '30d', model: 'first', mode: 'gross', filters: [] }, tick);
+	useEffect(() => {
+		// The first stats request can recheck an expired verification and lock the site again.
+		if (footer && site && !site.locked) {
+			setSite({ ...site, locked: true });
+			setOpen(null);
+		}
+	}, [footer, site]);
+	const ready = canReadStats && !footer;
+	const live = useLiveSocket(ready ? conn : null);
+	const hasVisit = ready && ((data?.totals.visitors ?? 0) > 0 || (live.online ?? 0) > 0);
+	const hasSale = ready && ((data?.sales.length ?? 0) > 0 || (data?.ltv.length ?? 0) > 0 || live.entries.some((e) => e.sale));
+	const waiting = ready && (!hasVisit || !hasSale);
 	useEffect(() => {
 		if (!waiting) return;
 		const t = setInterval(() => setTick((x) => x + 1), 5000);
@@ -244,8 +279,9 @@ function SelfHost() {
 	const statuses: Status[] = [
 		deployed ? 'done' : 'current',
 		conn ? 'done' : deployed ? 'current' : 'todo',
-		!conn ? 'todo' : hasVisit ? 'done' : 'waiting',
-		!conn ? 'todo' : hasSale ? 'done' : 'waiting',
+		!conn ? 'todo' : ready ? 'done' : site || siteError ? 'current' : 'waiting',
+		!ready ? 'todo' : hasVisit ? 'done' : 'waiting',
+		!ready ? 'todo' : hasSale ? 'done' : 'waiting',
 	];
 	const firstOpen = statuses.findIndex((s) => s !== 'done');
 	const isOpen = (i: number) => (open === null ? i === firstOpen : open === i);
@@ -267,7 +303,7 @@ function SelfHost() {
 					</div>
 					{where === 'cloudflare' ? (
 						<>
-							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 18 or newer, a free Cloudflare account, and a domain on that account. About five minutes. Free in exchange for a “Powered by Grosslytics” link in your site’s footer: the dashboard asks for it, and checks it, when you add a site.</p>
+							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 18 or newer, a free Cloudflare account, and a domain on that account. About five minutes.</p>
 							<CopyBlock label="1. Get the code" code={`git clone ${REPO}.git\ncd grosslytics && bun install`} />
 							<CopyBlock label="2. Set up and deploy" code="bun run setup" />
 							<p className="text-[13px]">It asks for a hostname (such as analytics.yourstartup.com) and a dashboard password, then opens Cloudflare: click <strong>Allow</strong>. It creates the database and queues, deploys, and prints your dashboard address and API_TOKEN. Run it again later to update.</p>
@@ -283,28 +319,47 @@ function SelfHost() {
 					<button type="button" className="btn btn-primary" onClick={() => (setDeployed(true), setOpen(1))}>It's running</button>
 				</Step>
 
-				<Step n={2} title="Connect this dashboard and add your site" status={statuses[1]!} open={isOpen(1)} onToggle={toggle(1)} summary={conn && <>Connected to <code className="font-mono text-[12px]">{conn.api}</code>, site <code className="font-mono text-[12px]">{conn.siteId}</code>. <button type="button" className="text-accent hover:underline" onClick={() => (saveConnection(null), setConn(null), setOpen(1))}>Change</button></>}>
+				<Step n={2} title="Connect this dashboard and add your site" status={statuses[1]!} open={isOpen(1)} onToggle={toggle(1)} summary={conn && <>Connected to <code className="font-mono text-[12px]">{conn.api}</code>, site <code className="font-mono text-[12px]">{conn.siteId}</code>. <button type="button" className="text-accent hover:underline" onClick={() => changeSite(null)}>Change</button></>}>
 					<p>Open your own dashboard at <code className="font-mono text-[13px]">https://your-hostname/app</code> and sign in with the password you chose. It shows your tracker snippet and payment webhooks. Or connect it here with your API URL and the API_TOKEN that setup printed, and follow the next steps on this page.</p>
 					<div className="-mx-2">
-						<Connect
-							remote
-							onConnect={(c) => {
-								saveConnection(c);
-								setConn(c);
-								setOpen(null);
-							}}
-						/>
+						<Connect remote onConnect={changeSite} />
 					</div>
 				</Step>
 
-				<Step n={3} title="Add the tracker to your site" status={statuses[2]!} open={isOpen(2)} onToggle={toggle(2)} summary={hasVisit && 'Visits are arriving.'}>
+				<Step n={3} title="Verify your footer link" status={statuses[2]!} open={isOpen(2)} onToggle={toggle(2)} summary={ready ? 'Your site is ready to continue.' : 'Free self-hosting requires a “Powered by Grosslytics” link on your homepage.'}>
+					{!conn ? (
+						<>
+							<p>Add this link to your homepage footer for free self-hosting. Connect your site in step 2 to verify it.</p>
+							<CopyBlock label="Footer link" code={FOOTER_SNIPPET} />
+						</>
+					) : siteError ? (
+						<>
+							<p className="text-down" role="alert">{siteError}</p>
+							<button type="button" className="btn btn-primary" onClick={() => {
+								setSiteError('');
+								setSiteRetry((n) => n + 1);
+							}}>Retry</button>
+						</>
+					) : !site ? (
+						<p role="status">Checking your site's footer status…</p>
+					) : site.locked ? (
+						<FooterGate key={site.id} conn={conn} site={site} onVerified={() => {
+							setSite({ ...site, locked: false });
+							setOpen(null);
+						}} onSwitch={() => changeSite(null)} />
+					) : (
+						<p>Your site is ready to continue.</p>
+					)}
+				</Step>
+
+				<Step n={4} title="Add the tracker to your site" status={statuses[3]!} open={isOpen(3)} onToggle={toggle(3)} summary={hasVisit && 'Visits are arriving.'}>
 					<p>Paste this into the <code className="font-mono text-[13px]">&lt;head&gt;</code> of every page. It's about 1.5 KB compressed and sets no cookies.</p>
 					<CopyBlock label="HTML" code={`<script defer src="${origin}/g.js" data-site-id="${siteId}" data-api="${api}/api/event"></script>`} />
 					<p className="text-[13px]">Then open your site in a new tab. This step turns green as soon as the visit arrives.</p>
 					<p className="text-[13px]">Still waiting? If your site sends a Content-Security-Policy header, add <code className="font-mono">{api || origin}</code> to its <code className="font-mono">script-src</code> and <code className="font-mono">connect-src</code>. Otherwise the browser blocks the tracker and only says so in the console.</p>
 				</Step>
 
-				<Step n={4} title="Connect payments" status={statuses[3]!} open={isOpen(3)} onToggle={toggle(3)} summary={hasSale && 'Sales are being attributed.'}>
+				<Step n={5} title="Connect payments" status={statuses[4]!} open={isOpen(4)} onToggle={toggle(4)} summary={hasSale && 'Sales are being attributed.'}>
 					<div className="flex flex-wrap gap-1.5" role="group" aria-label="Payment provider">
 						{(Object.keys(GATEWAYS) as Gateway[]).map((k) => (
 							<button

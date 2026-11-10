@@ -260,7 +260,7 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 	);
 }
 
-const FOOTER_SNIPPET = '<a href="https://grosslytics.com">Powered by Grosslytics</a>';
+export const FOOTER_SNIPPET = '<a href="https://grosslytics.com">Powered by Grosslytics</a>';
 
 /** Free self-hosted installs: the dashboard stays shut until the site's homepage carries the footer link (the API enforces it; see footer.ts). */
 export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connection; site: SiteInfo; onVerified: () => void; onSwitch: () => void }) {

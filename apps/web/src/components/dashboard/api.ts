@@ -29,6 +29,8 @@ export const loadConnection = (): Connection | null => {
 export const logout = (api: string) => fetch(`${api.replace(/\/$/, '')}/api/auth/logout`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(() => undefined, () => undefined);
 export const saveConnection = (c: Connection | null) => (c ? localStorage.setItem(KEY, JSON.stringify(c)) : localStorage.removeItem(KEY));
 
+class FooterRequiredError extends Error {}
+
 export async function apiFetch<T>(c: Pick<Connection, 'api' | 'token'>, path: string, init?: RequestInit): Promise<T> {
 	const res = await fetch(`${c.api.replace(/\/$/, '')}${path}`, {
 		...init,
@@ -43,9 +45,13 @@ export async function apiFetch<T>(c: Pick<Connection, 'api' | 'token'>, path: st
 		if (res.status === 401) throw new Error(c.token ? 'The API token was rejected.' : 'Your session has ended. Sign in again.');
 		const text = await res.text().catch(() => '');
 		let msg = text;
+		let footer = false;
 		try {
-			msg = JSON.parse(text).error || text;
+			const body = JSON.parse(text);
+			msg = body.error || text;
+			footer = res.status === 403 && body.footer === true;
 		} catch {}
+		if (footer) throw new FooterRequiredError(msg);
 		throw new Error(msg || `Request failed (${res.status}).`);
 	}
 	return res.json() as Promise<T>;
@@ -86,7 +92,7 @@ export function useRemoteDashboard(
 	refreshKey = 0,
 ) {
 	const scope = target ? JSON.stringify(target) : '';
-	const [state, setState] = useState<{ scope: string; data: DashboardData | null; error: string | null; loading: boolean }>({ scope, data: null, error: null, loading: !!target });
+	const [state, setState] = useState<{ scope: string; data: DashboardData | null; error: string | null; loading: boolean; footer?: boolean }>({ scope, data: null, error: null, loading: !!target });
 	const key = JSON.stringify([scope, q, refreshKey]);
 	useEffect(() => {
 		if (!target) {
@@ -106,12 +112,12 @@ export function useRemoteDashboard(
 					});
 		req.then(
 			(data) => !ctl.signal.aborted && setState({ scope, data, error: null, loading: false }),
-			(e: Error) => !ctl.signal.aborted && e.name !== 'AbortError' && setState((s) => ({ scope, data: s.scope === scope ? s.data : null, error: e.message || 'Could not reach the API.', loading: false })),
+			(e: Error) => !ctl.signal.aborted && e.name !== 'AbortError' && setState((s) => ({ scope, data: s.scope === scope ? s.data : null, error: e.message || 'Could not reach the API.', loading: false, footer: e instanceof FooterRequiredError })),
 		);
 		return () => ctl.abort();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [key]);
-	return state.scope === scope ? state : { data: null, error: null, loading: !!target };
+	return state.scope === scope ? state : { data: null, error: null, loading: !!target, footer: false };
 }
 
 interface JourneyEvent {
