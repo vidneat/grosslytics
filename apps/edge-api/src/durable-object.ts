@@ -66,17 +66,17 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 	/** Evicts stale visitors older than 5 minutes */
 	async alarm(): Promise<void> {
 		const cutoff = Date.now() - PRESENCE_TTL_MS;
-		let changed = false;
-
+		const stale: string[] = [];
 		for (const [id, v] of this.visitors.entries()) {
 			if (v.timestamp < cutoff) {
 				this.visitors.delete(id);
-				await this.ctx.storage.delete(`v:${id}`);
-				changed = true;
+				stale.push(`v:${id}`);
 			}
 		}
+		// One storage call per 128 keys (the API's limit) instead of one awaited call per visitor after a traffic spike
+		for (let i = 0; i < stale.length; i += 128) await this.ctx.storage.delete(stale.slice(i, i + 128));
 
-		if (changed) {
+		if (stale.length) {
 			this.broadcastPresence();
 		}
 
@@ -106,6 +106,8 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 	}
 
 	private broadcastPresence(): void {
+		// Nobody watching: don't sort every online visitor on each page view just to throw the message away
+		if (!this.ctx.getWebSockets().length) return;
 		this.broadcast(this.buildPresenceMessage());
 	}
 

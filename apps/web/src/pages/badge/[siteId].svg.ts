@@ -22,13 +22,15 @@ export const GET: APIRoute = async ({ params, url }) => {
 	const label = amount ? 'Verified net, 30 days' : 'Not verified yet';
 	const verifiedAmount = amount ?? '—';
 
+	// One text run, so the amount always starts 8px after the label whatever font the viewer has. SVG can't measure text, so the width is a generous estimate at 12px
+	const w = Math.ceil(32 + label.length * 5.7 + 8 + verifiedAmount.length * 7 + 14);
+
 	const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="210" height="32" viewBox="0 0 210 32" role="img" aria-label="${label} ${verifiedAmount}">
-  <rect x="0.5" y="0.5" width="209" height="31" rx="15.5" fill="#fff" stroke="#d2d2d7"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="32" viewBox="0 0 ${w} 32" role="img" aria-label="${label} ${verifiedAmount}">
+  <rect x="0.5" y="0.5" width="${w - 1}" height="31" rx="15.5" fill="#fff" stroke="#d2d2d7"/>
   <rect x="12" y="11" width="12" height="3.5" rx="1.75" fill="#1d1d1f" opacity="0.28"/>
   <rect x="12" y="17.5" width="8" height="3.5" rx="1.75" fill="#0071e3"/>
-  <text x="32" y="20.5" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12">${label}</text>
-  <text x="196" y="20.5" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" font-weight="600" text-anchor="end">${verifiedAmount}</text>
+  <text x="32" y="20.5" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12">${label}<tspan dx="8" fill="#1d1d1f" font-weight="600">${verifiedAmount}</tspan></text>
 </svg>
 `.trim();
 
@@ -36,7 +38,8 @@ export const GET: APIRoute = async ({ params, url }) => {
 		status: 200,
 		headers: {
 			'Content-Type': 'image/svg+xml',
-			'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400',
+			// a failed lookup must not stick: only a badge with an amount is cached
+			'Cache-Control': amount ? 'public, max-age=300, stale-while-revalidate=86400' : 'no-store',
 			'X-Grosslytics-Site': siteId,
 		},
 	});

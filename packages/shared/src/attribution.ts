@@ -112,17 +112,30 @@ export const isTimeZone = (tz: string) => {
 	}
 };
 
+/** Longest custom range: each day is one chart bucket. */
+export const MAX_CUSTOM_DAYS = 366;
+
 /**
  * Same calendar buckets in the dashboard, channel API and MCP, aligned to the site's local midnight/hour. End is exclusive.
  * shortcut: one fixed offset (the zone's offset now) for the whole range, so days before a DST change are off by an hour; switch to per-day boundaries if users report it.
  */
 export function dateRangeToTimestamps(
-	range: '24h' | '7d' | '30d' | '90d',
+	range: '24h' | '7d' | '30d' | '90d' | '12m' | 'custom',
 	now = Math.floor(Date.now() / 1000),
 	offsetSec = 0,
+	custom?: { from: string; to: string },
 ): { start: number; end: number; step: number; n: number } {
-	const n = range === '24h' ? 24 : range === '7d' ? 7 : range === '90d' ? 90 : 30;
-	const step = range === '24h' ? 3600 : 86400;
-	const end = Math.floor((now + offsetSec) / step) * step + step - offsetSec;
+	if (range === 'custom') {
+		// Whole site-local days, both dates included; anything unusable falls back to 30 days
+		const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 1000;
+		const start = day(custom?.from ?? '') - offsetSec;
+		const n = (day(custom?.to ?? '') - offsetSec + 86400 - start) / 86400;
+		if (n >= 1 && n <= MAX_CUSTOM_DAYS) return { start, end: start + n * 86400, step: 86400, n };
+		range = '30d';
+	}
+	const n = range === '24h' ? 24 : range === '7d' ? 7 : range === '90d' ? 90 : range === '12m' ? 52 : 30;
+	const step = range === '24h' ? 3600 : range === '12m' ? 604800 : 86400;
+	const shift = range === '12m' ? 345600 : 0; // weeks start on Monday; the Unix epoch was a Thursday
+	const end = Math.floor((now + offsetSec - shift) / step) * step + step + shift - offsetSec;
 	return { start: end - n * step, end, step, n };
 }

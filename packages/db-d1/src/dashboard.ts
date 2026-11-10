@@ -3,10 +3,12 @@ import { classifySourceCategory, dateRangeToTimestamps, tzOffsetSec, AI_SOURCES,
 import type { AttributionModel, ChannelStats } from '@grosslytics/shared/types';
 import { allocateAdSpend } from './ad-spend.js';
 import { formatDuration, sourceIcon } from '@grosslytics/shared/dashboard';
-import type { DashboardData, DashFilter, DashMode, DashModel, DashRange, DashRow, DashSale, DashSource } from '@grosslytics/shared/dashboard';
+import type { DashboardData, DashCustomRange, DashFilter, DashMode, DashModel, DashRange, DashRow, DashSale, DashSource } from '@grosslytics/shared/dashboard';
 
 export interface DashboardQuery {
 	range: DashRange;
+	/** Required when range is 'custom' */
+	custom?: DashCustomRange;
 	model: DashModel;
 	mode: DashMode;
 	filters: DashFilter[];
@@ -45,7 +47,8 @@ fv AS (
 	AND (?6 IS NULL OR visitor_id IN (SELECT visitor_id FROM visitors WHERE site_id = ?1 AND country = ?6))
 	AND (?7 IS NULL OR visitor_id IN (SELECT visitor_id FROM visitors WHERE site_id = ?1 AND lower(device_type) = lower(?7)))
 ),
-ev AS (SELECT e.*, ${eventCategory('e')} AS category FROM events e WHERE site_id = ?1 AND created_at >= ?2 AND created_at < ?3 AND event_type != 'ai_crawl' AND visitor_id IN fv),
+ev AS (SELECT e.*, ${eventCategory('e')} AS category FROM events e WHERE site_id = ?1 AND created_at >= ?2 AND created_at < ?3 AND event_type != 'ai_crawl'
+	AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR visitor_id IN fv)), -- unfiltered, every event's visitor is in fv already: skip building it
 vv AS (SELECT * FROM visitors WHERE site_id = ?1 AND visitor_id IN fv),
 pay AS (
 	SELECT * FROM payments WHERE site_id = ?1 AND status = 'succeeded' AND upper(currency) = ?11 AND created_at >= ?2 AND created_at < ?3
@@ -70,6 +73,9 @@ const SQL = {
 	totals: `${CTE} SELECT (SELECT COUNT(*) FROM fv) AS v, (SELECT COALESCE(SUM(gross_amount_cents), 0) FROM pay) AS g, (SELECT COALESCE(SUM(fee_amount_cents), 0) FROM pay) AS f, (SELECT COUNT(*) FROM pay WHERE is_renewal = 0) AS s`,
 	seriesVisitors: `${CTE} SELECT CAST((created_at - ?2) / (SELECT step FROM w) AS INTEGER) AS b, COUNT(DISTINCT visitor_id) AS v FROM ev GROUP BY b`,
 	seriesRevenue: `${CTE} SELECT CAST((created_at - ?2) / (SELECT step FROM w) AS INTEGER) AS b, SUM(gross_amount_cents) AS g, SUM(fee_amount_cents) AS f, SUM(is_renewal = 0) AS s FROM pay GROUP BY b`,
+	// One row per visit: a bounce saw a single page and reached no goal; time is active reading time (the tracker's leave events)
+	sessions: `${CTE} SELECT COUNT(*) AS n, COALESCE(SUM(pv <= 1 AND g = 0), 0) AS b, COALESCE(AVG(t), 0) AS t FROM (
+		SELECT SUM(event_type = 'pageview') AS pv, SUM(event_type = 'goal') AS g, SUM(duration_sec) AS t FROM ev GROUP BY visitor_id, session_id)`,
 	sourceTraffic: `${CTE} SELECT source AS k, COUNT(DISTINCT visitor_id) AS v, COUNT(DISTINCT json_array(visitor_id, session_id)) AS ses,
 	 SUM(event_type = 'pageview') AS pv, SUM(duration_sec) AS rd, AVG(CASE WHEN event_type = 'leave' THEN scroll_depth END) AS sc,
 	 CASE WHEN COUNT(DISTINCT category) = 1 THEN MIN(category) ELSE 'Mixed' END AS cat FROM ev GROUP BY source`,
@@ -94,13 +100,20 @@ const SQL = {
 	LEFT JOIN (SELECT k, AVG(t) AS x FROM (SELECT session_id, event_name AS k, SUM(duration_sec) AS t FROM ev WHERE event_type = 'leave' GROUP BY visitor_id, session_id, event_name) WHERE t > 0 GROUP BY k) rd ON rd.k = pv.k
 	ORDER BY pv.v DESC LIMIT 50`,
 	// One entry per visitor in the period; untracked buyers remain visible so money reconciles.
+	// No join against `entries`: SQLite scans an unindexed CTE once per row, which made this query quadratic (26s of a 27s year view).
+	// Traffic is counted straight off it, and each buyer's entry page is looked up through idx_events_visitor_journey.
 	entry: `${CTE}, entries AS (SELECT visitor_id, k FROM (
 		SELECT visitor_id, event_name AS k, ROW_NUMBER() OVER (PARTITION BY visitor_id ORDER BY created_at, id) AS rn FROM ev WHERE event_type = 'pageview'
 	) WHERE rn = 1)
 	SELECT k, SUM(v) AS v, SUM(g) AS g, SUM(f) AS f, SUM(s) AS s FROM (
-		SELECT COALESCE(e.k, '(not tracked)') AS k, COUNT(*) AS v, 0 AS g, 0 AS f, 0 AS s FROM fv LEFT JOIN entries e USING (visitor_id) GROUP BY k
+		SELECT k, COUNT(*) AS v, 0 AS g, 0 AS f, 0 AS s FROM entries GROUP BY k
 		UNION ALL
-		SELECT COALESCE(e.k, '(not tracked)'), 0, SUM(p.gross_amount_cents), SUM(p.fee_amount_cents), SUM(p.is_renewal = 0) FROM pay p LEFT JOIN entries e USING (visitor_id) GROUP BY e.k
+		SELECT '(not tracked)', (SELECT COUNT(*) FROM fv) - (SELECT COUNT(*) FROM entries), 0, 0, 0 WHERE (SELECT COUNT(*) FROM fv) > (SELECT COUNT(*) FROM entries)
+		UNION ALL
+		SELECT COALESCE(k, '(not tracked)'), 0, SUM(g), SUM(f), SUM(s) FROM (
+			SELECT (SELECT e.event_name FROM events e WHERE e.site_id = ?1 AND e.visitor_id = p.visitor_id AND e.created_at >= ?2 AND e.created_at < ?3 AND e.event_type = 'pageview' ORDER BY e.created_at, e.id LIMIT 1) AS k,
+			p.gross_amount_cents AS g, p.fee_amount_cents AS f, p.is_renewal = 0 AS s FROM pay p
+		) GROUP BY 1
 	) GROUP BY k ORDER BY v DESC LIMIT 50`,
 	exit: `${CTE} SELECT k, COUNT(DISTINCT visitor_id) AS v, 0 AS g, 0 AS f, 0 AS s FROM (
 		SELECT visitor_id, event_name AS k, ROW_NUMBER() OVER (PARTITION BY visitor_id, session_id ORDER BY created_at DESC, id DESC) AS rn FROM ev WHERE event_type IN ('pageview', 'leave')
@@ -127,6 +140,9 @@ const SQL = {
 		(SELECT COUNT(DISTINCT visitor_id) FROM ev WHERE event_type = 'pageview' AND event_name LIKE '/pricing%') AS pricing,
 		(SELECT COUNT(DISTINCT visitor_id) FROM ev WHERE event_type = 'goal') AS goal,
 		(SELECT COUNT(DISTINCT COALESCE(visitor_id, payment_id)) FROM pay WHERE is_renewal = 0) AS paid`,
+	goals: `${CTE} SELECT event_name AS k, COUNT(DISTINCT visitor_id) AS v, COUNT(*) AS n,
+		COUNT(DISTINCT CASE WHEN visitor_id IN (SELECT visitor_id FROM pay) THEN visitor_id END) AS b
+		FROM ev WHERE event_type = 'goal' GROUP BY event_name ORDER BY v DESC LIMIT 20`,
 	timeToConvert: `${CTE} SELECT CASE WHEN time_to_convert_hours < 24 THEN 0 WHEN time_to_convert_hours < 96 THEN 1 WHEN time_to_convert_hours < 192 THEN 2 WHEN time_to_convert_hours < 744 THEN 3 ELSE 4 END AS b, COUNT(*) AS s FROM pay WHERE is_renewal = 0 GROUP BY b`,
 	// Lifetime value is all-time by design: a range would cut renewals off
 	ltv: `${CTE} SELECT first_touch_source AS k, SUM(net_amount_cents) AS net, COUNT(DISTINCT COALESCE(customer_email_hash, visitor_id, payment_id)) AS c
@@ -168,9 +184,9 @@ function buildSources(trafficRows: Rec[], revenueRows: Rec[], adBySource: Map<st
  * ponytail: raw distinct counts until mergeable unique rollups are justified by measured query cost.
  */
 /** A preset range on the site's local calendar, for the channel API and MCP. */
-export async function siteRange(db: D1Database, siteId: string, range: '24h' | '7d' | '30d' | '90d', now = Math.floor(Date.now() / 1000)) {
+export async function siteRange(db: D1Database, siteId: string, range: DashRange, now = Math.floor(Date.now() / 1000), custom?: DashCustomRange) {
 	const site = await db.prepare('SELECT timezone FROM sites WHERE site_id = ?').bind(siteId).first<{ timezone: string | null }>();
-	return dateRangeToTimestamps(range, now, tzOffsetSec(site?.timezone || 'UTC', now));
+	return dateRangeToTimestamps(range, now, tzOffsetSec(site?.timezone || 'UTC', now), custom);
 }
 
 export async function queryChannelStats(db: D1Database, siteId: string, start: number, end: number, model: AttributionModel): Promise<ChannelStats[]> {
@@ -215,7 +231,7 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 	const now = q.now ?? Math.floor(Date.now() / 1000);
 	const off = tzOffsetSec(timezone, now);
 	const { results: excluded } = await db.prepare('SELECT DISTINCT upper(currency) AS currency FROM payments WHERE site_id = ? AND upper(currency) != ? ORDER BY currency').bind(siteId, currency).all<{ currency: string }>();
-	const { n, step, start, end } = dateRangeToTimestamps(q.range, now, off);
+	const { n, step, start, end } = dateRangeToTimestamps(q.range, now, off, q.custom);
 	const prevStart = start - n * step;
 
 	const f = (dim: DashFilter['dim']) => q.filters.find((x) => x.dim === dim)?.value ?? null;
@@ -224,10 +240,10 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 
 	const names = Object.keys(SQL) as Q[];
 	const stmts = names.map((k) => db.prepare(SQL[k]).bind(...params(start, end)));
-	for (const k of ['totals', 'seriesVisitors', 'seriesRevenue', 'adSpend'] as const) stmts.push(db.prepare(SQL[k]).bind(...params(prevStart, start)));
+	for (const k of ['totals', 'seriesVisitors', 'seriesRevenue', 'adSpend', 'sessions'] as const) stmts.push(db.prepare(SQL[k]).bind(...params(prevStart, start)));
 	const results = await db.batch<Rec>(stmts);
 	const r = Object.fromEntries(names.map((k, i) => [k, results[i]!.results])) as Record<Q, Rec[]>;
-	const [prevTotals, prevVisitors, prevRevenue, prevAd] = results.slice(names.length).map((x) => x.results);
+	const [prevTotals, prevVisitors, prevRevenue, prevAd, prevSessions] = results.slice(names.length).map((x) => x.results);
 
 	// Ad spend: by source and by day. Only a source filter can scope it; other filters can't split ad spend.
 	const anyFilter = q.filters.length > 0;
@@ -261,7 +277,11 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 
 	const t = r.totals[0] ?? {};
 	const pt = prevTotals?.[0] ?? {};
-	const totals = { visitors: Number(t.v ?? 0), gross: Number(t.g ?? 0), fee: Number(t.f ?? 0), ad: adTotal, revenue: 0, sales: Number(t.s ?? 0) };
+	const visits = (rows: Rec[] | undefined) => {
+		const x = rows?.[0] ?? {};
+		return { bounce: x.n ? Number(x.b) / Number(x.n) : 0, sessionSec: Math.round(Number(x.t ?? 0)) };
+	};
+	const totals = { visitors: Number(t.v ?? 0), gross: Number(t.g ?? 0), fee: Number(t.f ?? 0), ad: adTotal, revenue: 0, sales: Number(t.s ?? 0), ...visits(r.sessions) };
 	totals.revenue = money(totals.gross, totals.fee, adTotal);
 
 	const fill = (rows: Rec[] | undefined, pick: (x: Rec, b: number) => number) => {
@@ -307,7 +327,7 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 		excludedCurrencies: excluded.map((row) => row.currency),
 		adSpendAvailable: !q.filters.some((filter) => filter.dim !== 'source'),
 		totals,
-		prev: { visitors: Number(pt.v ?? 0), revenue: money(Number(pt.g ?? 0), Number(pt.f ?? 0), prevAdTotal), sales: Number(pt.s ?? 0) },
+		prev: { visitors: Number(pt.v ?? 0), revenue: money(Number(pt.g ?? 0), Number(pt.f ?? 0), prevAdTotal), sales: Number(pt.s ?? 0), ...visits(prevSessions) },
 		series: {
 			n,
 			start,
@@ -344,6 +364,7 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 			{ label: 'Reached a goal', count: Number(fu.goal ?? 0) },
 			{ label: 'Paid', count: Number(fu.paid ?? 0) },
 		],
+		goals: r.goals.map((x) => ({ key: String(x.k), visitors: Number(x.v), completions: Number(x.n), buyers: Number(x.b) })),
 		timeToConvert: ['Same day', '1–3 days', '4–7 days', '8–30 days', '30+ days'].map((label, i) => ({ label, share: ttc[i]! / ttcSum })),
 		ltv: r.ltv.map((x) => ({ key: String(x.k), icon: sourceIcon(String(x.k)), ltv: Math.round(x.net / x.c), customers: Number(x.c) })),
 		direct: directish

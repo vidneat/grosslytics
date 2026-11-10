@@ -4,7 +4,8 @@
  * No Math.random here: server and client render identical markup.
  */
 
-import type { DashboardData, DashFilter, DashMode, DashModel, DashRange, DashRow, DashSale } from '@grosslytics/shared/dashboard';
+import { dateRangeToTimestamps } from '@grosslytics/shared/attribution';
+import type { DashboardData, DashCustomRange, DashFilter, DashMode, DashModel, DashRange, DashRow, DashSale } from '@grosslytics/shared/dashboard';
 
 export type Range = DashRange;
 export type Model = DashModel;
@@ -17,8 +18,6 @@ type Row = DashRow;
 /** The demo's fixed "now": end of 2026-03-31 UTC, so server and client render the same labels. */
 export const DEMO_NOW = Date.UTC(2026, 2, 31, 23, 30) / 1000;
 
-const RANGE_SCALE: Record<Range, number> = { '24h': 1 / 30, '7d': 7 / 30, '30d': 1, '90d': 3 };
-export const RANGE_POINTS: Record<Range, number> = { '24h': 24, '7d': 7, '30d': 30, '90d': 90 };
 const FEE_RATE = 0.0296;
 
 // lastTouch: share of revenue this source gets when credited by last touch instead of first.
@@ -120,13 +119,24 @@ function wave(n: number, total: number, seed: number, lift = 0.5): number[] {
 	return raw.map((r) => (r / sum) * total);
 }
 
+// Named goals: share of visitors who reach each, completions per person, share of buyers who did
+const GOALS = [
+	{ key: 'signup', share: 0.031, repeat: 1.02, buyers: 0.92 },
+	{ key: 'checkout', share: 0.018, repeat: 1.3, buyers: 0.97 },
+	{ key: 'newsletter', share: 0.012, repeat: 1, buyers: 0.08 },
+	{ key: 'docs_copy_snippet', share: 0.009, repeat: 1.8, buyers: 0.21 },
+	{ key: 'book_demo', share: 0.004, repeat: 1.1, buyers: 0.11 },
+];
+
 export const ANNOTATIONS_30D = [
 	{ at: 8, label: 'Launched on Product Hunt' },
 	{ at: 20, label: 'New pricing page' },
 ];
 
-export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filter[]): DashboardData {
-	const scale = RANGE_SCALE[range];
+export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filter[], custom?: DashCustomRange): DashboardData {
+	// Same buckets as the real API; the sample totals scale with the length of the range (30 days = 1)
+	const { n, step, start: seriesStart } = dateRangeToTimestamps(range, DEMO_NOW, 0, custom);
+	const scale = (n * step) / (30 * 86400);
 	const weight = (last: number) => (model === 'first' ? 1 : model === 'last' ? last : (1 + last) / 2);
 
 	// Filters narrow everything to a share of traffic (demo approximation of a real query).
@@ -182,6 +192,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		{ visitors: 0, gross: 0, fee: 0, ad: 0, revenue: 0, sales: 0 },
 	);
 	const totalVisitors = totals.visitors;
+	const visits = { bounce: 0.46, sessionSec: 188 }; // sample values, the same for every range
 	const totalRevenue = totals.revenue;
 	const detailRevenue = mode === 'gross' ? totals.gross : totals.gross - totals.fee;
 
@@ -207,15 +218,12 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		}));
 
 	// Time series for current and previous period
-	const n = RANGE_POINTS[range];
-	const visitSeries = wave(n, totalVisitors, 3, 0.4);
+	const visitSeries = wave(n, totalVisitors, 3, 0.4).map(Math.round); // people come in whole numbers
 	const grossSeries = wave(n, totals.gross, 7, 0.6);
 	const k = totals.gross ? totalRevenue / totals.gross : 0;
 	const revenueSeries = grossSeries.map((g) => g * k);
-	const step = range === '24h' ? 3600 : 86400;
-	const seriesStart = Math.floor(DEMO_NOW / step) * step - (n - 1) * step;
 	const start30 = Math.floor(DEMO_NOW / 86400) * 86400 - 29 * 86400;
-	const prevVisit = wave(n, totalVisitors * 0.89, 11, 0.2);
+	const prevVisit = wave(n, totalVisitors * 0.89, 11, 0.2).map(Math.round);
 	const prevRevenue = wave(n, totalRevenue * 0.85, 13, 0.2);
 	const salesSeries = revenueSeries.map((r) => (totalRevenue ? (r / totalRevenue) * totals.sales : 0));
 	const prevSales = prevRevenue.map((r) => (totalRevenue ? (r / (totalRevenue * 0.85)) * totals.sales * 0.9 : 0));
@@ -273,7 +281,7 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 	];
 
 	return {
-		totals,
+		totals: { ...totals, ...visits },
 		sources: shown.map((s) => ({ ...s, note: s.cat })),
 		groups: [...groups.values()],
 		campaigns: CAMPAIGNS.map((c) => ({ key: c.key, label: c.key, visitors: Math.round(totalVisitors * c.share), revenue: detailRevenue * c.rev, sales: totals.sales * c.rev, note: c.note })),
@@ -290,10 +298,11 @@ export function buildDemo(range: Range, model: Model, mode: Mode, filters: Filte
 		heat,
 		heatRefunds,
 		funnel,
+		goals: GOALS.map((g) => ({ key: g.key, visitors: Math.round(totalVisitors * g.share), completions: Math.round(totalVisitors * g.share * g.repeat), buyers: Math.round(totals.sales * g.buyers) })),
 		timeToConvert,
 		ltv,
 		direct,
-		prev: { visitors: totalVisitors * 0.89, revenue: totalRevenue * 0.85, sales: totals.sales * 0.9 },
+		prev: { visitors: totalVisitors * 0.89, revenue: totalRevenue * 0.85, sales: totals.sales * 0.9, bounce: 0.45, sessionSec: 172 },
 		live: false,
 		currency: 'USD',
 		timezone: 'UTC',

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { DashboardData, DashFilter, DashMode, DashModel, DashRange, DashSale } from '@grosslytics/shared/dashboard';
+import type { DashboardData, DashCustomRange, DashFilter, DashMode, DashModel, DashRange, DashSale } from '@grosslytics/shared/dashboard';
 import { formatMoney } from '@grosslytics/shared/money';
 import { formatDuration } from '@grosslytics/shared/dashboard';
 import type { JourneyStep } from './demo';
@@ -63,8 +63,15 @@ export interface SiteInfo {
 	locked?: boolean;
 }
 
-const dashQuery = (q: { range: DashRange; model: DashModel; mode: DashMode; filters: DashFilter[] }) => {
-	const p = new URLSearchParams({ range: q.range, model: q.model, mode: q.mode });
+type DashQ = { range: DashRange; custom?: DashCustomRange; model: DashModel; mode: DashMode; filters: DashFilter[] };
+
+/** `range=…` plus the dates of a custom range, for any stats endpoint. */
+export const rangeQuery = (range: DashRange, custom?: DashCustomRange) => new URLSearchParams({ range, ...(range === 'custom' ? custom : {}) });
+
+const dashQuery = (q: DashQ) => {
+	const p = rangeQuery(q.range, q.custom);
+	p.set('model', q.model);
+	p.set('mode', q.mode);
 	for (const f of q.filters) p.set(f.dim, f.value);
 	return p;
 };
@@ -75,7 +82,7 @@ const dashQuery = (q: { range: DashRange; model: DashModel; mode: DashMode; filt
  */
 export function useRemoteDashboard(
 	target: { conn: Connection } | { shareDomain: string } | null,
-	q: { range: DashRange; model: DashModel; mode: DashMode; filters: DashFilter[] },
+	q: DashQ,
 	refreshKey = 0,
 ) {
 	const scope = target ? JSON.stringify(target) : '';
@@ -162,6 +169,9 @@ export function useLiveSocket(conn: Connection | null) {
 		let ws: WebSocket | null = null;
 		let timer: ReturnType<typeof setTimeout>;
 		let closed = false;
+		let pending: any;
+		let flush: ReturnType<typeof setTimeout> | undefined;
+		let first = true; // the snapshot sent on connect shows immediately
 		const open = () => {
 			const url = `${conn.api.replace(/^http/, 'ws').replace(/\/$/, '')}/api/stats/live?siteId=${encodeURIComponent(conn.siteId)}&token=${encodeURIComponent(conn.token)}`;
 			ws = new WebSocket(url);
@@ -170,11 +180,18 @@ export function useLiveSocket(conn: Connection | null) {
 				if (closed) return;
 				const msg = JSON.parse(String(m.data));
 				if (msg.type === 'presence') {
-					setState((current) => {
-						const sales = current.entries.filter((e) => e.sale);
-						const visits: LiveEntry[] = msg.recentVisitors.map((v: any) => ({ id: `${v.visitorId}-${v.timestamp}`, cc: v.country, city: v.city, page: v.page, src: v.source, at: v.timestamp / 1000 }));
-						return { ...current, scope, online: msg.onlineVisitors, entries: [...sales, ...visits].sort((a, b) => b.at - a.at).slice(0, 8) };
-					});
+					// A busy site sends one of these per page view, and each update redraws the whole dashboard: keep the newest and apply at most one a second
+					pending = msg;
+					flush ??= setTimeout(() => {
+						flush = undefined;
+						const latest = pending;
+						setState((current) => {
+							const sales = current.entries.filter((e) => e.sale);
+							const visits: LiveEntry[] = latest.recentVisitors.map((v: any) => ({ id: `${v.visitorId}-${v.timestamp}`, cc: v.country, city: v.city, page: v.page, src: v.source, at: v.timestamp / 1000 }));
+							return { ...current, scope, online: latest.onlineVisitors, entries: [...sales, ...visits].sort((a, b) => b.at - a.at).slice(0, 8) };
+						});
+					}, first ? 0 : 1000);
+					first = false;
 				} else if (msg.type === 'sale') {
 					setState((current) => ({ ...current, sales: current.sales + 1, entries: [{ id: `sale-${msg.timestamp}`, cc: msg.country, city: '', page: msg.planName || '', src: msg.lastTouchSource, at: msg.timestamp / 1000, sale: msg.grossAmountCents }, ...current.entries].slice(0, 8) }));
 				}
@@ -188,6 +205,7 @@ export function useLiveSocket(conn: Connection | null) {
 		return () => {
 			closed = true;
 			clearTimeout(timer);
+			clearTimeout(flush);
 			ws?.close();
 		};
 	}, [scope]);

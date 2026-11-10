@@ -1,13 +1,13 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react';
 import { Bot, Download, FileSpreadsheet, History, MousePointerClick, Users } from 'lucide-react';
 import { apiFetch, type Connection } from './api';
-import { CurrencyContext, num, Panel } from './ui';
+import { CurrencyContext, downloadCsv, num, Panel } from './ui';
 
-type Range = '24h' | '7d' | '30d' | '90d';
 type Hit = { k: string; hits: number };
 type ClickRow = { page: string; el: string | null; clicks: number; visitors: number; dead: number; rage: number; buyers: number };
 
-const q = (conn: Connection, range: Range) => `siteId=${encodeURIComponent(conn.siteId)}&range=${range}`;
+/** `range` is the query string from `rangeQuery()` */
+const q = (conn: Connection, range: string) => `siteId=${encodeURIComponent(conn.siteId)}&${range}`;
 const apiBase = (conn: Connection) => (conn.api || (typeof location === 'undefined' ? '' : location.origin)).replace(/\/$/, '');
 
 /** GET once per (path) change; errors show as a sentence. */
@@ -41,7 +41,7 @@ function HitList({ rows, unit }: { rows: Hit[]; unit: string }) {
 }
 
 /** AI crawlers don't run JavaScript, so these hits come from a few lines of server code on the owner's site. */
-export function AiCrawlers({ conn, range }: { conn: Connection; range: Range }) {
+export function AiCrawlers({ conn, range }: { conn: Connection; range: string }) {
 	const { data, error } = useGet<{ bots: Hit[]; pages: Hit[] }>(conn, `/api/stats/ai-crawls?${q(conn, range)}`);
 	const empty = data && data.bots.length === 0;
 	return (
@@ -63,7 +63,7 @@ export function AiCrawlers({ conn, range }: { conn: Connection; range: Range }) 
 }
 
 /** Clicks from the opt-in c.js script, grouped by page and element. */
-export function ClickMap({ conn, range }: { conn: Connection; range: Range }) {
+export function ClickMap({ conn, range }: { conn: Connection; range: string }) {
 	const { data, error } = useGet<{ clicks: ClickRow[] }>(conn, `/api/stats/clicks?${q(conn, range)}`);
 	const snippet = `<script defer src="${apiBase(conn)}/c.js" data-site-id="${conn.siteId}"></script>`;
 	return (
@@ -217,14 +217,7 @@ export function Waitlist({ conn }: { conn: Connection }) {
 	const { data, error } = useGet<{ signups: Array<{ email: string; plan: string; createdAt: number }> }>(conn, '/api/stats/waitlist');
 	if (error || !data) return null;
 	const list = data.signups;
-	const download = () => {
-		const csv = ['email,plan,joined', ...list.map((s) => `${s.email},${s.plan},${new Date(s.createdAt * 1000).toISOString()}`)].join('\n');
-		const a = document.createElement('a');
-		a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-		a.download = 'grosslytics-waitlist.csv';
-		a.click();
-		URL.revokeObjectURL(a.href);
-	};
+	const download = () => downloadCsv('grosslytics-waitlist.csv', [['email', 'plan', 'joined'], ...list.map((x) => [x.email, x.plan, new Date(x.createdAt * 1000).toISOString()])]);
 	return (
 		<Card title={`Waitlist (${num(list.length)})`} icon={<Users size={15} />}>
 			<p className="mt-1 text-[13px] text-ink-2">Emails from “Join the waitlist” on /start. Nothing is sent to them automatically: write to them yourself when the plan opens.</p>

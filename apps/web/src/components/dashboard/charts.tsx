@@ -1,122 +1,146 @@
 import { useState } from 'react';
-import { num, useMoney, useWidth } from './ui';
+import { Delta, num, useMoney, useWidth } from './ui';
 
 export interface Point {
 	label: string;
 	value: number;
 	prev?: number;
-	fee?: number; // stacked on top of value (gross mode)
+	/** Extra tooltip lines: [label, formatted value] */
+	rows?: Array<[string, string]>;
 	note?: string;
+	/** Sales in this bucket, drawn as a green marker above the bar; 0 or missing draws nothing */
+	sales?: number;
 }
 
-const H = 220;
-const PAD = { top: 18, right: 8, bottom: 24, left: 52 };
+const H = 260;
+const PAD = { top: 26, right: 10, bottom: 26, left: 52 };
+const TICKS = [0, 0.25, 0.5, 0.75, 1];
 
 function niceCeil(v: number): number {
 	if (v <= 0) return 1;
 	const mag = 10 ** Math.floor(Math.log10(v));
-	return [1, 2, 2.5, 4, 5, 10].map((m) => m * mag).find((x) => x >= v) ?? 10 * mag;
+	return [1, 2, 4, 5, 8, 10].map((m) => m * mag).find((x) => x >= v) ?? 10 * mag; // all divide cleanly into four steps
 }
 
 /**
- * Single-metric time chart (one y-axis): bars for money, a line for counts and ratios.
- * Previous period is a dashed line of the same metric. Hover shows a crosshair and tooltip.
+ * Bar chart of one metric over time, one y-axis. The previous period is a faint wider bar behind each bar, so there are no lines to untangle.
+ * Hover or touch shows a tooltip with every number for that bucket.
  */
-export function MainChart(props: { points: Point[]; kind: 'bars' | 'line'; format: (v: number) => string; showPrev: boolean; stacked: boolean }) {
+export function MainChart(props: {
+	points: Point[];
+	color: string;
+	format: (v: number) => string;
+	showPrev: boolean;
+	/** The last bucket is still filling up (today, or this hour) */
+	partial?: boolean;
+}) {
 	const [ref, width] = useWidth<HTMLDivElement>();
 	const [hover, setHover] = useState<number | null>(null);
 	const pts = props.points;
 	const n = pts.length;
 	const innerW = Math.max(0, width - PAD.left - PAD.right);
 	const innerH = H - PAD.top - PAD.bottom;
-	const peak = Math.max(...pts.map((p) => p.value + (props.stacked ? p.fee ?? 0 : 0)), ...(props.showPrev ? pts.map((p) => p.prev ?? 0) : [0]));
+	const peak = Math.max(...pts.map((p) => p.value), ...(props.showPrev ? pts.map((p) => p.prev ?? 0) : [0]));
 	const ceil = niceCeil(peak);
 	const step = innerW / Math.max(1, n);
 	const x = (i: number) => PAD.left + step * (i + 0.5);
-	const y = (v: number) => PAD.top + innerH - (v / ceil) * innerH;
-	const barW = Math.max(2, Math.min(22, step * 0.62));
-	const line = (vals: number[]) => vals.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ');
-	const ticks = [0, 0.5, 1];
-	const labelEvery = Math.ceil(n / 6);
+	const y = (v: number) => PAD.top + innerH - (Math.max(0, v) / ceil) * innerH; // profit can dip below zero; the axis starts at 0
+	const barW = Math.max(2, Math.min(26, step * 0.56));
+	const ghostW = Math.min(step * 0.9, barW + Math.max(2, barW * 0.5));
+	// rounded top, square foot, so bars sit on the baseline
+	const bar = (i: number, v: number, w: number) => {
+		const top = y(v);
+		const base = y(0);
+		const r = Math.min(5, w / 2, (base - top) / 2);
+		return `M${x(i) - w / 2},${base} V${top + r} q0,${-r} ${r},${-r} h${w - 2 * r} q${r},0 ${r},${r} V${base} Z`;
+	};
+	let noteEnd = 0; // right edge of the last note label drawn
+	const labelEvery = Math.ceil(n / Math.max(2, Math.floor(innerW / 80)));
 	const h = hover;
+	const at = h === null ? undefined : pts[h];
+	const move = (e: React.PointerEvent<SVGSVGElement>) => {
+		const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - PAD.left) / step);
+		setHover(i >= 0 && i < n ? i : null);
+	};
 
 	return (
 		<div ref={ref} className="relative w-full select-none" style={{ height: H }}>
 			{width > 0 && (
-				<svg width={width} height={H} role="img" aria-label="Chart of the selected metric over time" onMouseLeave={() => setHover(null)}>
-					{ticks.map((t) => (
+				<svg width={width} height={H} role="img" aria-label="Chart of the selected metric over time" className="touch-pan-y" onPointerMove={move} onPointerDown={move} onPointerLeave={() => setHover(null)}>
+					{TICKS.filter((t) => !t || peak > 0).map((t) => ( // an empty period gets the baseline only, not five zeros
 						<g key={t}>
-							<line x1={PAD.left} x2={width - PAD.right} y1={y(ceil * t)} y2={y(ceil * t)} stroke="var(--line)" />
-							<text x={PAD.left - 8} y={y(ceil * t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--ink-3)">{props.format(ceil * t)}</text>
+							<line x1={PAD.left} x2={width - PAD.right} y1={y(ceil * t)} y2={y(ceil * t)} stroke="var(--line)" strokeDasharray={t ? '3 4' : undefined} />
+							<text x={PAD.left - 10} y={y(ceil * t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--ink-3)">{props.format(ceil * t)}</text>
 						</g>
 					))}
 
 					{pts.map((p, i) =>
-						i % labelEvery === 0 || i === n - 1 ? (
+						i % labelEvery === 0 ? (
 							<text key={`l${i}`} x={x(i)} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--ink-3)">{p.label}</text>
 						) : null,
 					)}
 
-					{/* Annotations: dashed rule + marker */}
-					{pts.map((p, i) =>
-						p.note ? (
+					{/* Notes: dashed rule, marker and the note's text, on whichever side has room; a label that would run into the previous one is left to the tooltip */}
+					{pts.map((p, i) => {
+						if (!p.note) return null;
+						const text = p.note.length > 26 ? `${p.note.slice(0, 25)}…` : p.note;
+						const w = text.length * 6.2 + 10; // estimate at 11px
+						const right = x(i) + 9 + w <= width - PAD.right;
+						const from = right ? x(i) + 9 : x(i) - 9 - w;
+						const show = from >= noteEnd && from >= PAD.left;
+						if (show) noteEnd = from + w;
+						return (
 							<g key={`a${i}`}>
-								<line x1={x(i)} x2={x(i)} y1={PAD.top - 6} y2={PAD.top + innerH} stroke="var(--ink-3)" strokeDasharray="2 3" opacity="0.6" />
-								<circle cx={x(i)} cy={PAD.top - 8} r="4.5" fill="var(--card)" stroke="var(--ink-2)" strokeWidth="1.5" />
+								<line x1={x(i)} x2={x(i)} y1={PAD.top - 9} y2={PAD.top + innerH} stroke="var(--ink-3)" strokeDasharray="2 3" opacity="0.6" />
+								<circle cx={x(i)} cy={PAD.top - 13} r="4.5" fill="var(--card)" stroke="var(--ink-2)" strokeWidth="1.5" />
+								{show && <text x={right ? x(i) + 9 : x(i) - 9} y={PAD.top - 13} dy="0.34em" textAnchor={right ? 'start' : 'end'} fontSize="11" fontWeight="500" fill="var(--ink-2)">{text}</text>}
+							</g>
+						);
+					})}
+
+					{props.showPrev && pts.map((p, i) => <path key={`p${i}`} d={bar(i, p.prev ?? 0, ghostW)} fill="var(--ink)" opacity="0.1" />)}
+					{pts.map((p, i) => (
+						<path key={i} d={bar(i, p.value, barW)} fill={props.color} opacity={(h !== null && h !== i ? 0.4 : 1) * (props.partial && i === n - 1 ? 0.55 : 1)} />
+					))}
+
+					{/* Sales: a green marker above the bar, with the count when there is more than one */}
+					{pts.map((p, i) =>
+						p.sales ? (
+							<g key={`s${i}`} transform={`translate(${x(i)},${Math.max(PAD.top + 8, y(Math.max(p.value, props.showPrev ? p.prev ?? 0 : 0)) - 12)})`}>
+								<circle r="7.5" fill="var(--up)" stroke="var(--card)" strokeWidth="2" />
+								<text textAnchor="middle" dy="0.34em" fontSize="9" fontWeight="700" fill="#fff">{p.sales > 1 ? (p.sales > 99 ? '99+' : p.sales) : '$'}</text>
 							</g>
 						) : null,
 					)}
-
-					{props.kind === 'bars' ? (
-						pts.map((p, i) => {
-							const fee = props.stacked ? p.fee ?? 0 : 0;
-							const top = y(p.value + fee);
-							const mid = y(p.value);
-							const base = y(0);
-							const faded = h !== null && h !== i;
-							return (
-								<g key={i} opacity={faded ? 0.45 : 1}>
-									{fee > 0 && <rect x={x(i) - barW / 2} y={top} width={barW} height={Math.max(0, mid - top - 2)} rx={Math.min(4, barW / 2)} fill="var(--fee)" />}
-									<rect x={x(i) - barW / 2} y={mid} width={barW} height={Math.max(1, base - mid)} rx={fee > 0 ? 1 : Math.min(4, barW / 2)} fill="var(--net)" />
-									{/* square off the bottom corners so bars sit on the baseline */}
-									<rect x={x(i) - barW / 2} y={Math.max(mid, base - 4)} width={barW} height={Math.min(4, base - mid)} fill="var(--net)" />
-								</g>
-							);
-						})
-					) : (
-						<>
-							<path d={`${line(pts.map((p) => p.value))} L${x(n - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill="var(--accent)" opacity="0.08" />
-							<path d={line(pts.map((p) => p.value))} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
-						</>
-					)}
-
-					{props.showPrev && <path d={line(pts.map((p) => p.prev ?? 0))} fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeDasharray="4 4" />}
-
-					{h !== null && (
-						<>
-							<line x1={x(h)} x2={x(h)} y1={PAD.top} y2={PAD.top + innerH} stroke="var(--ink-3)" opacity="0.5" />
-							{props.kind === 'line' && <circle cx={x(h)} cy={y(pts[h]!.value)} r="4.5" fill="var(--accent)" stroke="var(--card)" strokeWidth="2" />}
-						</>
-					)}
-
-					{/* Hit targets wider than the marks */}
-					{pts.map((_, i) => (
-						<rect key={`h${i}`} x={PAD.left + step * i} y={0} width={step} height={H} fill="transparent" onMouseEnter={() => setHover(i)} />
-					))}
 				</svg>
 			)}
 
-			{h !== null && pts[h] && (
+			{at && (
 				<div
-					className="tnum pointer-events-none absolute top-0 z-10 w-max min-w-36 rounded-xl bg-card px-3 py-2 text-[12px] shadow-lg ring-1 ring-line"
-					style={{ left: Math.min(Math.max(x(h) - 72, 0), Math.max(0, width - 160)) }}
+					className="tnum pointer-events-none absolute top-0 z-10 w-52 rounded-xl bg-card px-3 py-2.5 text-[12px] shadow-lg ring-1 ring-line"
+					// beside the hovered column, on whichever side has room, so it never covers the value it describes
+					style={{ left: Math.max(0, x(h!) > width / 2 ? x(h!) - step / 2 - 216 : Math.min(width - 208, x(h!) + step / 2 + 8)) }}
 					role="status"
 				>
-					<div className="font-semibold">{pts[h].label}</div>
-					{pts[h].note && <div className="text-accent">{pts[h].note}</div>}
-					<div className="mt-1 flex justify-between gap-4"><span className="text-ink-2">This period</span><span>{props.format(pts[h].value)}</span></div>
-					{props.stacked && pts[h].fee !== undefined && <div className="flex justify-between gap-4"><span className="text-ink-2">Fees</span><span>{props.format(pts[h].fee!)}</span></div>}
-					{props.showPrev && pts[h].prev !== undefined && <div className="flex justify-between gap-4"><span className="text-ink-2">Previous</span><span>{props.format(pts[h].prev!)}</span></div>}
+					<div className="flex items-baseline justify-between gap-2">
+						<span className="font-semibold">{at.label}</span>
+						{props.partial && h === n - 1 && <span className="text-ink-3">so far</span>}
+					</div>
+					{at.note && <div className="text-accent">{at.note}</div>}
+					<div className="mt-1.5 flex items-center justify-between gap-3">
+						<span className="flex items-center gap-1.5 text-ink-2"><span className="h-2 w-2 rounded-sm" style={{ background: props.color }} />This period</span>
+						<span className="flex items-center gap-1.5 font-semibold">{props.format(at.value)}{props.showPrev && <Delta now={at.value} before={at.prev ?? 0} />}</span>
+					</div>
+					{props.showPrev && at.prev !== undefined && (
+						<div className="flex justify-between gap-3"><span className="flex items-center gap-1.5 text-ink-2"><span className="h-2 w-2 rounded-sm bg-ink/15" />Previous</span><span>{props.format(at.prev)}</span></div>
+					)}
+					{at.rows && at.rows.length > 0 && (
+						<dl className="mt-1.5 grid grid-cols-[1fr_auto] gap-x-3 border-t border-line pt-1.5 text-ink-2">
+							{at.rows.map(([k, v]) => (
+								<div key={k} className="contents"><dt>{k}</dt><dd className="text-right text-ink">{v}</dd></div>
+							))}
+						</dl>
+					)}
 				</div>
 			)}
 		</div>

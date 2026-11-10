@@ -4,7 +4,14 @@
  * Money is in cents; `revenue` is already in the requested mode (gross, net or profit).
  */
 
-export type DashRange = '24h' | '7d' | '30d' | '90d';
+export const DASH_RANGES = ['24h', '7d', '30d', '90d', '12m', 'custom'] as const;
+/** `12m` is 52 Monday-first weeks; `custom` needs a `DashCustomRange` */
+export type DashRange = (typeof DASH_RANGES)[number];
+/** Inclusive site-local dates, YYYY-MM-DD */
+export interface DashCustomRange {
+	from: string;
+	to: string;
+}
 export type DashModel = 'first' | 'last' | 'linear';
 export type DashMode = 'gross' | 'net' | 'profit';
 export type DashDimension = 'source' | 'page' | 'country' | 'device';
@@ -62,8 +69,9 @@ export interface DashboardData {
 	excludedCurrencies: string[];
 	/** Spend is only attributable to a source, not a page/country/device cohort. */
 	adSpendAvailable: boolean;
-	totals: { visitors: number; gross: number; fee: number; ad: number; revenue: number; sales: number };
-	prev: { visitors: number; revenue: number; sales: number };
+	/** `bounce`: share of visits (0-1) with a single page view and no goal. `sessionSec`: average active reading time per visit. */
+	totals: { visitors: number; gross: number; fee: number; ad: number; revenue: number; sales: number; bounce: number; sessionSec: number };
+	prev: { visitors: number; revenue: number; sales: number; bounce: number; sessionSec: number };
 	/** Buckets of `step` seconds starting at `start` (hours for 24h, days otherwise) */
 	series: {
 		n: number;
@@ -93,6 +101,8 @@ export interface DashboardData {
 	/** Same grid for refunds, at the hour the refund happened. */
 	heatRefunds: number[][];
 	funnel: Array<{ label: string; count: number }>;
+	/** Named goals: people who reached each, how many times, and how many of those people paid in the period */
+	goals: Array<{ key: string; visitors: number; completions: number; buyers: number }>;
 	timeToConvert: Array<{ label: string; share: number }>;
 	ltv: Array<{ key: string; icon: string; ltv: number; customers: number }>;
 	direct: Array<{ key: string; icon: string; share: number }>;

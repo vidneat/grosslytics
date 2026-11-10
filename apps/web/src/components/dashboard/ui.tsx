@@ -192,3 +192,20 @@ export function useWidth<T extends HTMLElement>() {
 	}, []);
 	return [ref, width] as const;
 }
+
+/** RFC 4180 CSV. Text that a spreadsheet would run as a formula (a referrer named "=cmd…") gets a leading apostrophe. */
+export function toCsv(rows: Array<Array<string | number>>): string {
+	const cell = (v: string | number) => {
+		const s = typeof v === 'string' && /^[=+\-@\t\r]/.test(v) && Number.isNaN(Number(v)) ? `'${v}` : String(v); // "-4.50" is a number, not a formula
+		return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+	};
+	return rows.map((r) => r.map(cell).join(',')).join('\r\n');
+}
+
+export function downloadCsv(name: string, rows: Array<Array<string | number>>) {
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(new Blob([toCsv(rows)], { type: 'text/csv' }));
+	a.download = name;
+	a.click();
+	URL.revokeObjectURL(a.href);
+}

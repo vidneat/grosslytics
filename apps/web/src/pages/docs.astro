@@ -38,7 +38,7 @@ const gateways = [
 
 const endpoints = [
 	['GET', '/api/stats/sites', 'Your sites (owner only, not read-only tokens)'],
-	['GET', '/api/stats/dashboard?siteId=…&range=30d&model=first&mode=net', 'Every dashboard number in one response. range: 24h, 7d, 30d, 90d. model: first, last, linear. mode: gross, net, profit. Filters: source, page, country, device.'],
+	['GET', '/api/stats/dashboard?siteId=…&range=30d&model=first&mode=net', 'Every dashboard number in one response. range: 24h, 7d, 30d, 90d, 12m (weekly), or custom with from and to (YYYY-MM-DD, up to 366 days). model: first, last, linear. mode: gross, net, profit. Filters: source, page, country, device.'],
 	['GET', '/api/stats?siteId=…&range=30d&model=first', 'Visitors, sales and revenue per channel'],
 	['GET', '/api/stats/journey/{visitorId}?siteId=…', 'One visitor’s pages, goals and payments in order'],
 	['POST', '/api/stats/ad-spend', '{ siteId, source, date: "YYYY-MM-DD", amountCents } sets one day’s spend for a source'],

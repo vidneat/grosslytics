@@ -126,7 +126,9 @@ export type LiveUpdate = LivePresenceUpdate | LiveSaleUpdate;
 
 /** Dashboard filter state shared across Astro Islands via Nanostores */
 export interface DashboardFilterState {
-	dateRange: '24h' | '7d' | '30d' | '90d';
+	dateRange: '24h' | '7d' | '30d' | '90d' | '12m' | 'custom';
+	/** Set when dateRange is 'custom': inclusive YYYY-MM-DD dates */
+	custom?: { from: string; to: string };
 	attributionModel: AttributionModel;
 	revenueMode: 'gross' | 'net' | 'profit';
 }

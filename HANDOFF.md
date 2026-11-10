@@ -42,9 +42,47 @@ bun run dev:test-site   # port 3000, after filling examples/test-site/config.js
 `.dev.vars` (gitignored) holds `API_TOKEN` and `STRIPE_WEBHOOK_SECRET`. **Never read or print it**; the user pastes the token into `/app` themselves.
 
 Checks:
-- `bun test packages apps`: 55 tests pass.
+- `bun test packages apps`: 56 tests pass.
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
+
+## Speed and memory review (2026-11-10, on `main`, not committed, not deployed)
+
+Measured first, on the local sample data (95k events, 19k visitors, 759 payments), then fixed what the numbers pointed at.
+- **Dashboard queries:** the entry-pages query was quadratic (see the chart section below); fixed. For unfiltered views, events are no longer checked against the visitor set (`fv`), which every event belongs to by definition, so that set is not built for those queries. Uncached requests through the local API: 30d 0.4s, 90d about 0.9s, 12m about 1.5s (was 1.5s, 11.8s, 27.6s). The response is byte-identical before and after for 30d, 90d, 12m and a filtered 90d view.
+- **Auto-refresh:** the signed-in dashboard re-ran every query once a minute whatever the range. Now every minute for 24h and 7d, every 5 minutes for 30d, every 15 minutes for longer ranges. A new sale still refreshes at once.
+- **Live updates:** the browser applies at most one presence update a second (the hub sends one per page view, and each used to redraw the whole dashboard). The first snapshot still shows immediately.
+- **Live hub (`durable-object.ts`):** with no dashboard connected it no longer sorts every online visitor on each page view; expired visitors are deleted from storage 128 at a time instead of one awaited call each.
+- **Buyer journey:** capped at a visitor's newest 2,000 events (`shortcut:` in `adapter.ts`), so one visitor with thousands of click events can't exhaust the Worker's memory.
+- Checked and left alone: hovering the chart and the demo's live ticks cause no long tasks (over 50ms) in the browser; the dashboard script is 25 KB compressed and React 58 KB; ingest is one batch of five statements per queue batch.
+- Verified: 56 tests, typecheck for web, API and db-d1, `astro build`, the timings above. Not verified in a running system: the live hub changes and the one-a-second presence updates (they need a signed-in dashboard with real page views), and anything on Cloudflare's own D1.
+- **Found, not fixed (each needs a decision):**
+  - `events` is never pruned, so storage and every query's cost grow with the site's whole history. Needs a retention setting (how long to keep raw events).
+  - The dashboard response lists every source with no limit; a site with thousands of distinct referrers gets a large response. Capping it would change the totals the Sources panel and the insights add up.
+  - Every dashboard load is about 35 SQL statements that each scan the range's events. On Cloudflare's free D1 allowance (rows read per day) a busy site with long ranges open will use it quickly. The real fix is daily rollup tables, which were retired on 2026-11-07 because summed uniques were wrong.
+  - Source and channel traffic (about 0.4s and 0.2s on a year) parse each event's JSON to find its category; a stored category column would remove that.
+
+## Gaps versus DataFast and DataBull (looked at 2026-11-10)
+
+Seen on datafa.st/demo and the databull.app homepage demo that day. Unless noted, none of this exists in Grosslytics yet.
+- Built later the same day (see the next section): bounce rate and session time in the top bar, note text printed on the chart, a marker for each sale. Still missing from that part: the buyer's avatar or source icon on a sale marker, DataFast's new/returning visitor split in the hover box, and visitors as a line over the revenue bars (the user rejected our tangled version of that; ask before trying a single line).
+- **DataFast only:** chart granularity picker (daily etc.), previous/next period arrows, Keyword tab (Search Console), map and Region views, Hostname and Exit-link tabs, custom funnels, a Users list, AI tabs for answers/indexing/training with a per-assistant chart, a live globe, generated insights.
+- **DataBull only:** Telegram pings for each sale, traffic-spike alerts and a daily digest; a pages table with trend, bounce and duration; scroll-depth quartiles per page; peak hours for visits and revenue (ours is sales only); path to purchase (median days and visits, share buying on the first visit); lifetime value with renewals and repeat rate; a live map with visitor profiles; a CLI; install guides per platform; Creem; past-payment import for every provider (ours is Stripe only).
+- Not checked: either product's signed-in settings (team members, email reports), so those are unknown, not absent.
+
+## Dashboard chart, date ranges, CSV export, goals (2026-11-10, on `main`, not committed, not deployed)
+
+- **Main chart** (`charts.tsx` `MainChart`): bars for every metric (the user rejected a version with curved lines over the bars: no line overlays). The previous period is a faint wider bar behind each bar. Four dashed grid lines, rounded bar tops, today's unfinished bar is lighter and marked "so far" (live data only). The hover box sits beside the column and lists this period with % change, previous, and the other metrics plus sales for that bucket. A line under the chart gives the average and the best day/hour/week. Works by touch (pointer events).
+- **Date ranges:** new `12M` preset (52 weeks, Monday first) and a `Custom` picker (two native date inputs, up to 366 days, both dates included, site-local days). API: `range=12m`, or `range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD` on `/api/stats/dashboard`, `/api/share/<domain>`, `/api/stats/ai-crawls` and `/api/stats/clicks`; bad or missing dates return 400. Logic in `dateRangeToTimestamps` (shared) and `customRange` (`routes/stats.ts`). The channel API (`GET /api/stats`) and MCP still take only 24h/7d/30d/90d. /docs lists the new values.
+- **CSV export:** "CSV" buttons on the chart (per-bucket visitors, revenue, sales, with the previous period) and on the Sources and Pages panels (current tab). `toCsv`/`downloadCsv` in `ui.tsx`; text starting with `=`, `+`, `-` or `@` gets a leading apostrophe so a referrer name can't run as a spreadsheet formula. The waitlist download uses the same helper now.
+- **Goals by name:** new `goals` in the dashboard response (people, completions, how many of them paid in the period) and a Goals panel beside Purchase milestones. No migration: it reads the existing `goal` events.
+- **Badge:** `/badge/<site>.svg` had a fixed 210px width with the amount right-aligned, so "Verified net, 30 days" ran into the amount in fonts a little wider than Chrome's. Label and amount are now one text run with an 8px gap, so they cannot overlap in any font; the width is estimated from the text. A badge whose revenue lookup failed ("Not verified yet") is sent `no-store` instead of being cached for five minutes. The share page loads it as `?v=2` to skip browsers' cached copy of the old badge; badges embedded on other sites refresh within a day. Seen in the browser with the real local amount.
+- **Top bar:** six numbers in a 3-wide grid (2-wide on phones). New: Bounce rate (visits with one page view and no goal) and Session time (average active reading time per visit), each with its change against the previous period. They come from one new query (`sessions` in `packages/db-d1/src/dashboard.ts`) as `totals.bounce`, `totals.sessionSec` and the same on `prev`. They have no daily series, so they are plain tiles, not chart tabs.
+- **Events on the chart:** a note's text is printed beside its marker (cut at 26 characters; a label that would run into the previous one stays hover-only). Each bar with new sales gets a green marker, with the count when there is more than one. The markers are hidden when more than half the bars have sales, because they would only repeat the bars. An empty period shows one baseline instead of five "$0" lines.
+- Verified: 56 tests (new: 12m and custom ranges, goals, bounce rate and session time, bad custom dates refused on dashboard and clicks routes, CSV escaping), web/API/db/shared typecheck, `astro build`. In the browser: `/app/demo` at 1440px light and dark and at 375px (no overflow), tooltip, 12M, custom range applied, Goals panel, the six top-bar numbers, labelled notes; sale markers on `/share/acme.io` filtered to the `newsletter` source (the demo's sample sales are too dense to show them); `/share/acme.io` against the local API with the seeded data; the local API returned 30d, 12m and custom correctly and refused reversed dates.
+- Not verified: the signed-in `/app` (needs the owner password), so the AI-bots and click panels with a custom range and the CSV buttons were not clicked there; a downloaded CSV was not opened in a spreadsheet.
+- **Slow long ranges, fixed:** the entry-pages query joined the visitor list and the payments against an unindexed CTE, which SQLite scans once per row, so its cost grew with the square of the range. It now counts entries straight off the CTE and looks up each buyer's entry page through `idx_events_visitor_journey`. Timings are in the speed and memory review above.
+- Still missing versus competitors: email reports and alerts (needs an email provider), team members, refunds outside Stripe, page flow, a bots panel, a live map.
 
 ## SEO audit fixes (2026-11-10, on `main`, not committed, not deployed)
 
@@ -181,7 +219,7 @@ Competitor checked: github.com/shivamanupadi/traks (general cookieless analytics
 
 - `apps/web/src/pages/compare/[slug].astro` now gives each page its own keyword cluster (primary: "DataFast alternative", "DataBull alternative", "Plausible alternative", "GA4 alternative") and long-form sections modelled on currently ranking articles: answer-first intro, "What is X?", glance table, "Choose X if / Choose Grosslytics if", pricing, two topic sections, "How to switch", 5–6 page-specific FAQs (FAQPage JSON-LD), related comparisons. ~1,070–1,180 words each (was ~400).
 - All competitor facts re-checked on their own sites on 2026-11-07 (VERIFIED). Notable additions: DataFast 14-day trial and 3y/5y retention; DataBull $49 once / hosted $9–19, Telegram alerts, cookie-mode choice; Plausible $9 Starter, $14 Growth, 30-day trial; GA4 user-level retention 2 or 14 months.
-- Goals are only counted in aggregate ("Reached a goal"), not by name. The pages say so; a per-goal breakdown would strengthen the Plausible/GA4 switch story.
+- Goals are now broken down by name in the dashboard (2026-11-10); the comparison pages still say they are only counted in aggregate and need updating.
 - No search-volume data was available; keyword clusters are from SERP research, not measured volumes.
 
 ## Password sign-in for /app (2026-11-07)
@@ -442,7 +480,7 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - **Dashboard:** owner settings moved to a Settings view (toolbar button, `/app#settings`): public page, timezone, payment webhooks, Stripe import, ad-spend CSV, chart notes (new: delete, via `POST /api/stats/annotations/:id/delete` with `siteId`), API tokens, waitlist. Failed saves show the error. The empty dashboard points to Settings for payments. The one-minute refresh skips hidden tabs and catches up when shown.
 - Browser-checked locally (port 4321, via a temporary read-only token, since deleted): dashboard loads, Settings opens at `#settings`, a refused save shows its message, notes list with Delete, no horizontal scroll at 375px. Not clicked with a full owner session (needs your password): timezone, webhooks and a real note delete.
 - Nice-to-haves, also fixed: the dashboard refreshes on every live sale (it used to stop after 8, because it counted the capped live list; `useLiveSocket` now returns a `sales` counter). The MCP tool `compare_buyer_reading_time` now returns the real buyers-vs-everyone-else rows from the dashboard. MCP `range`/`model` are validated and a bad value comes back as an `isError` tool result. A stale size comment was removed from `packages/tracker/build.ts`. MCP covered by the `mcp:` test. The live-sale refresh was not checked with a real sale.
-- Not done (competitor gaps): custom date ranges, goals by name, alerts/email reports, CSV export, team members, refunds outside Stripe.
+- Not done (competitor gaps): alerts/email reports, team members, refunds outside Stripe. (Custom date ranges, goals by name and CSV export were added 2026-11-10.)
 
 ## Dodo Payments checkout links, Cloud at $5.99 (2026-11-07, committed 624d478, deployed (now a92c30b))
 

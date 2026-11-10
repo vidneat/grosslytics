@@ -6,11 +6,14 @@ import {
 	Bot,
 	CalendarDays,
 	ChartColumn,
+	Download,
 	FileText,
 	Filter as FilterIcon,
 	Gauge,
 	Globe,
 	Hourglass,
+	Timer,
+	Undo2,
 	Lightbulb,
 	LogOut,
 	Monitor,
@@ -20,20 +23,21 @@ import {
 	Settings as SettingsIcon,
 	Share2,
 	StickyNote,
+	Target,
 	Trophy,
 	Users,
 	X,
 } from 'lucide-react';
 import type { DashboardData, DashSale } from '@grosslytics/shared/dashboard';
-import { sourceIcon } from '@grosslytics/shared/dashboard';
+import { formatDuration, sourceIcon } from '@grosslytics/shared/dashboard';
 import { $dashboardFilters, setAttributionModel, setDateRange, setRevenueMode } from '../../stores/filterStore.js';
-import { apiFetch, fetchJourney, loadConnection, logout, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from './api';
+import { apiFetch, fetchJourney, loadConnection, logout, rangeQuery, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from './api';
 import { Milestones, Heatmap, MainChart, MiniBars, ProfitBridge, type Point } from './charts';
 import { ApiTokens, CloudBilling, Connect, FooterGate, InstallSnippet, PaymentWebhooks } from './connect';
 import { buildDemo, DEMO_NOW, flag, journeyFor, type Dimension, type Filter, type Metric, type Mode, type Model, type Range } from './demo';
 import { gatewayLabel, JourneyDrawer, LiveFeed } from './live';
 import { AdSpendCsv, AiCrawlers, ClickMap, StripeImport, Waitlist } from './extras';
-import { BarList, CurrencyContext, Delta, Panel, SourceIcon, Sparkline, compact, num, useMoney } from './ui';
+import { BarList, CurrencyContext, Delta, Panel, SourceIcon, Sparkline, compact, downloadCsv, num, useMoney, type ListRow } from './ui';
 
 const MODELS = [
 	{ id: 'first', label: 'First touch' },
@@ -45,7 +49,48 @@ const MODES = [
 	{ id: 'net', label: 'Net' },
 	{ id: 'profit', label: 'Profit' },
 ] as const;
-const RANGES = (['24h', '7d', '30d', '90d'] as const).map((r) => ({ id: r, label: r.toUpperCase() }));
+const RANGES = (['24h', '7d', '30d', '90d', '12m'] as const).map((r) => ({ id: r, label: r.toUpperCase() }));
+const BUCKET: Record<number, string> = { 3600: 'hour', 86400: 'day', 604800: 'week' };
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/** Any two dates, up to a year apart. Native date inputs, so every browser brings its own calendar. */
+function CustomRange({ value, onApply }: { value?: { from: string; to: string }; onApply: (from: string, to: string) => void }) {
+	const [open, setOpen] = useState(false);
+	const today = isoDay(new Date());
+	const [from, setFrom] = useState(value?.from ?? isoDay(new Date(Date.now() - 13 * 86_400_000)));
+	const [to, setTo] = useState(value?.to ?? today);
+	const days = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1;
+	const error = !(days >= 1) ? 'The end date is before the start date.' : days > 366 ? 'Pick a year or less.' : '';
+	const field = 'rounded-lg bg-band px-2 py-1 text-[13px] ring-1 ring-line';
+	return (
+		<div className="relative">
+			<button type="button" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] hover:bg-band ${value ? 'bg-band font-medium text-ink' : 'text-ink-2 hover:text-ink'}`} aria-expanded={open} aria-pressed={!!value} onClick={() => setOpen(!open)}>
+				<CalendarDays size={14} aria-hidden="true" />
+				{value ? `${shortDay(value.from)} – ${shortDay(value.to)}` : 'Custom'}
+			</button>
+			{open && (
+				<form
+					className="absolute left-0 top-full z-50 xl:left-auto xl:right-0 mt-2 w-64 space-y-2 rounded-xl bg-card p-3 text-[13px] shadow-lg ring-1 ring-line"
+					onSubmit={(e) => {
+						e.preventDefault();
+						if (error) return;
+						onApply(from, to);
+						setOpen(false);
+					}}
+				>
+					<label className="flex items-center justify-between gap-2 text-ink-2">From <input className={field} type="date" value={from} max={today} onChange={(e) => setFrom(e.target.value)} required /></label>
+					<label className="flex items-center justify-between gap-2 text-ink-2">To <input className={field} type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} required /></label>
+					{error && <p className="text-[12px] text-down" role="alert">{error}</p>}
+					<div className="flex justify-end gap-2 pt-1">
+						<button type="button" className="btn btn-quiet !px-2.5 !py-1 !text-[13px]" onClick={() => setOpen(false)}>Cancel</button>
+						<button className="btn btn-primary !px-2.5 !py-1 !text-[13px]" disabled={!!error}>Apply</button>
+					</div>
+				</form>
+			)}
+		</div>
+	);
+}
 const MODE_LABEL: Record<Mode, string> = { gross: 'Gross revenue', net: 'Net revenue', profit: 'True profit' };
 const MODE_SHORT: Record<Mode, string> = { gross: 'Gross', net: 'Net', profit: 'Profit' };
 const DIM_LABEL: Record<Dimension, string> = { source: 'Source', page: 'Page', country: 'Country', device: 'Device' };
@@ -164,6 +209,7 @@ function Workspace(props: {
 	const page = variant === 'full' && source !== 'share';
 	const f = useStore($dashboardFilters);
 	const range = f.dateRange as Range;
+	const custom = range === 'custom' ? f.custom : undefined;
 	const model = f.attributionModel as Model;
 	const mode = f.revenueMode as Mode;
 
@@ -193,8 +239,8 @@ function Workspace(props: {
 	};
 
 	// Data: demo is computed locally; owner and share pages come from the API.
-	const q = { range, model, mode, filters };
-	const demo = useMemo(() => (source === 'demo' ? buildDemo(range, model, mode, filters) : null), [source, range, model, mode, filters]);
+	const q = { range, custom, model, mode, filters };
+	const demo = useMemo(() => (source === 'demo' ? buildDemo(range, model, mode, filters, custom) : null), [source, range, model, mode, filters, custom]);
 	const remote = useRemoteDashboard(source === 'api' && conn ? { conn } : source === 'share' ? { shareDomain: site } : null, q, refresh);
 	const d: DashboardData | null = demo ?? remote.data;
 	const money = useMoney(d?.currency);
@@ -219,7 +265,9 @@ function Workspace(props: {
 	useEffect(() => {
 		if (source !== 'api') return;
 		let stale = false;
-		const t = setInterval(() => (document.hidden ? (stale = true) : setRefresh((r) => r + 1)), 60_000);
+		// Each refresh re-runs every dashboard query over the whole range, so long ranges refresh less often; a new sale still refreshes at once
+		const every = range === '24h' || range === '7d' ? 60_000 : range === '30d' ? 300_000 : 900_000;
+		const t = setInterval(() => (document.hidden ? (stale = true) : setRefresh((r) => r + 1)), every);
 		const onShow = () => {
 			if (!document.hidden && stale) (stale = false), setRefresh((r) => r + 1);
 		};
@@ -228,7 +276,7 @@ function Workspace(props: {
 			clearInterval(t);
 			document.removeEventListener('visibilitychange', onShow);
 		};
-	}, [source]);
+	}, [source, range]);
 
 	const closeSale = useCallback(() => setSale(null), []);
 	const loadJourney = useCallback(async (s: DashSale) => (source === 'api' && conn ? fetchJourney(conn, s) : journeyFor(s.id)), [source, conn]);
@@ -282,6 +330,15 @@ function Workspace(props: {
 		const i = Math.floor((a.at - s.start) / s.step);
 		if (i >= 0 && i < s.n) notes.set(i, notes.has(i) ? `${notes.get(i)} · ${a.label}` : a.label);
 	}
+	const format: Record<Metric, (v: number) => string> = {
+		visitors: (v) => compact(v),
+		revenue: (v) => money(v),
+		rpv: (v) => money(v, 2),
+		conversion: (v) => `${v.toFixed(2)}%`,
+	};
+	const METRIC_SHORT: Record<Metric, string> = { visitors: 'Visitors', revenue: MODE_SHORT[shownMode], rpv: 'Per visitor', conversion: 'Conversion' };
+	// Sales are pinned to the chart while they are occasional; once most bars have one, the markers would only repeat the bars
+	const markSales = s.sales.filter((x) => Math.round(x) >= 1).length <= s.n / 2;
 	const points: Point[] = Array.from({ length: s.n }, (_, i) => {
 		const v = s.visitors[i]!;
 		const pv = s.prevVisitors[i]!;
@@ -291,15 +348,30 @@ function Workspace(props: {
 			rpv: [s.revenue[i]! / Math.max(1, v), s.prevRevenue[i]! / Math.max(1, pv)],
 			conversion: [(s.sales[i]! / Math.max(1, v)) * 100, (s.prevSales[i]! / Math.max(1, pv)) * 100],
 		};
-		return { label: bucketLabel(s.start + i * s.step, s.step, d.timezone || 'UTC'), note: notes.get(i), value: by[metric][0], prev: by[metric][1] };
+		// The tooltip carries every metric for the bucket, whichever one is charted
+		const rows = (['visitors', 'revenue', 'conversion', 'rpv'] as const).filter((m) => m !== metric).map((m): [string, string] => [METRIC_SHORT[m], format[m](by[m][0])]);
+		rows.push(['Sales', num(s.sales[i]!)]);
+		return { label: bucketLabel(s.start + i * s.step, s.step, d.timezone || 'UTC'), note: notes.get(i), value: by[metric][0], prev: by[metric][1], rows, sales: markSales ? Math.round(s.sales[i]!) : 0 };
 	});
-	const format: Record<Metric, (v: number) => string> = {
-		visitors: (v) => compact(v),
-		revenue: (v) => money(v),
-		rpv: (v) => money(v, 2),
-		conversion: (v) => `${v.toFixed(2)}%`,
-	};
-
+	// One line under the chart title: the typical bucket and the best one
+	const unit = BUCKET[s.step] ?? 'day';
+	const bestAt = points.reduce((b, p, i) => (p.value > points[b]!.value ? i : b), 0);
+	const average = metric === 'visitors' || metric === 'revenue' ? points.reduce((a, p) => a + p.value, 0) / Math.max(1, s.n) : null; // a mean of ratios would mislead
+	const csvTime = (t: number) => new Date(t * 1000).toLocaleString('sv-SE', { timeZone: d.timezone || 'UTC' }).slice(0, s.step < 86400 ? 16 : 10);
+	const fileName = (what: string) => `${site}-${what}-${custom ? `${custom.from}_${custom.to}` : range}.csv`;
+	const exportSeries = () =>
+		downloadCsv(fileName('over-time'), [
+			[s.step < 86400 ? 'hour' : s.step > 86400 ? 'week starting' : 'date', 'visitors', `${MODE_SHORT[shownMode].toLowerCase()} revenue (${d.currency})`, 'sales', 'previous visitors', 'previous revenue', 'previous sales'],
+			...Array.from({ length: s.n }, (_, i) => [csvTime(s.start + i * s.step), s.visitors[i]!, (s.revenue[i]! / 100).toFixed(2), +s.sales[i]!.toFixed(2), s.prevVisitors[i]!, (s.prevRevenue[i]! / 100).toFixed(2), +s.prevSales[i]!.toFixed(2)]),
+		]);
+	const exportRows = (what: string, rows: ListRow[]) =>
+		downloadCsv(fileName(what), [[what, 'visitors', `revenue (${d.currency})`, 'revenue per visitor'], ...rows.map((r) => [r.label, r.visitors, (r.revenue / 100).toFixed(2), (r.revenue / 100 / Math.max(1, r.visitors)).toFixed(2)])]);
+	const exportButton = (label: string, onClick: () => void) => (
+		<button type="button" className="inline-flex items-center gap-1 text-[12px] text-ink-2 hover:text-ink" onClick={onClick} aria-label={`Download ${label} as CSV`} title={`Download ${label} as CSV`}>
+			<Download size={13} aria-hidden="true" />
+			<span className="max-sm:sr-only">CSV</span>
+		</button>
+	);
 	// Insights, computed from the same data; each is skipped when the data can't support it
 	const short = (k: string) => k.replace(/ \(.*\)$/, '');
 	const bySrc = d.sources.filter((x) => x.visitors >= 10);
@@ -458,6 +530,7 @@ function Workspace(props: {
 					<Segmented label="Attribution model" value={model} options={MODELS} onChange={setAttributionModel} />
 					<Segmented label="Revenue" value={mode} options={MODES} onChange={setRevenueMode} />
 					<Segmented label="Date range" value={range} options={RANGES} onChange={setDateRange} />
+					<CustomRange value={custom} onApply={(from, to) => setDateRange('custom', { from, to })} />
 					{isOwner && (
 						<button type="button" className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] text-ink-2 hover:bg-band hover:text-ink" aria-pressed={view === 'settings'} onClick={() => setView(view === 'settings' ? 'dashboard' : 'settings')}>
 							<SettingsIcon size={14} aria-hidden="true" />
@@ -492,8 +565,9 @@ function Workspace(props: {
 			{/* KPIs + chart + live */}
 			<div className="grid gap-5 lg:grid-cols-12">
 				<section className={`rounded-xl bg-card ring-1 ring-line ${showLive ? 'lg:col-span-8' : 'lg:col-span-12'}`} aria-label="Overview">
-					<div className="grid grid-cols-2 border-b border-line md:grid-cols-4" role="tablist" aria-label="Chart metric">
-						{kpis.map((k, i) => {
+					{/* gap-px over a line-coloured grid draws the dividers for any number of columns */}
+					<div className="grid grid-cols-2 gap-px overflow-hidden rounded-t-xl border-b border-line bg-line md:grid-cols-3" role="tablist" aria-label="Chart metric">
+						{kpis.map((k) => {
 							const on = metric === k.id;
 							return (
 								<button
@@ -502,9 +576,9 @@ function Workspace(props: {
 									role="tab"
 									aria-selected={on}
 									onClick={() => setMetric(k.id)}
-									className={`relative px-5 py-5 text-left transition-colors ${on ? 'bg-band/70' : 'hover:bg-band/50'} ${i ? 'border-l border-line' : ''} ${i === 2 ? 'max-md:border-l-0 max-md:border-t' : ''} ${i === 3 ? 'max-md:border-t' : ''} ${i === 0 ? 'rounded-tl-xl' : ''} ${i === 3 ? 'md:rounded-tr-xl' : ''}`}
+									className={`relative px-5 py-4 text-left transition-colors ${on ? 'bg-[color-mix(in_srgb,var(--band)_70%,var(--card))]' : 'bg-card hover:bg-[color-mix(in_srgb,var(--band)_50%,var(--card))]'}`}
 								>
-									{on && <span className="absolute inset-x-0 bottom-[-1px] h-[2px] bg-ink" aria-hidden="true" />}
+									{on && <span className="absolute inset-x-0 bottom-0 h-[2px] bg-ink" aria-hidden="true" />}
 									<span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.04em] text-ink-3">
 										<k.icon size={12} aria-hidden="true" />
 										{k.label}
@@ -517,15 +591,31 @@ function Workspace(props: {
 								</button>
 							);
 						})}
+						{/* Whole-period numbers with no daily series, so they are not chart tabs */}
+						{[
+							{ label: 'Bounce rate', icon: Undo2, value: `${Math.round(t.bounce * 100)}%`, now: t.bounce, before: d.prev.bounce, goodWhenUp: false, hint: 'Visits that saw one page and reached no goal' },
+							{ label: 'Session time', icon: Timer, value: formatDuration(t.sessionSec), now: t.sessionSec, before: d.prev.sessionSec, goodWhenUp: true, hint: 'Average time actively reading per visit' },
+						].map((k) => (
+							<div key={k.label} className="bg-card px-5 py-4" title={k.hint}>
+								<span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.04em] text-ink-3">
+									<k.icon size={12} aria-hidden="true" />
+									{k.label}
+								</span>
+								<span className="tnum mt-1.5 block font-display text-[30px] font-semibold leading-tight tracking-[-0.03em]">{k.value}</span>
+								<span className="mt-1 flex min-h-6 items-end"><Delta now={k.now} before={k.before} goodWhenUp={k.goodWhenUp} /></span>
+							</div>
+						))}
 					</div>
 					<div className="px-4 pt-4 pb-3">
 						<div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[12px] text-ink-2">
-							<span className="flex items-center gap-3">
+							<span className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap">
 								<span className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${metric === 'revenue' ? 'bg-net' : 'bg-accent'}`} />This period</span>
-								{compare && <span className="inline-flex items-center gap-1.5"><span className="h-0 w-3 border-t-2 border-dashed border-ink-3" />Previous period</span>}
+								{compare && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-ink/15" />Previous period</span>}
 								{notes.size > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-ink-2" />Note</span>}
+								{points.some((p) => p.sales) && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-up" />Sale</span>}
 							</span>
 							<span className="flex items-center gap-3">
+								{exportButton('the chart data', exportSeries)}
 								{isOwner && (
 									<button type="button" className="inline-flex items-center gap-1 text-accent hover:underline" onClick={addNote}>
 										<StickyNote size={12} aria-hidden="true" />
@@ -538,7 +628,13 @@ function Workspace(props: {
 								</label>
 							</span>
 						</div>
-						<MainChart points={points} kind={metric === 'revenue' ? 'bars' : 'line'} format={format[metric]} showPrev={compare} stacked={false} />
+						<MainChart points={points} color={metric === 'revenue' ? 'var(--net)' : 'var(--accent)'} format={format[metric]} showPrev={compare} partial={d.live && !custom} />
+						{points[bestAt]!.value > 0 && (
+							<p className="tnum mt-1 px-1 text-[12px] text-ink-3">
+								{average !== null && <>Average <span className="text-ink-2">{format[metric](metric === 'visitors' ? Math.round(average) : average)}</span> a {unit} · </>}
+								Best {unit} <span className="text-ink-2">{points[bestAt]!.label}</span>, {format[metric](points[bestAt]!.value)}
+							</p>
+						)}
 					</div>
 				</section>
 
@@ -574,6 +670,7 @@ function Workspace(props: {
 					tabs={[{ id: 'channels', label: 'Channels' }, { id: 'referrers', label: 'Referrers' }, { id: 'campaigns', label: 'Campaigns' }]}
 					tab={tabs.sources}
 					onTab={setTab('sources')}
+					action={full && exportButton(`sources (${tabs.sources})`, () => exportRows(tabs.sources, sourceRows))}
 				>
 					<p className="px-3 pb-2 text-[12px] text-ink-3">{tabs.sources === 'campaigns' ? 'Campaigns with no recorded value appear as (not set).' : 'Visitors may return on other days or appear in another source/channel. Referrers show top rows; totals include every source.'}</p>
 					<BarList
@@ -593,6 +690,7 @@ function Workspace(props: {
 					tabs={[{ id: 'top', label: 'Top' }, { id: 'entry', label: 'Entry' }, { id: 'exit', label: 'Exit' }]}
 					tab={tabs.pages}
 					onTab={setTab('pages')}
+					action={full && exportButton(`pages (${tabs.pages})`, () => exportRows(`${tabs.pages}-pages`, pageRows))}
 				>
 					<p className="px-3 pb-2 text-[12px] text-ink-3">{tabs.pages === 'top' ? 'Revenue from buyers who viewed each page; pages overlap.' : tabs.pages === 'entry' ? 'First page per visitor in this period; includes untracked buyers.' : 'Last page per session; visitors can appear on more than one page.'}</p>
 					<BarList rows={pageRows} revenueLabel={detailRevenueLabel} sortBy={sortOf('pages')} onSort={setSort('pages')} onPick={tabs.pages === 'top' ? pick('page') : undefined} active={activeOf('page')} showIcons={false} />
@@ -695,10 +793,36 @@ function Workspace(props: {
 						</Panel>
 					</div>
 
-					<div className="grid gap-5 lg:grid-cols-2">
+					<div className="grid gap-5 lg:grid-cols-3">
 						<Panel title="Purchase milestones" icon={<Route size={15} />}>
 							<p className="px-3 pb-3 text-[12px] text-ink-3">Independent counts in this period, not a sequential funnel.</p>
 							<Milestones steps={d.funnel} />
+						</Panel>
+						<Panel title="Goals" icon={<Target size={15} />}>
+							{d.goals.length === 0 ? (
+								<p className="px-3 py-4 text-[13px] text-ink-3">No goals in this period. Add <code>data-gl-goal="signup"</code> to a button or link to count its clicks here.</p>
+							) : (
+								<table className="tnum w-full table-fixed text-[13px]">
+									<thead>
+										<tr className="text-[11px] text-ink-3">
+											<th scope="col" className="px-3 pb-2 text-left font-medium">Goal</th>
+											<th scope="col" className="w-16 px-2 pb-2 text-right font-medium">People</th>
+											<th scope="col" className="w-14 px-2 pb-2 text-right font-medium" title="Share of all visitors who reached it">Rate</th>
+											<th scope="col" className="w-14 px-3 pb-2 text-right font-medium" title="People who reached it and paid in this period">Paid</th>
+										</tr>
+									</thead>
+									<tbody>
+										{d.goals.slice(0, 7).map((g) => (
+											<tr key={g.key} className="border-t border-line">
+												<th scope="row" className="truncate px-3 py-2 text-left font-normal" title={`${g.key}: ${num(g.completions)} times`}>{g.key}</th>
+												<td className="px-2 py-2 text-right font-semibold">{num(g.visitors)}</td>
+												<td className="px-2 py-2 text-right text-ink-2">{((g.visitors / Math.max(1, t.visitors)) * 100).toFixed(1)}%</td>
+												<td className="px-3 py-2 text-right text-ink-2">{num(g.buyers)}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							)}
 						</Panel>
 						<Panel title="Lifetime value by first source" icon={<Trophy size={15} />}>
 							{d.ltv.length === 0 && <p className="px-3 py-4 text-[13px] text-ink-3">Appears after your first sales.</p>}
@@ -718,8 +842,8 @@ function Workspace(props: {
 
 					{isOwner && conn && (
 						<div className="grid gap-5 lg:grid-cols-2">
-							<AiCrawlers conn={conn} range={range} />
-							<ClickMap conn={conn} range={range} />
+							<AiCrawlers conn={conn} range={String(rangeQuery(range, custom))} />
+							<ClickMap conn={conn} range={String(rangeQuery(range, custom))} />
 						</div>
 					)}
 

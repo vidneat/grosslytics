@@ -7,8 +7,8 @@ export const $dashboardFilters = atom<DashboardFilterState>({
 	revenueMode: 'net',
 });
 
-export function setDateRange(range: DashboardFilterState['dateRange']): void {
-	$dashboardFilters.set({ ...$dashboardFilters.get(), dateRange: range });
+export function setDateRange(range: DashboardFilterState['dateRange'], custom?: DashboardFilterState['custom']): void {
+	$dashboardFilters.set({ ...$dashboardFilters.get(), dateRange: range, custom });
 }
 
 export function setAttributionModel(model: DashboardFilterState['attributionModel']): void {

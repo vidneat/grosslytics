@@ -1,5 +1,5 @@
 import { queryChannelStats } from './dashboard.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 
 import type {
@@ -76,9 +76,11 @@ export class D1StorageAdapter {
 			})
 			.from(schema.events)
 			.where(and(eq(schema.events.siteId, siteId), eq(schema.events.visitorId, visitorId)))
-			.orderBy(schema.events.createdAt);
+			// shortcut: the newest 2,000 events only, so one visitor with thousands of click events can't fill the Worker's memory; page it if anyone needs older steps
+			.orderBy(desc(schema.events.createdAt))
+			.limit(2000);
 
-		return rows.map((r) => ({
+		return rows.reverse().map((r) => ({
 			eventType: r.eventType as BuyerJourneyEvent['eventType'],
 			eventName: r.eventName,
 			source: r.source,

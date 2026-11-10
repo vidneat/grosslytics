@@ -208,7 +208,9 @@ test('dashboard: totals, attribution models, filters, pages, funnel and profit a
 		queryDashboard(d1, 's1', { range: '30d', model: 'first', mode: 'net', filters: [], now: NOW, ...o });
 
 	const d = await q();
-	expect(d.totals).toEqual({ visitors: 2, gross: 10000, fee: 320, ad: 2000, revenue: 9680, sales: 1 }); // refund and bot excluded
+	expect(d.totals).toMatchObject({ visitors: 2, gross: 10000, fee: 320, ad: 2000, revenue: 9680, sales: 1 });
+	// three visits: v1's first (one page, 120s read) and v2's bounced; v1's second reached a goal, so it did not
+	expect([d.totals.bounce, d.totals.sessionSec, d.prev.bounce]).toEqual([2 / 3, 40, 0]); // refund and bot excluded
 	expect(d.series.n).toBe(30);
 	expect(d.series.revenue.reduce((a, b) => a + b, 0)).toBe(9680);
 	expect(d.series.revenue[29]).toBe(9680); // today is the last bucket
@@ -250,6 +252,22 @@ test('dashboard: totals, attribution models, filters, pages, funnel and profit a
 	const pricing = await q({ filters: [{ dim: 'page', value: '/pricing' }] });
 	expect(pricing.totals).toMatchObject({ visitors: 1, sales: 1 });
 
+	expect(d.goals).toEqual([{ key: 'checkout', visitors: 1, completions: 1, buyers: 1 }]);
+
+	// 12 months: 52 weeks that start on a Monday and end after today
+	const year = await q({ range: '12m' });
+	expect([year.series.n, year.series.step]).toEqual([52, 604800]);
+	expect(new Date(year.series.start * 1000).getUTCDay()).toBe(1);
+	expect(year.series.start + 52 * 604800).toBeGreaterThan(NOW);
+	expect(year.totals.gross).toBe(10000);
+
+	// Custom: both dates included, one bucket a day; yesterday alone has no sale, yesterday to today has it
+	const iso = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
+	const yesterday = await q({ range: 'custom', custom: { from: iso(NOW - 86400), to: iso(NOW - 86400) } });
+	expect([yesterday.series.n, yesterday.totals.gross]).toEqual([1, 0]);
+	const twoDays = await q({ range: 'custom', custom: { from: iso(NOW - 86400), to: iso(NOW) } });
+	expect([twoDays.series.n, twoDays.totals.gross, twoDays.series.revenue[1]]).toEqual([2, 10000, 9680]);
+
 	const day = await q({ range: '24h' });
 	expect(day.series.n).toBe(24);
 	expect(day.totals.visitors).toBe(1); // only v1 was active in the last 24 hours
@@ -269,6 +287,11 @@ test('dashboard routes: token required, params validated, share page public but 
 	expect((await fetch('/api/stats/dashboard?siteId=s1')).status).toBe(401);
 	const auth = { headers: { authorization: 'Bearer tok' } };
 	expect((await fetch('/api/stats/dashboard?siteId=s1&range=1y', auth)).status).toBe(400);
+	for (const bad of ['range=custom', 'range=custom&from=2026-03-02&to=2026-03-01', 'range=custom&from=2024-01-01&to=2026-03-01', 'range=custom&from=x&to=y'])
+		expect((await fetch(`/api/stats/dashboard?siteId=s1&${bad}`, auth)).status).toBe(400);
+	expect((await fetch('/api/stats/dashboard?siteId=s1&range=custom&from=2026-03-01&to=2026-03-31', auth)).status).toBe(200);
+	expect((await fetch('/api/stats/clicks?siteId=s1&range=custom&from=2026-03-01&to=2026-03-31', auth)).status).toBe(200);
+	expect((await fetch('/api/stats/clicks?siteId=s1&range=custom', auth)).status).toBe(400);
 	const ok = await fetch('/api/stats/dashboard?siteId=s1&model=linear&country=US', auth);
 	expect(ok.status).toBe(200);
 	expect(((await ok.json()) as any).totals.visitors).toBe(1);

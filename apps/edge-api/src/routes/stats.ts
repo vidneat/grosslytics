@@ -3,7 +3,8 @@ import * as v from 'valibot';
 import { DashboardQuerySchema } from '@grosslytics/shared/schemas';
 import { isTimeZone } from '@grosslytics/shared/attribution';
 import { D1StorageAdapter, queryDashboard, siteRange } from '@grosslytics/db-d1';
-import type { DashFilter } from '@grosslytics/shared/dashboard';
+import { DASH_RANGES, type DashFilter } from '@grosslytics/shared/dashboard';
+import { MAX_CUSTOM_DAYS } from '@grosslytics/shared/attribution';
 import type { AttributionModel } from '@grosslytics/shared/types';
 import type { Bindings } from '../env.js';
 import { hashToken, newTokenSecret } from '../auth.js';
@@ -82,9 +83,22 @@ statsRoute.get('/live', async (c) => {
 });
 
 
-const DashParams = v.object({
+// range=custom needs from and to (site-local YYYY-MM-DD, both included)
+const rangeFields = {
 	siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-	range: v.optional(v.picklist(['24h', '7d', '30d', '90d']), '30d'),
+	range: v.optional(v.picklist(DASH_RANGES), '30d'),
+	from: v.optional(v.pipe(v.string(), v.isoDate())),
+	to: v.optional(v.pipe(v.string(), v.isoDate())),
+};
+/** The custom dates when the range is custom and they are usable; `false` when it is custom and they are not. */
+function customRange(p: { range: string; from?: string; to?: string }) {
+	if (p.range !== 'custom') return undefined;
+	const days = p.from && p.to ? (Date.parse(p.to) - Date.parse(p.from)) / 86_400_000 + 1 : 0;
+	return days >= 1 && days <= MAX_CUSTOM_DAYS ? { from: p.from!, to: p.to! } : false;
+}
+
+const DashParams = v.object({
+	...rangeFields,
 	model: v.optional(v.picklist(['first', 'last', 'linear']), 'first'),
 	mode: v.optional(v.picklist(['gross', 'net', 'profit']), 'net'),
 	source: v.optional(v.pipe(v.string(), v.maxLength(512))),
@@ -100,7 +114,9 @@ export function parseDashParams(query: Record<string, string>) {
 	if (!parsed.success) return null;
 	const p = parsed.output;
 	const filters: DashFilter[] = (['source', 'page', 'country', 'device'] as const).flatMap((dim) => (p[dim] ? [{ dim, value: p[dim]! }] : []));
-	return { siteId: p.siteId, range: p.range, model: p.model, mode: p.mode, filters };
+	const custom = customRange(p);
+	if (custom === false) return null;
+	return { siteId: p.siteId, range: p.range, custom, model: p.model, mode: p.mode, filters };
 }
 
 // GET /api/stats/dashboard - every dashboard panel in one response
@@ -297,26 +313,33 @@ statsRoute.get('/waitlist', async (c) => {
 	return c.json({ signups: results }, 200, { 'Cache-Control': 'private, no-store' });
 });
 
-const RangeQuery = v.object({ siteId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)), range: v.optional(v.picklist(['24h', '7d', '30d', '90d']), '30d') });
+const RangeQuery = v.object(rangeFields);
+/** Start and end for the AI-crawl and click panels, or null for bad params. */
+async function panelRange(db: D1Database, query: Record<string, string>) {
+	const q = v.safeParse(RangeQuery, query);
+	const custom = q.success ? customRange(q.output) : false;
+	if (!q.success || custom === false) return null;
+	return { siteId: q.output.siteId, ...(await siteRange(db, q.output.siteId, q.output.range, undefined, custom)) };
+}
 
 // GET /api/stats/ai-crawls - which AI bots read which pages (reported server-side, see /docs)
 statsRoute.get('/ai-crawls', async (c) => {
-	const q = v.safeParse(RangeQuery, c.req.query());
-	if (!q.success) return c.json({ error: 'siteId required' }, 400);
-	const { start, end } = await siteRange(c.env.DB, q.output.siteId, q.output.range);
+	const q = await panelRange(c.env.DB, c.req.query());
+	if (!q) return c.json({ error: 'siteId required; a custom range needs from and to (YYYY-MM-DD)' }, 400);
+	const { siteId, start, end } = q;
 	const where = "FROM ai_crawls WHERE site_id = ?1 AND day >= date(?2, 'unixepoch') AND day <= date(?3, 'unixepoch')";
 	const [bots, pages] = await c.env.DB.batch<{ k: string; hits: number }>([
-		c.env.DB.prepare(`SELECT bot AS k, SUM(hits) AS hits ${where} GROUP BY bot ORDER BY hits DESC LIMIT 20`).bind(q.output.siteId, start, end),
-		c.env.DB.prepare(`SELECT path AS k, SUM(hits) AS hits ${where} GROUP BY path ORDER BY hits DESC LIMIT 20`).bind(q.output.siteId, start, end),
+		c.env.DB.prepare(`SELECT bot AS k, SUM(hits) AS hits ${where} GROUP BY bot ORDER BY hits DESC LIMIT 20`).bind(siteId, start, end),
+		c.env.DB.prepare(`SELECT path AS k, SUM(hits) AS hits ${where} GROUP BY path ORDER BY hits DESC LIMIT 20`).bind(siteId, start, end),
 	]);
 	return c.json({ bots: bots!.results, pages: pages!.results });
 });
 
 // GET /api/stats/clicks - what people click on pages running the opt-in click script (c.js)
 statsRoute.get('/clicks', async (c) => {
-	const q = v.safeParse(RangeQuery, c.req.query());
-	if (!q.success) return c.json({ error: 'siteId required' }, 400);
-	const { start, end } = await siteRange(c.env.DB, q.output.siteId, q.output.range);
+	const q = await panelRange(c.env.DB, c.req.query());
+	if (!q) return c.json({ error: 'siteId required; a custom range needs from and to (YYYY-MM-DD)' }, 400);
+	const { siteId, start, end } = q;
 	const m = (k: string) => `json_extract(json_extract(meta_json, '$.custom'), '$.${k}')`;
 	const { results } = await c.env.DB.prepare(
 		`SELECT event_name AS page, ${m('el')} AS el, COUNT(*) AS clicks, COUNT(DISTINCT visitor_id) AS visitors,
@@ -324,7 +347,7 @@ statsRoute.get('/clicks', async (c) => {
 		 COUNT(DISTINCT CASE WHEN visitor_id IN (SELECT visitor_id FROM payments WHERE site_id = ?1 AND status = 'succeeded' AND visitor_id IS NOT NULL) THEN visitor_id END) AS buyers
 		 FROM events WHERE site_id = ?1 AND event_type = 'click' AND created_at >= ?2 AND created_at < ?3
 		 GROUP BY page, el ORDER BY clicks DESC LIMIT 100`,
-	).bind(q.output.siteId, start, end).all();
+	).bind(siteId, start, end).all();
 	return c.json({ clicks: results });
 });
 
