@@ -29,7 +29,7 @@ import {
 	X,
 } from 'lucide-react';
 import type { DashboardData, DashSale } from '@grosslytics/shared/dashboard';
-import { formatDuration, sourceIcon } from '@grosslytics/shared/dashboard';
+import { formatDuration, RETENTION_DAYS, sourceIcon } from '@grosslytics/shared/dashboard';
 import { $dashboardFilters, setAttributionModel, setDateRange, setRevenueMode } from '../../stores/filterStore.js';
 import { apiFetch, fetchJourney, loadConnection, logout, rangeQuery, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from './api';
 import { Milestones, Heatmap, MainChart, MiniBars, ProfitBridge, type Point } from './charts';
@@ -93,6 +93,7 @@ function CustomRange({ value, onApply }: { value?: { from: string; to: string };
 }
 const MODE_LABEL: Record<Mode, string> = { gross: 'Gross revenue', net: 'Net revenue', profit: 'True profit' };
 const MODE_SHORT: Record<Mode, string> = { gross: 'Gross', net: 'Net', profit: 'Profit' };
+const RETENTION_LABEL: Record<number, string> = { 0: 'forever', 730: '2 years', 365: '1 year', 180: '6 months', 90: '90 days' };
 const DIM_LABEL: Record<Dimension, string> = { source: 'Source', page: 'Page', country: 'Country', device: 'Device' };
 
 type Source = 'demo' | 'api' | 'share';
@@ -184,6 +185,11 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 				await apiFetch(conn, `/api/stats/sites/${conn.siteId}/timezone`, { method: 'POST', body: JSON.stringify({ timezone }) });
 				setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, timezone } : s)));
 			}}
+			retention={current?.retention ?? 0}
+			onRetention={async (days) => {
+				await apiFetch(conn, `/api/stats/sites/${conn.siteId}/retention`, { method: 'POST', body: JSON.stringify({ days }) });
+				setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, retention: days } : s)));
+			}}
 			payments={current?.payments}
 		/>
 		</>
@@ -203,6 +209,8 @@ function Workspace(props: {
 	onShare?: (enabled: boolean) => Promise<void>;
 	timezone?: string;
 	onTimezone?: (timezone: string) => Promise<void>;
+	retention?: number;
+	onRetention?: (days: number) => Promise<void>;
 }) {
 	const { site, variant, source, conn } = props;
 	// The /app page gets a full-width sticky toolbar; share pages and the homepage preview sit inside their own box
@@ -457,6 +465,26 @@ function Workspace(props: {
 								{timeZones(props.timezone).map((tz) => <option key={tz}>{tz}</option>)}
 							</select>
 						</label>
+					)}
+					{props.onRetention && (
+						<div>
+							<label className="flex flex-wrap items-center gap-2">
+								Keep visit data
+								<select
+									className="rounded-lg bg-band px-2 py-1 text-[13px] ring-1 ring-line"
+									value={props.retention}
+									onChange={(e) => {
+										const days = Number(e.target.value);
+										const stricter = days > 0 && (!props.retention || days < props.retention);
+										if (!stricter || confirm(`Permanently delete ${site}'s visit data older than ${RETENTION_LABEL[days]}? This starts tonight and can't be undone.`)) act(() => props.onRetention!(days));
+									}}
+									aria-label="How long to keep visit data"
+								>
+									{RETENTION_DAYS.map((days) => <option key={days} value={days}>{RETENTION_LABEL[days]}</option>)}
+								</select>
+							</label>
+							<p className="mt-1 text-[12px] text-ink-3">Older page views, clicks and goals are deleted every night, so charts and buyer journeys stop showing them. Sales, revenue and where each visitor came from are kept.</p>
+						</div>
 					)}
 				</div>
 			</Panel>

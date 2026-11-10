@@ -11,8 +11,9 @@ import { mcpRoute } from './mcp.js';
 import { authRoute } from './routes/auth.js';
 import { billingRoute } from './routes/billing.js';
 import { licenseRoute } from './routes/license.js';
-import { cleanup, handleQueueBatch } from './consumer.js';
+import { cleanup, handleQueueBatch, pruneEvents } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
+import { isCloud } from './cloud.js';
 import type { Bindings } from './env.js';
 
 export { SiteLiveHub } from './durable-object.js';
@@ -62,5 +63,7 @@ export default {
 	// Daily cron (wrangler.toml [triggers])
 	async scheduled(_event: ScheduledController, env: Bindings): Promise<void> {
 		await cleanup(env.DB);
+		// shortcut: self-host deletes at most 20,000 events a day to stay inside D1's free daily write allowance, so a site recording more than that never catches up; make it configurable if one appears
+		await pruneEvents(env.DB, isCloud(env) ? 250 : 10);
 	},
 };

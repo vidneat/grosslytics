@@ -3,7 +3,7 @@ import * as v from 'valibot';
 import { DashboardQuerySchema } from '@grosslytics/shared/schemas';
 import { isTimeZone } from '@grosslytics/shared/attribution';
 import { D1StorageAdapter, queryDashboard, siteRange } from '@grosslytics/db-d1';
-import { DASH_RANGES, type DashFilter } from '@grosslytics/shared/dashboard';
+import { DASH_RANGES, RETENTION_DAYS, type DashFilter } from '@grosslytics/shared/dashboard';
 import { MAX_CUSTOM_DAYS } from '@grosslytics/shared/attribution';
 import type { AttributionModel } from '@grosslytics/shared/types';
 import type { Bindings } from '../env.js';
@@ -132,7 +132,7 @@ const cloudAccount = (c: Parameters<typeof sessionAccount>[0]) => (isCloud(c.env
 // GET /api/stats/sites - sites this API serves (on Hosted Cloud, the signed-in account's), with the payment gateways that have a webhook secret
 statsRoute.get('/sites', async (c) => {
 	const account = await cloudAccount(c);
-	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments, EXISTS (SELECT 1 FROM site_footer f WHERE f.site_id = s.site_id) AS footer";
+	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments, COALESCE((SELECT days FROM site_retention r WHERE r.site_id = s.site_id), 0) AS retention, EXISTS (SELECT 1 FROM site_footer f WHERE f.site_id = s.site_id) AS footer";
 	const { results } = await (account
 		? c.env.DB.prepare(`SELECT ${cols} FROM sites s JOIN account_sites a ON a.site_id = s.site_id WHERE a.account_id = ? ORDER BY s.created_at`).bind(account.id)
 		: c.env.DB.prepare(`SELECT ${cols} FROM sites s ORDER BY s.created_at`)
@@ -191,6 +191,18 @@ statsRoute.post('/sites/:id/timezone', async (c) => {
 	const body = (await c.req.json().catch(() => ({}))) as { timezone?: unknown };
 	if (typeof body.timezone !== 'string' || body.timezone.length > 64 || !isTimeZone(body.timezone)) return c.json({ error: 'Pick a timezone such as Europe/London.' }, 400);
 	await c.env.DB.prepare('UPDATE sites SET timezone = ? WHERE site_id = ?').bind(body.timezone, c.req.param('id')).run();
+	return c.json({ ok: true });
+});
+
+// POST /api/stats/sites/:id/retention {days} - delete this site's raw events after that many days (the daily cron does it); 0 keeps them forever
+statsRoute.post('/sites/:id/retention', async (c) => {
+	const { days } = (await c.req.json().catch(() => ({}))) as { days?: unknown };
+	if (!RETENTION_DAYS.includes(days as (typeof RETENTION_DAYS)[number])) return c.json({ error: 'Pick one of the listed periods.' }, 400);
+	const id = c.req.param('id');
+	await (days === 0
+		? c.env.DB.prepare('DELETE FROM site_retention WHERE site_id = ?').bind(id)
+		: c.env.DB.prepare('INSERT INTO site_retention (site_id, days) VALUES (?, ?) ON CONFLICT (site_id) DO UPDATE SET days = excluded.days').bind(id, days)
+	).run();
 	return c.json({ ok: true });
 });
 

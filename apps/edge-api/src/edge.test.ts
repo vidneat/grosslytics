@@ -15,7 +15,7 @@ import { CLOUD_EVENT_CAP, countUsage, usageMonth } from './cloud.js';
 import { licenseRoute } from './routes/license.js';
 import { verifyPassword } from './routes/auth.js';
 import { apiToml, hashPassword as cliHashPassword, isHost, noindex, versionHost } from '../../../packages/cli/src/install.ts';
-import { cleanup, handleQueueBatch, RECEIPT_DAYS } from './consumer.js';
+import { cleanup, handleQueueBatch, pruneEvents, RECEIPT_DAYS } from './consumer.js';
 import type { EnrichedEvent } from '@grosslytics/shared/types';
 import { formatMoney } from '@grosslytics/shared/money';
 import { D1StorageAdapter, ingestEvents, queryDashboard, siteRange } from '@grosslytics/db-d1';
@@ -1115,6 +1115,39 @@ test('devices: iPhones are iOS, Edge and Opera are not Chrome; cleanup keeps rec
 	await cleanup(d1, now);
 	expect(sqlite.query('SELECT message_id FROM processed_messages').all()).toEqual([{ message_id: 'new' }]);
 	expect(sqlite.query('SELECT id_hash FROM sessions').all()).toEqual([{ id_hash: 'live' }]);
+});
+
+test('retention: only events past a site\'s setting go, in capped rounds; sales and other sites stay', async () => {
+	const app = makeApp();
+	const post = (site: string, days: unknown) => app.fetch(`/api/stats/sites/${site}/retention`, { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ days }) });
+	expect((await post('s1', 7)).status).toBe(400);
+	expect((await post('s1', 90)).status).toBe(200);
+	expect((await post('s1', 365)).status).toBe(200);
+	expect((await post('s1', 90)).status).toBe(200);
+	expect(app.sqlite.query('SELECT site_id, days FROM site_retention').all()).toEqual([{ site_id: 's1', days: 90 }]);
+
+	const day = 86400;
+	const add = (site: string, at: number, n = 1) => {
+		for (let i = 0; i < n; i++) app.sqlite.run("INSERT INTO events (site_id, visitor_id, session_id, event_type, event_name, source, created_at) VALUES (?, 'v', 'x', 'pageview', '/', 'Direct', ?)", [site, at]);
+	};
+	const before = (site: string) => app.sqlite.query('SELECT COUNT(*) AS n FROM events WHERE site_id = ?').get(site) as { n: number };
+	const start = before('s1').n;
+	const other = before('other').n;
+	add('s1', NOW - 91 * day, 4001);
+	add('s1', NOW - 89 * day);
+	add('other', NOW - 900 * day);
+	app.sqlite.run("INSERT INTO payments (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status, created_at) VALUES ('old', 's1', 'stripe', 100, 90, 'succeeded', ?)", [NOW - 900 * day]);
+
+	await pruneEvents(app.d1, 1, NOW);
+	expect(before('s1').n).toBe(start + 4002 - 2000);
+	await pruneEvents(app.d1, 10, NOW);
+	expect(app.sqlite.query('SELECT COUNT(*) AS n FROM events WHERE site_id = ? AND created_at < ?').get('s1', NOW - 90 * day)).toEqual({ n: 0 });
+	expect(app.sqlite.query('SELECT COUNT(*) AS n FROM events WHERE site_id = ? AND created_at = ?').get('s1', NOW - 89 * day)).toEqual({ n: 1 });
+	expect(before('other').n).toBe(other + 1);
+	expect(app.sqlite.query("SELECT COUNT(*) AS n FROM payments WHERE payment_id = 'old'").get()).toEqual({ n: 1 });
+
+	expect((await post('s1', 0)).status).toBe(200);
+	expect(app.sqlite.query('SELECT COUNT(*) AS n FROM site_retention').get()).toEqual({ n: 0 });
 });
 
 test('migration 011: legacy per-site webhook secrets move to site_secrets, and reruns keep removals', async () => {

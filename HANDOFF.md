@@ -24,7 +24,7 @@ Three connections, each pointing at the owner's own API (a Cloudflare Worker):
   - `/compare/<slug>`: comparison pages.
   - `/badge`, `/og`: badge and social-card images.
 - `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,587 bytes Brotli (the most that rounds to the site's "1.5 KB"); it is currently 1,560. The same build makes the opt-in click script `dist/c.js`; copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
-- `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–012.
+- `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–013.
 - `packages/shared`: types and the dashboard contract (`dashboard.ts`).
 - `scripts/db.ts`: local migrate and seed; also migrates the remote database.
 - `examples/test-site`: a three-page local site for end-to-end testing (see below).
@@ -42,7 +42,7 @@ bun run dev:test-site   # port 3000, after filling examples/test-site/config.js
 `.dev.vars` (gitignored) holds `API_TOKEN` and `STRIPE_WEBHOOK_SECRET`. **Never read or print it**; the user pastes the token into `/app` themselves.
 
 Checks:
-- `bun test packages apps`: 56 tests pass.
+- `bun test packages apps`: 58 tests pass.
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
 
@@ -57,10 +57,18 @@ Measured first, on the local sample data (95k events, 19k visitors, 759 payments
 - Checked and left alone: hovering the chart and the demo's live ticks cause no long tasks (over 50ms) in the browser; the dashboard script is 25 KB compressed and React 58 KB; ingest is one batch of five statements per queue batch.
 - Verified: 56 tests, typecheck for web, API and db-d1, `astro build`, the timings above. Not verified in a running system: the live hub changes and the one-a-second presence updates (they need a signed-in dashboard with real page views), and anything on Cloudflare's own D1.
 - **Found, not fixed (each needs a decision):**
-  - `events` is never pruned, so storage and every query's cost grow with the site's whole history. Needs a retention setting (how long to keep raw events).
   - The dashboard response lists every source with no limit; a site with thousands of distinct referrers gets a large response. Capping it would change the totals the Sources panel and the insights add up.
   - Every dashboard load is about 35 SQL statements that each scan the range's events. On Cloudflare's free D1 allowance (rows read per day) a busy site with long ranges open will use it quickly. The real fix is daily rollup tables, which were retired on 2026-11-07 because summed uniques were wrong.
   - Source and channel traffic (about 0.4s and 0.2s on a year) parse each event's JSON to find its category; a stored category column would remove that.
+
+## Visit data retention (2026-11-10)
+
+- New setting under Settings → This site: "Keep visit data" forever (the default), 2 years, 1 year, 6 months or 90 days. Choosing a shorter period asks for confirmation first. Stored in new table `site_retention` (migration 013; no row means forever), set by `POST /api/stats/sites/:id/retention` (read-only `gl_pat_` tokens can't reach it). Allowed values: `RETENTION_DAYS` in `shared/dashboard.ts`.
+- The daily cron runs `pruneEvents()`: 2,000 events per query, at most 10 queries a run on self-host (20,000 events a day, to stay inside D1's free write allowance) and 250 on Hosted Cloud. Sites are taken in random order. A very busy self-hosted site recording over 20,000 events a day never catches up (`shortcut:` in `index.ts`).
+- Only `events` is deleted (page views, leaves, goals, clicks). Payments and `visitors` stay, so revenue and first/last-touch attribution survive, and so do the visitor rows themselves: this is a cost setting, not a full privacy erase. Charts and buyer journeys no longer show deleted visits. The date picker still offers ranges longer than the setting.
+- Verified: 58 tests (new `retention:` test: bad values refused, cutoff, capped rounds, other sites and payments untouched, back to forever), API/web/db-d1 typecheck, `astro build`, local migration. In the browser against a local Worker on a throwaway site: the setting shows, cancel leaves it unchanged, confirm saves it. A real trigger of the scheduled handler on local D1 deleted the 2 old events and kept the recent one; the seeded site was untouched (95,532 events); test rows removed afterwards.
+- Remote database migrated through 013 on 2026-11-10 (the owner ran `bun run db:migrate:remote`; 42 statements succeeded), so `site_retention` exists in production.
+- Not done or not deployed: the code is not committed or deployed. The nightly deletion has not run on Cloudflare's own D1 or with a large deletion.
 
 ## Gaps versus DataFast and DataBull (looked at 2026-11-10)
 
@@ -471,7 +479,7 @@ A full review found the issues below; all "must" and "should" items are fixed. 5
 - **Install-wide lists:** `gl_pat_` tokens can no longer read `/api/stats/waitlist` or `/api/stats/sites`, and Cloud sessions can't read the waitlist (`auth.ts`).
 - **Lockout race:** each login claims a try in one `UPDATE … RETURNING` before the PBKDF2 check (`attempt()` in `routes/auth.ts`); 20 parallel wrong guesses check at most 5.
 - **Share/badge cache:** `/api/share/*` is stored in the Cloudflare Cache API for 60s, without CORS headers (`routes/share.ts`). Turning a page off takes up to a minute to show.
-- **Pruning:** daily cron `17 3 * * *` (root `wrangler.toml` and the installer's `apiToml`) deletes `processed_messages` older than 14 days and expired sessions (`cleanup()` in `consumer.ts`). `events` are kept: deleting user data needs a retention setting first.
+- **Pruning:** daily cron `17 3 * * *` (root `wrangler.toml` and the installer's `apiToml`) deletes `processed_messages` older than 14 days and expired sessions (`cleanup()` in `consumer.ts`), then old `events` for sites with a retention setting (`pruneEvents()`; see the retention section).
 - **Live hub:** the eviction alarm runs only while someone is online.
 - **Devices:** iOS before macOS, Android before Linux; Edge (`Edg/`), Opera (`OPR/`), CriOS/FxiOS recognised (`parseDevice`).
 - **SPA page views:** `g.js` wraps `history.pushState` and listens for `popstate`. A path change sends a leave for the old page and a pageview for the new one. To fit the size budget, the tracker no longer sends its own channel guess (`cat`); the server works it out (`classifySourceCategory` now treats any `utm_medium` containing "mail" or "newsletter" as Email). The session key changed from `gl_src` to `gl_s` (c.js too). 1,560 B Brotli. /docs updated.

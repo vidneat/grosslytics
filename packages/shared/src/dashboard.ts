@@ -4,6 +4,9 @@
  * Money is in cents; `revenue` is already in the requested mode (gross, net or profit).
  */
 
+/** How long a site's raw events may be kept, in days. 0 keeps them forever. */
+export const RETENTION_DAYS = [0, 730, 365, 180, 90] as const;
+
 export const DASH_RANGES = ['24h', '7d', '30d', '90d', '12m', 'custom'] as const;
 /** `12m` is 52 Monday-first weeks; `custom` needs a `DashCustomRange` */
 export type DashRange = (typeof DASH_RANGES)[number];
