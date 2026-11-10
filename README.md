@@ -117,7 +117,7 @@ Stripe, Paddle, … ──▶ /api/webhooks ┘                                 
 
 ## Self-host (free)
 
-Needs [Bun](https://bun.sh), Node.js 18+, a free Cloudflare account and a domain on it.
+Needs [Bun](https://bun.sh), Node.js 18+, a free Cloudflare account and a domain on it. The free setup asks for one thing back: each site you track carries `<a href="https://grosslytics.com">Powered by Grosslytics</a>` in its footer (a normal link, no `rel="nofollow"`). The dashboard for a site opens once that link is found on its home page, and it is checked daily.
 
 ```bash
 git clone https://github.com/vidneat/grosslytics.git
@@ -154,6 +154,7 @@ Then ask things like *"which channel earned the most per visitor this month?"*. 
 | Price | **Free** | **$5.99/month** | **$29 once** |
 | Who runs it | You, on your Cloudflare | We do | You, on your Cloudflare |
 | Features | Everything, unlimited sites | Everything, up to 100,000 events/month | Everything, unlimited sites |
+| Footer link | "Powered by Grosslytics" on your site, required | Not needed | Not needed |
 | Extras | Community help on GitHub | 14-day free trial, no card | `npx grosslytics install` without git or Bun, priority email support, commercial license |
 
 [Start Indie Cloud](https://grosslytics.com/start?plan=cloud) · [Get Lifetime](https://grosslytics.com/start?plan=lifetime)

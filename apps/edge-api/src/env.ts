@@ -17,6 +17,8 @@ export interface Bindings {
 	API_TOKEN?: string;
 	/** "1" turns on Hosted Cloud: customer signup, per-account sites, the event cap and Stripe billing */
 	CLOUD?: string;
+	/** "1" on free self-hosted installs: a site's dashboard opens only once its homepage links to grosslytics.com (footer.ts) */
+	REQUIRE_FOOTER?: string;
 	/** Signing secret of the Stripe webhook for Grosslytics' own subscriptions (not a customer's payments) */
 	STRIPE_BILLING_WEBHOOK_SECRET?: string;
 	/** Signing secret (whsec_…) of the Dodo Payments webhook for Grosslytics' own Lifetime and Cloud sales */

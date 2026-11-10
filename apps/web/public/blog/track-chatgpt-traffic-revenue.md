@@ -1,6 +1,6 @@
 # How to Track ChatGPT Traffic Through to Real Revenue
 
-> Canonical URL: https://grosslytics.com/blog/track-chatgpt-traffic-revenue | Updated: 2026-11-09
+> Canonical URL: https://grosslytics.com/blog/track-chatgpt-traffic-revenue/ | Updated: 2026-11-09
 
 To track ChatGPT traffic through to revenue, record the `utm_source=chatgpt.com` tag or the chatgpt.com referrer on arrival, keep one visitor ID for that person, pass the ID into checkout, and match it to the signed payment event. Visit counts alone cannot tell you whether ChatGPT produced customers.
 

@@ -90,10 +90,10 @@ export function getStaticPaths() {
 
 const { competitor, competitorDomain, title, description, h1, answer, whatIs, rows, chooseThem, chooseUs, pricing, deep, switching, faqs, theyLead, weDiffer, sources, verified: lastVerifiedDate } = Astro.props;
 const related = [
-	{ href: '/compare/datafast-alternative', name: 'DataFast' },
-	{ href: '/compare/databull-alternative', name: 'DataBull' },
-	{ href: '/compare/plausible-alternative', name: 'Plausible' },
-	{ href: '/compare/ga4-alternative', name: 'Google Analytics 4' },
+	{ href: '/compare/datafast-alternative/', name: 'DataFast' },
+	{ href: '/compare/databull-alternative/', name: 'DataBull' },
+	{ href: '/compare/plausible-alternative/', name: 'Plausible' },
+	{ href: '/compare/ga4-alternative/', name: 'Google Analytics 4' },
 ].filter((r) => r.name !== competitor);
 const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 ---
@@ -218,7 +218,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 				<ol class="mt-4 list-decimal space-y-3 pl-6">
 					{switching.map((step) => <li>{step}</li>)}
 				</ol>
-				<p class="mt-4">Setup takes about five minutes. <a class="text-accent hover:underline" href="/start">Start the setup ›</a></p>
+				<p class="mt-4">Setup takes about five minutes. <a class="text-accent hover:underline" href="/start/">Start the setup ›</a></p>
 			</section>
 
 			<section class="prose-g mt-16 text-[19px] leading-relaxed">
@@ -259,7 +259,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 				<h2 class="text-[28px] font-semibold tracking-[-0.02em]">See your own numbers.</h2>
 				<p class="mt-2 text-ink-2">Free on your Cloudflare account.</p>
 				<div class="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-					<a href="/start" class="btn btn-primary">Start free</a>
+					<a href="/start/" class="btn btn-primary">Start free</a>
 					<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
 				</div>
 			</div>

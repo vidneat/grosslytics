@@ -231,7 +231,7 @@ test('stdio tools research, audit and write articles without overwriting work', 
 		const headers = await readFile(path.join(root, 'public/_headers'), 'utf8');
 		assert.match(
 			headers,
-			/Link: <https:\/\/grosslytics.com\/guides\/payment-tracking>; rel="canonical"/,
+			/Link: <https:\/\/grosslytics.com\/guides\/payment-tracking\/>; rel="canonical"/,
 		);
 		const linking = JSON.parse(
 			(await call('plan_internal_links', { keyword: 'payment revenue' })).content[0].text,

@@ -267,7 +267,7 @@ function SelfHost() {
 					</div>
 					{where === 'cloudflare' ? (
 						<>
-							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 18 or newer, a free Cloudflare account, and a domain on that account. About five minutes.</p>
+							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 18 or newer, a free Cloudflare account, and a domain on that account. About five minutes. Free in exchange for a “Powered by Grosslytics” link in your site’s footer: the dashboard asks for it, and checks it, when you add a site.</p>
 							<CopyBlock label="1. Get the code" code={`git clone ${REPO}.git\ncd grosslytics && bun install`} />
 							<CopyBlock label="2. Set up and deploy" code="bun run setup" />
 							<p className="text-[13px]">It asks for a hostname (such as analytics.yourstartup.com) and a dashboard password, then opens Cloudflare: click <strong>Allow</strong>. It creates the database and queues, deploys, and prints your dashboard address and API_TOKEN. Run it again later to update.</p>

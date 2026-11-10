@@ -12,6 +12,7 @@ import { PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
 import { accountActive, isCloud, sessionAccount } from '../cloud.js';
 import { extractPayment, recordPayment } from './webhooks.js';
 import { reportingCurrency } from '@grosslytics/shared/money';
+import { footerRequired, FOOTER_SNIPPET, verifyFooter } from '../footer.js';
 
 export const statsRoute = new Hono<{ Bindings: Bindings }>();
 
@@ -115,12 +116,14 @@ const cloudAccount = (c: Parameters<typeof sessionAccount>[0]) => (isCloud(c.env
 // GET /api/stats/sites - sites this API serves (on Hosted Cloud, the signed-in account's), with the payment gateways that have a webhook secret
 statsRoute.get('/sites', async (c) => {
 	const account = await cloudAccount(c);
-	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments";
+	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments, EXISTS (SELECT 1 FROM site_footer f WHERE f.site_id = s.site_id) AS footer";
 	const { results } = await (account
 		? c.env.DB.prepare(`SELECT ${cols} FROM sites s JOIN account_sites a ON a.site_id = s.site_id WHERE a.account_id = ? ORDER BY s.created_at`).bind(account.id)
 		: c.env.DB.prepare(`SELECT ${cols} FROM sites s ORDER BY s.created_at`)
-	).all<Record<string, unknown> & { payments: string | null }>();
-	return c.json({ sites: results.map((r) => ({ ...r, payments: r.payments ? r.payments.split(',') : [] })) });
+	).all<Record<string, unknown> & { payments: string | null; footer: number; domain: string }>();
+	// `locked`: the dashboard shows the footer-link step instead of the data (footer.ts)
+	const gate = footerRequired(c.env);
+	return c.json({ sites: results.map(({ footer, ...r }) => ({ ...r, payments: r.payments ? r.payments.split(',') : [], locked: gate && !footer && r.domain !== 'localhost' })) });
 });
 
 const SiteBody = v.object({
@@ -147,6 +150,24 @@ statsRoute.post('/sites', async (c) => {
 	const insert = c.env.DB.prepare('INSERT INTO sites (site_id, domain, name, currency, timezone) VALUES (?, ?, ?, ?, ?)').bind(id, parsed.output.domain, parsed.output.name || parsed.output.domain, parsed.output.currency, parsed.output.timezone);
 	await c.env.DB.batch(account ? [insert, c.env.DB.prepare('INSERT INTO account_sites (site_id, account_id) VALUES (?, ?)').bind(id, account.id)] : [insert]);
 	return c.json({ id, domain: parsed.output.domain }, 201);
+});
+
+// POST /api/stats/sites/:id/footer - look for the "Powered by Grosslytics" link on the site's homepage now
+statsRoute.post('/sites/:id/footer', async (c) => {
+	const id = c.req.param('id');
+	const site = await c.env.DB.prepare('SELECT domain FROM sites WHERE site_id = ?').bind(id).first<{ domain: string }>();
+	if (!site) return c.json({ error: 'Unknown site.' }, 404);
+	const result = await verifyFooter(c.env.DB, id, site.domain);
+	if (result === 'ok') return c.json({ ok: true });
+	return c.json(
+		{
+			error:
+				result === 'unreachable'
+					? `Could not load https://${site.domain}/. Check the site is online, then try again.`
+					: `No followed link to grosslytics.com on https://${site.domain}/. Add ${FOOTER_SNIPPET} to the page's HTML, without rel="nofollow", then try again.`,
+		},
+		422,
+	);
 });
 
 // POST /api/stats/sites/:id/timezone - the IANA zone the dashboard's days, hours and heatmap use

@@ -260,6 +260,47 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 	);
 }
 
+const FOOTER_SNIPPET = '<a href="https://grosslytics.com">Powered by Grosslytics</a>';
+
+/** Free self-hosted installs: the dashboard stays shut until the site's homepage carries the footer link (the API enforces it; see footer.ts). */
+export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connection; site: SiteInfo; onVerified: () => void; onSwitch: () => void }) {
+	const [copied, setCopied] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+	const verify = () => {
+		setBusy(true);
+		setError('');
+		apiFetch(conn, `/api/stats/sites/${site.id}/footer`, { method: 'POST', body: '{}' }).then(onVerified, (e: Error) => (setError(e.message), setBusy(false)));
+	};
+	return (
+		<section className="mx-auto max-w-[520px] rounded-xl bg-card p-7 ring-1 ring-line" aria-label="Add the footer link">
+			<div className="mb-4 flex items-center gap-3">
+				<span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent"><LockKeyhole size={20} aria-hidden="true" /></span>
+				<div className="min-w-0">
+					<h2 className="text-[19px] font-semibold tracking-[-0.02em]">One step to open your dashboard</h2>
+					<p className="break-all text-[13px] text-ink-2">{site.domain}</p>
+				</div>
+			</div>
+			<p className="text-[14px] text-ink-2">
+				The free plan is paid for with a link. Add this to the footer of <strong className="font-medium text-ink">{site.domain}</strong>, on the home page, as a normal link (no <code className="font-mono text-[12.5px]">rel="nofollow"</code>):
+			</p>
+			<div className="mt-3 flex items-start gap-2 rounded-xl bg-band p-3">
+				<code className="min-w-0 flex-1 break-all font-mono text-[12.5px] text-ink-2">{FOOTER_SNIPPET}</code>
+				<button type="button" className="btn btn-quiet shrink-0 !px-2 !py-1 !text-[13px]" onClick={() => copyText(FOOTER_SNIPPET).then(setCopied)}>
+					<Copy size={13} aria-hidden="true" />{copied ? 'Copied' : 'Copy'}
+				</button>
+			</div>
+			<p className="mt-3 text-[13px] text-ink-2">Visits and sales are still being recorded while you do this. The link is checked again each day, and removing it locks the dashboard.</p>
+			<button type="button" className="btn btn-primary mt-4 w-full" onClick={verify} disabled={busy}>{busy ? 'Checking your site…' : 'I added it, verify'}</button>
+			{error && <p className="mt-3 text-[13px] text-down" role="alert">{error}</p>}
+			<div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-[13px]">
+				<button type="button" className="text-accent hover:underline" onClick={onSwitch}>Choose another site</button>
+				<a className="text-ink-2 hover:text-ink hover:underline" href="/start?plan=lifetime">Remove the link with Lifetime</a>
+			</div>
+		</section>
+	);
+}
+
 /** Shown on an empty site: the one line to paste into the site's <head>. */
 export function InstallSnippet({ siteId, api }: { siteId: string; api: string }) {
 	const origin = typeof location === 'undefined' ? '' : location.origin;

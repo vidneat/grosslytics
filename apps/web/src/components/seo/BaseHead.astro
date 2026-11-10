@@ -10,14 +10,18 @@ interface Props {
 const { title, description, ogImage, noindex = false, schema = [] } = Astro.props;
 const cleanPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
 const siteOrigin = Astro.site?.toString() || 'https://grosslytics.com';
-const canonicalURL = new URL(cleanPath, siteOrigin).toString();
-const resolvedOgImage = ogImage || new URL(`/og${cleanPath === '/' ? '/index' : cleanPath}.png`, siteOrigin).toString();
+// Pages are served at /path/ (the host redirects /path there), so that is the address search engines are given
+const canonicalURL = new URL(cleanPath === '/' ? '/' : `${cleanPath}/`, siteOrigin).toString();
+// Share cards are PNG files made at build time (astro.config.mjs); pages rendered on request have none, so they use the homepage's
+const resolvedOgImage = ogImage || new URL(`/og${cleanPath === '/' || !Astro.isPrerendered ? '/index' : cleanPath}.png`, siteOrigin).toString();
 ---
 
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>{title}</title>
 <meta name="description" content={description} />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <link rel="canonical" href={canonicalURL} />
 
 {noindex ? (

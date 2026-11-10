@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireToken } from './auth.js';
+import { requireFooter } from './footer.js';
 import { cors } from 'hono/cors';
 import { collectRoute, crawlRoute } from './routes/collect.js';
 import { statsRoute } from './routes/stats.js';
@@ -35,6 +36,8 @@ app.get('/', (c) => c.text('Grosslytics Edge API Online', 200));
 // The /app owner signs in with a password (session cookie); API_TOKEN is the master key; gl_pat_ tokens are read-only per site.
 app.use('/api/stats/*', requireToken);
 app.use('/api/mcp/*', requireToken);
+app.use('/api/stats/*', requireFooter);
+app.use('/api/mcp/*', requireFooter);
 
 // Mount routes
 // /api/event: EasyPrivacy blocks URLs ending in /api/collect. The old path stays for snippets already installed.

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 20 20">
+  <!-- Grosslytics mark: a long "gross" bar above a shorter "net" bar (same shapes as apps/web/src/components/site/Logo.astro) -->
+  <rect width="20" height="20" rx="4.5" fill="#ffffff"/>
+  <rect x="2" y="4.5" width="16" height="4.5" rx="2.25" fill="#1d1d1f" fill-opacity="0.28"/>
+  <rect x="2" y="11" width="11" height="4.5" rx="2.25" fill="#0071e3"/>
+</svg>

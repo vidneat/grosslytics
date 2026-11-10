@@ -59,6 +59,8 @@ export interface SiteInfo {
 	timezone?: string;
 	/** Payment gateways with a webhook secret saved for this site */
 	payments?: string[];
+	/** Free self-hosted installs: true until the site's "Powered by Grosslytics" footer link is verified */
+	locked?: boolean;
 }
 
 const dashQuery = (q: { range: DashRange; model: DashModel; mode: DashMode; filters: DashFilter[] }) => {

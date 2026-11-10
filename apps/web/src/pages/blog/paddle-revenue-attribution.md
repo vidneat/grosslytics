@@ -23,7 +23,7 @@ You need a Paddle Billing product and price, an initialized Paddle.js integratio
 
 This guide is published by the Grosslytics team. Provider documentation and the current Grosslytics implementation were checked on November 8, 2026; the examples were not exercised against a live merchant account, and no setup-time guarantee is made.
 
-This guide covers Paddle Billing and transaction.completed, not legacy Paddle Classic events. Start with the [Grosslytics setup flow](/start), install the tracker and choose a reporting currency that matches the charge currency.
+This guide covers Paddle Billing and transaction.completed, not legacy Paddle Classic events. Start with the [Grosslytics setup flow](/start/), install the tracker and choose a reporting currency that matches the charge currency.
 
 1. Add the Grosslytics tracker to the acquisition and pricing pages.
 2. Load and initialize Paddle.js with your client-side token.

@@ -29,7 +29,7 @@ import { sourceIcon } from '@grosslytics/shared/dashboard';
 import { $dashboardFilters, setAttributionModel, setDateRange, setRevenueMode } from '../../stores/filterStore.js';
 import { apiFetch, fetchJourney, loadConnection, logout, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from './api';
 import { Milestones, Heatmap, MainChart, MiniBars, ProfitBridge, type Point } from './charts';
-import { ApiTokens, CloudBilling, Connect, InstallSnippet, PaymentWebhooks } from './connect';
+import { ApiTokens, CloudBilling, Connect, FooterGate, InstallSnippet, PaymentWebhooks } from './connect';
 import { buildDemo, DEMO_NOW, flag, journeyFor, type Dimension, type Filter, type Metric, type Mode, type Model, type Range } from './demo';
 import { gatewayLabel, JourneyDrawer, LiveFeed } from './live';
 import { AdSpendCsv, AiCrawlers, ClickMap, StripeImport, Waitlist } from './extras';
@@ -107,6 +107,13 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 	if (!conn) return <div className="px-5 pt-10"><Connect onConnect={connect} /></div>;
 	if (picking) return <div className="px-5 pt-10"><Connect start={conn} onConnect={connect} onCancel={() => setPicking(false)} onSignOut={() => connect(null)} /></div>;
 	const current = sites.find((s) => s.id === conn.siteId);
+	if (current?.locked) {
+		return (
+			<div className="px-5 pt-10">
+				<FooterGate conn={conn} site={current} onVerified={() => setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, locked: false } : s)))} onSwitch={() => setPicking(true)} />
+			</div>
+		);
+	}
 	return (
 		<>
 		{!conn.token && <CloudBilling />}

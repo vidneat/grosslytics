@@ -102,7 +102,7 @@ program
 
 		const api = join(DIR, 'release', 'api');
 		const web = join(DIR, 'release', 'web');
-		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone, releasesBucket: prev.releasesBucket }, dbId));
+		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone, releasesBucket: prev.releasesBucket, requireFooter: !!bundle && host !== 'grosslytics.com' }, dbId));
 		writeFileSync(join(web, 'wrangler.toml'), webToml({ host }));
 		noindex(host, join(web, 'dist'));
 		await step('Deploying the API', () => wrangler(['deploy'], { cwd: api, quiet: true }));

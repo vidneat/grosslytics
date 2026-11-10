@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { queryDashboard } from '@grosslytics/db-d1';
 import type { Bindings } from '../env.js';
 import { parseDashParams } from './stats.js';
+import { footerRequired } from '../footer.js';
 
 /** Public revenue pages: no token, only for sites that opted in, and never customer emails or journeys. */
 export const shareRoute = new Hono<{ Bindings: Bindings }>();
@@ -27,7 +28,10 @@ shareRoute.get('/:domain', async (c) => {
 
 async function shareResponse(c: Context<{ Bindings: Bindings }>) {
 	const domain = c.req.param('domain')!.toLowerCase();
-	const site = await c.env.DB.prepare('SELECT site_id FROM sites WHERE domain = ? AND public_share_enabled = 1 LIMIT 1').bind(domain).first<{ site_id: string }>();
+	const site = await c.env.DB.prepare(
+		// A locked dashboard has no public page either, or sharing would be a way around the footer link
+		"SELECT site_id FROM sites s WHERE domain = ?1 AND public_share_enabled = 1 AND (?2 = 0 OR domain = 'localhost' OR EXISTS (SELECT 1 FROM site_footer f WHERE f.site_id = s.site_id)) LIMIT 1",
+	).bind(domain, footerRequired(c.env) ? 1 : 0).first<{ site_id: string }>();
 	if (!site) return c.json({ error: 'No public page for this domain' }, 404);
 	const p = parseDashParams({ ...c.req.query(), siteId: site.site_id });
 	if (!p) return c.json({ error: 'Invalid query parameters' }, 400);

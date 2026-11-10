@@ -27,7 +27,7 @@ The supported path described here is Razorpay Orders with Standard Checkout, fol
 
 Before changing checkout:
 
-1. Create your Grosslytics site through [setup](/start).
+1. Create your Grosslytics site through [setup](/start/).
 2. Select INR reporting if you charge INR.
 3. Install the tracker on your landing and pricing pages.
 4. Keep your existing server order creation and payment verification flow.

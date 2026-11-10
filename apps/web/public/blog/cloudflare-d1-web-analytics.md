@@ -1,6 +1,6 @@
 # How to Self-Host Revenue Analytics on Cloudflare D1
 
-> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics | Updated: 2026-11-08
+> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics/ | Updated: 2026-11-08
 
 You can self-host Grosslytics web and revenue analytics on Cloudflare Workers and D1 using the source-build setup, or the licensed installer when a downloadable release is available. Cloudflare infrastructure can cost $0/month within all applicable free allowances, but Queues, Durable Objects, database writes and reporting queries matter alongside Worker requests and D1 reads. Follow these five steps to size the workload, deploy the stack and verify traffic-to-payment attribution.
 

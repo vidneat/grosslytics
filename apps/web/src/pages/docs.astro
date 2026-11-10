@@ -216,6 +216,7 @@ export function middleware(req: NextRequest) {
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="self-host" class={h2}>Self-hosting</h2>
 				<p>Grosslytics runs entirely in your own Cloudflare account: Workers, D1, Queues and a Durable Object. The free Workers plan is enough for most sites.</p>
+				<p>The free setup asks for a link in return. Put <code>&lt;a href="https://grosslytics.com"&gt;Powered by Grosslytics&lt;/a&gt;</code> in the footer of each site you track, in the page’s HTML and without <code>rel="nofollow"</code>. The dashboard for a site opens once the link is found on its home page; visits and sales are recorded in the meantime. The link is checked once a day, and removing it locks the dashboard again. Lifetime installs skip this.</p>
 				<p>You need Bun, Node.js 18 or newer, and a domain on Cloudflare. From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
 				<pre class={pre}><code>{`git clone https://github.com/vidneat/grosslytics.git
 cd grosslytics && bun install

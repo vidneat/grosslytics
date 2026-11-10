@@ -28,7 +28,7 @@
 - MCP (Streamable HTTP): `/api/mcp?site=YOUR_SITE_ID`. Tools: query_channel_roas, inspect_unmasked_direct, get_ai_search_citations, get_buyer_journeys, compare_buyer_reading_time.
 
 ## Pricing
-- Self-host: $0, open source (AGPL-3.0), your own Cloudflare account
+- Self-host: $0, open source (AGPL-3.0), your own Cloudflare account. The free setup needs a "Powered by Grosslytics" link to grosslytics.com in the tracked site's footer before the dashboard opens; Lifetime and Indie Cloud do not
 - Indie Cloud: $5.99/month
 - Lifetime: $29 one time. One-command installer and updates (no git or Bun), priority email support, and a commercial license without AGPL obligations
 

@@ -38,7 +38,7 @@ export const guessZone = (host: string) => host.split('.').slice(-2).join('.');
 export const isHost = (h: string) => /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(h);
 
 /** The edge API: pre-bundled, served at <host>/api/*. SQLite-backed Durable Objects work on the Workers Free and Paid plans. */
-export function apiToml(s: Pick<InstallState, 'host' | 'zone' | 'releasesBucket'>, databaseId: string): string {
+export function apiToml(s: Pick<InstallState, 'host' | 'zone' | 'releasesBucket'> & { requireFooter?: boolean }, databaseId: string): string {
 	return `name = "grosslytics-edge-api"
 main = "index.js"
 no_bundle = true
@@ -85,7 +85,7 @@ crons = ["17 3 * * *"]
 [vars]
 ENVIRONMENT = "production"
 TRACKER_ORIGIN = "https://${s.host}"
-${s.releasesBucket ? `\n[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "${s.releasesBucket}"\n` : ''}`;
+${s.requireFooter ? 'REQUIRE_FOOTER = "1"\n' : ''}${s.releasesBucket ? `\n[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "${s.releasesBucket}"\n` : ''}`;
 }
 
 /** The website and dashboard, on <host> as a custom domain (Cloudflare creates the DNS record). */

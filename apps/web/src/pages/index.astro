@@ -45,10 +45,10 @@ const features = [
 	{ title: 'Ad spend from a CSV', body: 'Load daily spend exported from Meta, Google, X or LinkedIn Ads and see MER and profit per channel.' },
 ];
 const compares = [
-	{ href: '/compare/datafast-alternative', name: 'DataFast' },
-	{ href: '/compare/databull-alternative', name: 'DataBull' },
-	{ href: '/compare/plausible-alternative', name: 'Plausible' },
-	{ href: '/compare/ga4-alternative', name: 'Google Analytics 4' },
+	{ href: '/compare/datafast-alternative/', name: 'DataFast' },
+	{ href: '/compare/databull-alternative/', name: 'DataBull' },
+	{ href: '/compare/plausible-alternative/', name: 'Plausible' },
+	{ href: '/compare/ga4-alternative/', name: 'Google Analytics 4' },
 ];
 const faqs = [
 	{ question: 'What makes Grosslytics different from Google Analytics or Plausible?', answer: 'Those tools count visits. Grosslytics also receives your payment webhooks, so every sale is tied to the post, search or AI answer that brought the buyer, and shown after gateway fees and ad spend.' },
@@ -60,14 +60,14 @@ const faqs = [
 	{ question: 'Can I ask an AI agent about my numbers?', answer: 'Yes. Your API includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?”' },
 	{ question: 'Can I track several sites or client sites?', answer: 'Yes. Self-hosting has no site limit; each site has its own ID, currency and timezone.' },
 	{ question: 'I use DataFast. Is switching hard?', answer: 'Swap the script tag and point your payment webhook at your Grosslytics API. Existing data-fast-goal attributes on your buttons keep working.' },
-	{ question: 'Is Grosslytics open source?', answer: 'Yes, under the AGPL-3.0 license. The code is on GitHub, and self-hosting it is free with every feature. If you change it and offer it to others as a service, the AGPL asks you to share those changes; a Lifetime license removes that requirement.' },
-	{ question: 'Is hosting available, or only self-hosting?', answer: 'Both. Self-hosting from GitHub is free. Indie Cloud is hosted for you at $5.99 a month for up to 100,000 events, after a 14-day free trial with no card.' },
-	{ question: 'If self-hosting is free, why buy Lifetime?', answer: 'Lifetime ($29 once) is the easy way to self-host, and it pays for the work. You get one command, npx grosslytics install, that installs and updates it without git or Bun; priority email support; and a commercial license, so you can modify it or run it for clients without the AGPL’s share-your-changes rule.' },
+	{ question: 'Is Grosslytics open source?', answer: 'Yes, under the AGPL-3.0 license. The code is on GitHub, and self-hosting it is free with every feature, in exchange for a “Powered by Grosslytics” link in your site’s footer: the dashboard opens once the link is found. Lifetime and Indie Cloud need no link. If you change it and offer it to others as a service, the AGPL asks you to share those changes; a Lifetime license removes that requirement.' },
+	{ question: 'Is hosting available, or only self-hosting?', answer: 'Both. Self-hosting from GitHub is free with a footer link back to us. Indie Cloud is hosted for you at $5.99 a month for up to 100,000 events, after a 14-day free trial with no card.' },
+	{ question: 'If self-hosting is free, why buy Lifetime?', answer: 'Lifetime ($29 once) is the easy way to self-host, and it pays for the work. You get no footer link to add; one command, npx grosslytics install, that installs and updates it without git or Bun; priority email support; and a commercial license, so you can modify it or run it for clients without the AGPL’s share-your-changes rule.' },
 ];
 const plans = [
-	{ id: 'self', cta: 'Start free', name: 'Self-host', price: '$0', unit: 'forever', note: 'Open source (AGPL). Runs on your own Cloudflare.', items: ['Every feature, unlimited sites', 'Set up from GitHub with Bun', 'Community help on GitHub'] },
+	{ id: 'self', cta: 'Start free', name: 'Self-host', price: '$0', unit: 'forever', note: 'Open source (AGPL). Runs on your own Cloudflare.', items: ['Every feature, unlimited sites', 'Set up from GitHub with Bun', '“Powered by Grosslytics” link in your site footer', 'Community help on GitHub'] },
 	{ id: 'cloud', cta: 'Get Indie Cloud', name: 'Indie Cloud', price: '$5.99', unit: 'per month', note: 'We run it. 14-day free trial, no card.', items: ['Everything in Self-host', 'Up to 100,000 events a month', 'Unlimited sites, hosted dashboard'], featured: true },
-	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'Self-host the easy way, and back the project.', items: ['Everything in Self-host', 'One command installs and updates it: no git or Bun', 'Priority email support', 'Commercial license: no AGPL obligations'] },
+	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'Self-host the easy way, and back the project.', items: ['Everything in Self-host', 'No footer link needed', 'One command installs and updates it: no git or Bun', 'Priority email support', 'Commercial license: no AGPL obligations'] },
 ];
 ---
 
@@ -90,7 +90,7 @@ const plans = [
 				See which posts, searches and AI answers bring buyers, and what each one earned after fees and ad spend.
 			</p>
 			<div class="mt-9 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-				<a href="/start" class="btn btn-primary">Start free</a>
+				<a href="/start/" class="btn btn-primary">Start free</a>
 				<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
 			</div>
 			<p class="mt-5 text-[13px] text-ink-3">Open source and free on your own Cloudflare. No cookies.</p>
@@ -227,7 +227,7 @@ const plans = [
 				<article class="rounded-[28px] bg-band p-8">
 					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">Yours to run.</h3>
 					<p class="mt-2 text-ink-2">Deploy to your own Cloudflare account in about five minutes. The setup checks each step for you.</p>
-					<a href="/start" class="btn-quiet mt-5 inline-block text-[17px]">Start the setup ›</a>
+					<a href="/start/" class="btn-quiet mt-5 inline-block text-[17px]">Start the setup ›</a>
 				</article>
 			</div>
 		</section>
@@ -341,7 +341,7 @@ const plans = [
 				<h2 class="mx-auto max-w-[18ch] text-[clamp(32px,4.5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">Find out which posts pay the bills.</h2>
 				<p class="mt-4 text-[19px] text-ink-2">Open source and free on your own Cloudflare. Set up in about five minutes.</p>
 				<div class="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-					<a href="/start" class="btn btn-primary">Start free</a>
+					<a href="/start/" class="btn btn-primary">Start free</a>
 					<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
 				</div>
 			</div>

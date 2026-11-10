@@ -1191,3 +1191,71 @@ test('Dodo Payments: signed payment attributed via metadata, tax and fee taken o
 	expect(await (await send('refund.succeeded', { refund_id: 'ref_2', payment_id: 'pay_abc123', is_partial: false })).json()).toMatchObject({ refunded: true });
 	expect(payment(sqlite, 'dodo_pay_abc123').status).toBe('refunded');
 });
+
+test('footer link: free installs lock a site until its homepage links to grosslytics.com; daily recheck relocks', async () => {
+	const { requireFooter } = await import('./footer.js');
+	const realFetch = globalThis.fetch;
+	let html = '<footer><a href="https://grosslytics.com" rel="nofollow">Powered by Grosslytics</a><a href="https://grosslytics.com/"></a><a href="https://evil.com/grosslytics.com">Grosslytics</a></footer>';
+	let down = false;
+	globalThis.fetch = (async (url: string) => {
+		expect(String(url)).toBe('https://acme.io/');
+		return down ? new Response('', { status: 503 }) : new Response(html, { headers: { 'content-type': 'text/html' } });
+	}) as any;
+	try {
+		// Off (Lifetime, Cloud, local dev): nothing changes
+		const open = makeApp();
+		expect((await open.fetch('/api/stats/dashboard?siteId=s1', { headers: bearer })).status).toBe(200);
+		expect(((await (await open.fetch('/api/stats/sites', { headers: bearer })).json()) as any).sites[0].locked).toBe(false);
+		expect(apiToml({ host: 'a.example.com', zone: 'example.com' }, 'db')).not.toContain('REQUIRE_FOOTER');
+		expect(apiToml({ host: 'a.example.com', zone: 'example.com', requireFooter: true }, 'db')).toContain('REQUIRE_FOOTER = "1"');
+
+		const { d1, sqlite } = fakeD1();
+		sqlite.exec("INSERT INTO sites (site_id, domain, name, public_share_enabled) VALUES ('s1', 'acme.io', 'Acme', 1), ('s2', 'localhost', 'Local', 0)");
+		const app = new Hono<any>();
+		app.use('/api/stats/*', requireToken, requireFooter);
+		app.use('/api/mcp/*', requireToken, requireFooter);
+		app.route('/api/stats', statsRoute);
+		app.route('/api/mcp', mcpRoute);
+		app.route('/api/share', shareRoute);
+		const env = { DB: d1, API_TOKEN: 'tok', REQUIRE_FOOTER: '1' };
+		const call = (url: string, init?: RequestInit) => app.fetch(new Request(`http://x${url}`, { headers: bearer, ...init }), env, { waitUntil() {}, passThroughOnException() {} } as any);
+		const verify = () => call('/api/stats/sites/s1/footer', { method: 'POST', body: '{}' });
+
+		// Locked: data, settings, MCP and the public page are all shut; the site list and localhost stay open
+		const locked = await call('/api/stats/dashboard?siteId=s1');
+		expect(locked.status).toBe(403);
+		expect(((await locked.json()) as any).footer).toBe(true);
+		expect((await call('/api/stats/tokens?siteId=s1')).status).toBe(403);
+		expect((await call('/api/stats/sites/s1/share', { method: 'POST', body: '{"enabled":true}' })).status).toBe(403);
+		expect((await call('/api/mcp?site=s1', { method: 'POST', body: '{}' })).status).toBe(403);
+		expect((await call('/api/stats/dashboard')).status).toBe(403);
+		expect((await call('/api/share/acme.io')).status).toBe(404);
+		const sites = ((await (await call('/api/stats/sites')).json()) as any).sites;
+		expect(sites.map((s: any) => s.locked)).toEqual([true, false]);
+		expect((await call('/api/stats/dashboard?siteId=s2')).status).toBe(200);
+
+		// nofollow, an empty link and a look-alike host don't count
+		expect((await verify()).status).toBe(422);
+		down = true;
+		expect(((await (await verify()).json()) as any).error).toContain('Could not load');
+		down = false;
+		html = '<footer><a class="x" href="https://www.grosslytics.com/?ref=acme" rel="noopener">Powered by <b>Grosslytics</b></a></footer>';
+		expect((await verify()).status).toBe(200);
+		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
+		expect((await call('/api/share/acme.io')).status).toBe(200);
+		expect(((await (await call('/api/stats/sites')).json()) as any).sites[0].locked).toBe(false);
+
+		// A day later the link is looked for again: a site that is down keeps access, a removed link locks it
+		const age = () => sqlite.exec('UPDATE site_footer SET checked_at = checked_at - 90000');
+		age();
+		down = true;
+		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
+		age();
+		down = false;
+		html = '<footer></footer>';
+		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(403);
+		expect(sqlite.query('SELECT COUNT(*) n FROM site_footer').get()).toEqual({ n: 0 });
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+});

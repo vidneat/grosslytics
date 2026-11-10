@@ -1,6 +1,6 @@
 # Handoff
 
-The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-09.
+The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-10.
 
 ## What this is
 
@@ -24,7 +24,7 @@ Three connections, each pointing at the owner's own API (a Cloudflare Worker):
   - `/compare/<slug>`: comparison pages.
   - `/badge`, `/og`: badge and social-card images.
 - `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,587 bytes Brotli (the most that rounds to the site's "1.5 KB"); it is currently 1,560. The same build makes the opt-in click script `dist/c.js`; copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
-- `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–010.
+- `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–012.
 - `packages/shared`: types and the dashboard contract (`dashboard.ts`).
 - `scripts/db.ts`: local migrate and seed; also migrates the remote database.
 - `examples/test-site`: a three-page local site for end-to-end testing (see below).
@@ -42,9 +42,34 @@ bun run dev:test-site   # port 3000, after filling examples/test-site/config.js
 `.dev.vars` (gitignored) holds `API_TOKEN` and `STRIPE_WEBHOOK_SECRET`. **Never read or print it**; the user pastes the token into `/app` themselves.
 
 Checks:
-- `bun test packages apps`: 54 tests pass.
+- `bun test packages apps`: 55 tests pass.
 - `cd apps/web && bunx astro build`: passes.
 - Direct `tsc --noEmit` passes for web, API, CLI and ClickHouse; the web production build passes. `astro check` is not a valid check yet: `@astrojs/check` is missing and Turbo cached its install prompt as success.
+
+## SEO audit fixes (2026-11-10, on `main`, not committed, not deployed)
+
+An audit of the 20 live sitemap pages found six faults. Five are fixed in code; the live site still has all of them until the next deploy.
+- **Canonical addresses:** canonical tags, `og:url`, the sitemap, the Markdown copies' `Link` headers in `public/_headers` and the SEO MCP's canonical (`packages/seo-mcp/src/seo.ts`, rebuilt) now end in `/`, the address the host actually serves. Before, they named `/blog/x`, which redirects to `/blog/x/`.
+- **Redirects:** Cloudflare's asset server answers `/blog/x` with a 307 and that status can't be changed from the project. Internal links that used the slashless form (`/start`, article lists, homepage and compare-page links) now point at the final address, so nothing on the site goes through the redirect. A typed slashless address still gets a 307.
+- **Share cards:** `/og/*.png` used to be SVG served at a `.png` address by a request-time route, which X, LinkedIn and Facebook don't draw. That route is deleted. `astro.config.mjs` now writes a real 1200x630 PNG per built page into `dist/og/` at build time, titled from the page's `<title>`, using the new dev dependency `@resvg/resvg-js`. Pages rendered on request (`/app`, `/share/<domain>`) use the homepage card. `shortcut:` the cards use the build machine's sans-serif font.
+- **Favicon:** `public/favicon.svg` and `public/apple-touch-icon.png` (from `brand/`), linked in `BaseHead.astro`.
+- **Schema:** `public/logo.png` now exists (the Organization schema named a missing file), and "Docker" is gone from the SoftwareApplication platforms.
+- **Not fixable in code:** `www.grosslytics.com` does not resolve. The user needs a proxied DNS record for `www` plus a Cloudflare redirect rule to `https://grosslytics.com`.
+- Verified: `astro build`; built pages carry slash canonicals and the icon links; sitemap entries end in `/`; no slashless internal links remain except `/app` and `/app/demo` (rendered on request, no redirect); 17 PNG cards made and two looked at; 55 tests; web typecheck. Not verified: the cards and favicon being served on the live site, and how the cards look when shared.
+- Still open from the audit, the user's call: the forced followed footer link (Google link-spam risk), whether the David Mill LinkedIn and X profiles are genuine, the self-ranking "7 Best DataFast Alternatives" title, and connecting Search Console and Bing Webmaster.
+
+## Footer link for free self-hosting (2026-11-10, on `main`, committed, pushed and deployed)
+
+- The user's decision: free self-hosting now costs a followed "Powered by Grosslytics" link to grosslytics.com in the tracked site's footer. Lifetime and Indie Cloud need no link.
+- How it is switched on: `bun run setup` (the free path, `--bundle`) writes `REQUIRE_FOOTER = "1"` into the generated API `wrangler.toml`. `npx grosslytics install` (Lifetime), the host `grosslytics.com`, local dev and Cloud never set it, so nothing changes there. Deploying this to grosslytics.com does not lock the owner's own dashboard.
+- What it does (`apps/edge-api/src/footer.ts`, middleware `requireFooter` after `requireToken`): for a site without a row in `site_footer` (migration 012), every `/api/stats/*` and `/api/mcp` call naming that site returns 403 `{footer: true}`, and its public `/api/share/<domain>` page returns 404. Open: the site list, adding a site, the waitlist, and `POST /api/stats/sites/:id/footer` (the check). `localhost` sites are exempt. Tracking and payment webhooks keep recording.
+- The check fetches `https://<domain>/` (8s limit) and looks, with `HTMLRewriter`, for an `<a>` whose host is grosslytics.com, whose text contains "Grosslytics", and whose `rel` has no `nofollow`, `sponsored` or `ugc`. It is repeated at most once a day on the owner's next request: a missing link locks the site again; a site that is down keeps access (`shortcut:`). It reads served HTML only, so a footer added by client-side JavaScript is not seen (`shortcut:`).
+- UI: `/api/stats/sites` returns `locked` per site; `/app` shows `FooterGate` (`connect.tsx`) instead of the dashboard, with the snippet, a verify button and a link to Lifetime.
+- Copy updated: homepage pricing cards and FAQ, `/start`, `/docs` self-hosting, Terms, `llms.txt`, README, DEPLOY.md.
+- Verified: 55 tests (new `footer link:` test: locked routes, nofollow/empty/look-alike links refused, verify, daily recheck); typecheck for API, web and CLI; local migration applied. In the browser with launch config `api-footer` (port 8788, gate on, a throwaway token): acme.io and vidneat.app listed as locked, the gate screen showed for vidneat.app, and Verify fetched the real vidneat.app and answered "No followed link"; no overflow at 375px.
+- Not verified: a successful check against a real site carrying the link (only in the test, with a stubbed fetch); a real `bun run setup` writing the variable. `astro build` passes (run during the SEO fixes below).
+- Known limits: the code is public AGPL, so a self-hoster can delete the check or the variable. Existing free installs (none known besides the owner's) get locked on their next `bun run setup` until the link is added. Requiring a followed link in exchange for a free product is what Google's link-spam policy calls out; the user was told. The dashboard briefly requests data (a 403) before the site list arrives and the gate shows.
+- Lifetime buyers get this code on the next `bun scripts/release.ts --upload`, with the gate off. CLI on npm (0.1.0) is unaffected.
 
 ## ChatGPT revenue article (2026-11-09, on `main`, pushed and deployed)
 

@@ -25,7 +25,7 @@ This guide is published by the Grosslytics team. Provider documentation and the 
 
 This workflow connects evidence from a visit to evidence from a payment. It cannot recover a referrer, campaign or search query that was never recorded, and a browser visitor ID is an attribution identifier rather than an authentication credential.
 
-1. Add your site using the [setup flow](/start).
+1. Add your site using the [setup flow](/start/).
 2. Set the site's reporting currency to match your Stripe charges.
 3. Choose Payment Links or server-created Checkout Sessions.
 4. Identify the destination domain serving your Grosslytics API.

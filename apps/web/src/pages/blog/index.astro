@@ -10,7 +10,7 @@ const articles = Object.values(import.meta.glob<MarkdownInstance<{title: string;
         <p class="mt-4 text-ink-2">Implementation guides for connecting payment events to acquisition channels, with code examples and current limitations.</p>
         <ul class="mt-8">
             {articles.map(article => <li class="border-b border-line py-6">
-                <h2 class="text-xl font-semibold"><a class="underline" href={article.url}>{article.frontmatter.title}</a></h2>
+                <h2 class="text-xl font-semibold"><a class="underline" href={`${article.url}/`}>{article.frontmatter.title}</a></h2>
                 <p class="mt-2 text-ink-2">{article.frontmatter.description}</p>
             </li>)}
         </ul>

@@ -61,13 +61,13 @@ const nav = [
 								<span class="hidden sm:inline">Star</span>
 							</a>
 							<a href="/app/" class="hidden text-ink-2 hover:text-ink lg:inline">Sign in</a>
-							<a href="/start" class="btn btn-primary hidden !px-4 !py-2 !text-[13px] sm:inline-flex">Get started</a>
+							<a href="/start/" class="btn btn-primary hidden !px-4 !py-2 !text-[13px] sm:inline-flex">Get started</a>
                             <details class="mobile-nav lg:hidden">
                                 <summary>Menu</summary>
                                 <nav aria-label="Mobile main">
                                     {nav.map(n => <a href={n.href} aria-current={currentSection(n.href) ? 'page' : undefined}>{n.label}</a>)}
                                     <a href="/app/">Sign in</a>
-                                    <a href="/start">Get started</a>
+                                    <a href="/start/">Get started</a>
                                 </nav>
                             </details>
 						</>

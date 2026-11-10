@@ -19,6 +19,8 @@ bun run setup
 
 Needs Bun and Node.js 18+ (the installer prompts run on Node; Bun 1.4 drops typed input). One command does steps 2 to 10 below. It builds the code, signs in to Cloudflare (click **Allow**), creates the D1 database and both queues, runs every migration, deploys the API (`<host>/api/*`) and the website (custom domain `<host>`), and sets a random `API_TOKEN` plus your dashboard password. It prints the dashboard address and the `API_TOKEN` once, so save the token.
 
+This free setup sets `REQUIRE_FOOTER = "1"` on the API: a site's dashboard, settings, MCP and public page stay locked until its home page has `<a href="https://grosslytics.com">Powered by Grosslytics</a>` (no `rel="nofollow"`), found by the Verify button on `/app` and rechecked daily. Tracking is never paused by it. Lifetime installs (`npx grosslytics install`) and grosslytics.com itself don't set the variable.
+
 Before the first run:
 - **New Cloudflare account:** open Workers & Pages in the dashboard once, so Cloudflare creates your workers.dev subdomain. Deploys are refused without it.
 - **Your hostname must have no DNS records** (A, AAAA or CNAME). Cloudflare won't attach a custom domain over existing records.

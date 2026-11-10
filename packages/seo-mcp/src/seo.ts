@@ -236,7 +236,7 @@ export async function auditSeoContent(webDir: string, markdown: string, articleP
 export async function markdownCanonicalHeader(webDir: string, collection: string, slug: string) {
 	const headersPath = path.join(webDir, 'public/_headers');
 	const route = `/${collection}/${slug}.md`;
-	const canonical = `${site.url}/${collection}/${slug}`;
+	const canonical = `${site.url}/${collection}/${slug}/`;
 	const rule = `${route}\n  Link: <${canonical}>; rel="canonical"\n`;
 	const existing = await fs.readFile(headersPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
 		if (error.code === 'ENOENT') return '';
