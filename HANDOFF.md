@@ -1,12 +1,12 @@
 # Handoff
 
-The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-10.
+The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-11.
 
-## Affiliate foundations: Paddle refunds (2026-11-11, local only)
+## Affiliate foundations: Paddle refunds (2026-11-11, deployed)
 
 - The user requested affiliate programs, durable referral attribution, commission accounting, partial refund handling, and separate partner permissions. This work is **not complete** and no affiliate or payout workflow has been implemented.
 - Paddle Billing `adjustment.created` and `adjustment.updated` now apply signed, approved, full refunds through the existing atomic refund ledger, including when a refund arrives before its transaction. Pending, rejected and partial adjustments are ignored. Setup and the Paddle guide now list both adjustment events.
-- Verified locally: the full 59-test suite and API/web TypeScript checks passed; the new test covers signature rejection, pending and partial adjustments, retries, refund-before-sale, and approved adjustments created after a sale. No Paddle sandbox transaction was performed and the change is not deployed. Partial refund accounting for Stripe, Paddle and Dodo remains outstanding, as do partner accounts, referral attribution, commission rules, and payouts. Do not use the current payment records to calculate affiliate payouts.
+- Verified locally: the full 59-test suite and API/web TypeScript checks passed; the new test covers signature rejection, pending and partial adjustments, retries, refund-before-sale, and approved adjustments created after a sale. Deployed commit `2b49d43` to grosslytics.com; homepage, docs, Paddle guide, app, tracker and API status returned 200, the homepage tracker ID was preserved, and unauthenticated stats returned 401. API Worker version `be06d25b-d9d9-4fb8-9e46-b3dfe0df7468`; web Worker version `6a0ff1cd-3a0e-4454-8660-de7dccdbae01`. The R2 installer release was not updated. No Paddle sandbox transaction was performed. Partial refund accounting for Stripe, Paddle and Dodo remains outstanding, as do partner accounts, referral attribution, commission rules, and payouts. Do not use the current payment records to calculate affiliate payouts.
 
 ## What this is
 
