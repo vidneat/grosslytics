@@ -28,7 +28,7 @@ const gateways = [
 	{ name: 'Polar', id: 'polar', events: 'order.paid', visitor: 'Checkout links on your page are tagged automatically (reference_id). Or pass metadata.visitor_id.' },
 	{ name: 'Dodo Payments', id: 'dodo', events: 'payment.succeeded, refund.succeeded', visitor: 'Checkout links on your page are tagged automatically (metadata_visitor_id). With the API, pass metadata: { visitor_id } when you create the payment or subscription. The signing secret is the endpoint’s whsec_… secret. Full refunds remove the sale; partial refunds keep it.' },
 	{ name: 'Lemon Squeezy', id: 'lemonsqueezy', events: 'order_created, subscription_payment_success', visitor: 'Checkout links on your page are tagged automatically (checkout[custom][visitor_id]).' },
-	{ name: 'Paddle', id: 'paddle', events: 'transaction.completed', visitor: 'Pass customData: { visitor_id } when you open Paddle Checkout.' },
+	{ name: 'Paddle', id: 'paddle', events: 'transaction.completed, adjustment.created, adjustment.updated', visitor: 'Pass customData: { visitor_id } when you open Paddle Checkout. Approved full refunds remove the sale; partial refunds need separate reconciliation.' },
 	{ name: 'Razorpay', id: 'razorpay', events: 'payment.captured', visitor: 'Pass notes: { visitor_id } when you create the order or payment.' },
 	{ name: 'Cashfree', id: 'cashfree', events: 'PAYMENT_SUCCESS_WEBHOOK', visitor: 'Pass order_tags: { visitor_id } when you create the order. The signing secret is your Cashfree client secret.' },
 	{ name: 'Gumroad', id: 'gumroad', events: 'Ping (sales) and refunds', visitor: 'Product links on your page are tagged automatically (?visitor_id=, delivered as url_params). Gumroad pings are unsigned, so choose a long random key and add &key=YOUR_KEY to the ping URL.' },
@@ -120,7 +120,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 				</div>
 
 				<h3 class={h3}>Currencies, tax and refunds</h3>
-				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. A full Stripe refund or a Gumroad refund removes the sale from revenue; partial refunds and other providers’ refunds are not handled yet.</p>
+				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. Full Stripe and Dodo refunds, approved full Paddle refunds, and Gumroad refunds remove the sale from revenue. Partial refunds and other providers’ refunds need separate reconciliation.</p>
 				<p>Sales tax or VAT that the provider reports (Stripe, Paddle, Polar, Lemon Squeezy, Dodo Payments, RevenueCat) is taken out of revenue, because it is not yours to keep. Net revenue then subtracts the payment fee: PayPal’s and RevenueCat’s real fee from the event, and each other provider’s standard published fee, which is an estimate.</p>
 			</section>
 

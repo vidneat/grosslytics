@@ -344,6 +344,19 @@ webhooksRoute.post('/:gateway', async (c) => {
 		return c.json(result.processed ? { received: true, refunded: true } : { received: true, deduplicated: true });
 	}
 
+	// An adjustment may be approved immediately on creation or after a later review.
+	// Only a full approved refund can use the existing whole-payment refund ledger.
+	if (gateway === 'paddle' && (event.event_type === 'adjustment.created' || event.event_type === 'adjustment.updated')) {
+		const adjustment = event.data ?? {};
+		if (adjustment.action !== 'refund' || adjustment.status !== 'approved' || adjustment.type !== 'full') return c.json({ received: true, ignored: true });
+		if (!event.event_id || !adjustment.id || !adjustment.transaction_id) return c.text('Missing event or payment reference', 400);
+		const result = await applyPaymentEvent(c.env.DB, {
+			id: event.event_id, siteId, gateway, references: [adjustment.transaction_id],
+			refundedAt: Math.floor(Date.parse(event.occurred_at) / 1000) || Math.floor(Date.now() / 1000),
+		});
+		return c.json(result.processed ? { received: true, refunded: true } : { received: true, deduplicated: true });
+	}
+
 	// Dodo: full refunds only, like Stripe; a partial refund keeps the sale
 	if (gateway === 'dodo' && event.type === 'refund.succeeded') {
 		const r = event.data ?? {};

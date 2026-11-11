@@ -185,7 +185,7 @@ const GATEWAYS = {
 	paddle: {
 		label: 'Paddle',
 		where: 'Developer tools → Notifications → New destination',
-		events: 'transaction.completed',
+		events: 'transaction.completed, adjustment.created, adjustment.updated',
 		secret: 'PADDLE_WEBHOOK_SECRET',
 		link: 'Pass customData: { visitor_id: localStorage.gl_vid } when you open Paddle Checkout.',
 	},

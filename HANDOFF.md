@@ -2,6 +2,12 @@
 
 The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-10.
 
+## Affiliate foundations: Paddle refunds (2026-11-11, local only)
+
+- The user requested affiliate programs, durable referral attribution, commission accounting, partial refund handling, and separate partner permissions. This work is **not complete** and no affiliate or payout workflow has been implemented.
+- Paddle Billing `adjustment.created` and `adjustment.updated` now apply signed, approved, full refunds through the existing atomic refund ledger, including when a refund arrives before its transaction. Pending, rejected and partial adjustments are ignored. Setup and the Paddle guide now list both adjustment events.
+- Verified locally: the full 59-test suite and API/web TypeScript checks passed; the new test covers signature rejection, pending and partial adjustments, retries, refund-before-sale, and approved adjustments created after a sale. No Paddle sandbox transaction was performed and the change is not deployed. Partial refund accounting for Stripe, Paddle and Dodo remains outstanding, as do partner accounts, referral attribution, commission rules, and payouts. Do not use the current payment records to calculate affiliate payouts.
+
 ## What this is
 
 Grosslytics is revenue-first web analytics. A small tracker records visits, payment-gateway webhooks record sales, and the dashboard shows which traffic source brought each paying customer. The user self-hosts it on their own Cloudflare account. There is no hosted multi-user version yet.

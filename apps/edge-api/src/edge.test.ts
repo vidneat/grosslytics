@@ -112,6 +112,38 @@ test('verify: razorpay, lemonsqueezy, paddle, polar', async () => {
 	expect(await verifyWebhook('polar', 'wrong', body, h)).toBe(false);
 });
 
+test('Paddle: only approved full refunds remove sales, including refunds delivered before the transaction', async () => {
+	const app = makeApp({ PADDLE_WEBHOOK_SECRET: SECRET });
+	const send = async (event: object, signed = true) => {
+		const body = JSON.stringify(event);
+		const ts = String(Math.floor(Date.now() / 1000));
+		const headers = signed ? { 'paddle-signature': `ts=${ts};h1=${await hmacHex(`${ts}:${body}`)}` } : {};
+		return app.fetch('/api/webhooks/paddle?siteId=s1', { method: 'POST', body, headers });
+	};
+	const adjustment = (id: string, status: string, type = 'full') => ({
+		event_id: id, event_type: 'adjustment.updated', occurred_at: '2026-11-11T00:00:00Z',
+		data: { id: 'adj_1', transaction_id: 'txn_1', action: 'refund', status, type },
+	});
+	expect((await send(adjustment('unauthorized', 'approved'), false)).status).toBe(401);
+	expect(await (await send(adjustment('pending', 'pending_approval'))).json()).toEqual({ received: true, ignored: true });
+	expect(await (await send(adjustment('rejected', 'rejected'))).json()).toEqual({ received: true, ignored: true });
+	expect(await (await send(adjustment('partial', 'approved', 'partial'))).json()).toEqual({ received: true, ignored: true });
+	expect((await send({ ...adjustment('bad', 'approved'), data: { ...adjustment('bad', 'approved').data, transaction_id: '' } })).status).toBe(400);
+	const approved = adjustment('approved', 'approved');
+	expect(await (await send(approved)).json()).toEqual({ received: true, refunded: true });
+	expect(await (await send(approved)).json()).toEqual({ received: true, deduplicated: true });
+	const sale = { event_id: 'sale', event_type: 'transaction.completed', data: { id: 'txn_1', currency_code: 'USD', details: { totals: { grand_total: '10000', tax: '0' } } } };
+	expect((await send(sale)).status).toBe(200);
+	expect(app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'txn_1'").get()).toEqual({ status: 'refunded' });
+	expect(app.sqlite.query('SELECT payment_id FROM refunds').all()).toEqual([{ payment_id: 'txn_1' }]);
+
+	const secondSale = { ...sale, event_id: 'sale_2', data: { ...sale.data, id: 'txn_2' } };
+	await send(secondSale);
+	const created = { ...adjustment('created', 'approved'), event_type: 'adjustment.created', data: { ...adjustment('created', 'approved').data, id: 'adj_2', transaction_id: 'txn_2' } };
+	expect(await (await send(created)).json()).toEqual({ received: true, refunded: true });
+	expect(app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'txn_2'").get()).toEqual({ status: 'refunded' });
+});
+
 test('webhooks: unsigned rejected; signed sale attributed, deduped, and in linear stats', async () => {
 	const app = makeApp();
 	const now = Math.floor(Date.now() / 1000);

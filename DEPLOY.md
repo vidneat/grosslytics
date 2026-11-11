@@ -255,10 +255,10 @@ Use `https://grosslytics.com/api/webhooks/<gateway>?siteId=<your site id>`. `sit
 | Stripe | `/stripe` | `checkout.session.completed`, `invoice.paid`, `invoice_payment.paid`, `charge.refunded` |
 | Razorpay | `/razorpay` | `payment.captured` |
 | Polar | `/polar` | `order.paid` |
-| Paddle | `/paddle` | `transaction.completed` |
+| Paddle | `/paddle` | `transaction.completed`, `adjustment.created`, `adjustment.updated` |
 | LemonSqueezy | `/lemonsqueezy` | `order_created`, `subscription_payment_success` |
 
-Copy each signing secret into step 8. `invoice_payment.paid` connects modern Stripe invoice IDs to their PaymentIntent IDs so refunds can arrive in either order. Full Stripe refunds are supported; partial refunds still need amount-based accounting.
+Copy each signing secret into step 8. `invoice_payment.paid` connects modern Stripe invoice IDs to their PaymentIntent IDs so refunds can arrive in either order. Full Stripe refunds and approved full Paddle refunds are supported; partial refunds still need amount-based accounting.
 
 **How sales get linked to visitors:** the tracker tags Stripe links with `client_reference_id`, Polar links with `reference_id`, and LemonSqueezy links with `checkout[custom][visitor_id]`. Paddle and Razorpay require their checkout SDK or server integration; adding a URL parameter alone does not attach metadata. For checkouts created in code, pass the visitor ID yourself:
 

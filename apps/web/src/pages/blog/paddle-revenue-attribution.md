@@ -76,7 +76,7 @@ The ID joins the payment to an existing visit; it is not an authentication crede
 
 ## Step 2: Which Paddle webhook should Grosslytics receive?
 
-Configure transaction.completed to reach the Paddle-specific endpoint and save the matching signing secret in Payments settings.
+Configure transaction.completed, adjustment.created and adjustment.updated to reach the Paddle-specific endpoint and save the matching signing secret in Payments settings.
 
 ```text
 https://YOUR_ANALYTICS_DOMAIN/api/webhooks/paddle?siteId=YOUR_SITE_ID
@@ -133,7 +133,7 @@ estimated_fee = round(12000 * 500 / 10000) + 50 = 650 cents
 revenue_after_tax_and_estimated_fee = 12000 - 2000 - 650 = 9350 cents
 ```
 
-That calculation describes the application's default, not your negotiated Paddle fee or exact payout. The current Paddle extractor does not use actual totals.fee or earnings as the stored fee amount, and refunds are not automatically applied by this handler.
+That calculation describes the application's default, not your negotiated Paddle fee or exact payout. The current Paddle extractor does not use actual totals.fee or earnings as the stored fee amount. Approved full refunds remove a sale; partial refunds need separate reconciliation.
 
 Mixed-currency payments are rejected rather than converted. Ad spend is a separate input, and subtracting fees and ad spend still excludes other business operating costs.
 
@@ -162,7 +162,7 @@ Reconcile a complete payment lifecycle with the provider records and keep unsupp
 4. Reconcile the fee estimate with actual provider charges.
 5. Test a recurring transaction and its source.
 6. Inspect an unmatched buyer and avoid inventing its source.
-7. Reconcile refunds separately because the current Paddle handler does not apply them.
+7. Reconcile partial refunds and other adjustments separately; the handler only applies approved full refunds.
 
 Keep revenue attribution, recurring receipts and cohort metrics distinct. Next, validate one initial and one recurring Paddle transaction before using the source report to allocate spend.
 
