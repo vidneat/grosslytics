@@ -14,7 +14,10 @@ export async function dnsAnswers(name: string, type: 'A' | 'AAAA' | 'TXT'): Prom
 		redirect: 'manual',
 		signal: AbortSignal.timeout(4000),
 	});
-	if (!response.ok) throw new Error('DNS lookup failed');
+	if (!response.ok) {
+		await response.body?.cancel();
+		throw new Error('DNS lookup failed');
+	}
 	const result = await response.json<{ Status: number; Answer?: { type: number; data: string }[] }>();
 	if (result.Status === 3) return [];
 	if (result.Status !== 0) throw new Error('DNS lookup failed');

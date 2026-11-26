@@ -1572,8 +1572,11 @@ test('security: email verification is required and neither signup nor claim expo
 	const app = makeApp();
 	const original = globalThis.fetch;
 	const messages: { to: string; body: string }[] = [];
+	let rejectEmailRedirect = false;
 	globalThis.fetch = (async (url: string, init: RequestInit) => {
 		expect(url).toBe('https://next-api.useplunk.com/v1/send');
+		expect(init.redirect).toBe('manual');
+		if (rejectEmailRedirect) return new Response(null, { status: 302, headers: { location: 'https://evil.example/' } });
 		messages.push(JSON.parse(String(init.body)));
 		return Response.json({ id: 'email_test' });
 	}) as any;
@@ -1605,6 +1608,10 @@ test('security: email verification is required and neither signup nor claim expo
 		const licenseCode = messages.at(-1)!.body.match(/[a-f0-9]{40}/)![0];
 		expect(await (await claim(claimApp, 'pay_license_12345678', licenseCode)).json()).toEqual({ key: expect.stringMatching(/^gl_lic_/) });
 		expect((await claim(claimApp, 'pay_license_12345678', licenseCode)).status).toBe(400);
+		rejectEmailRedirect = true;
+		claimApp.sqlite.exec("INSERT INTO licenses (key_hash, session_id, email) VALUES ('hash2', 'pay_license_redirect', 'redirect@acme.io')");
+		expect((await claim(claimApp, 'pay_license_redirect')).status).toBe(503);
+		expect(claimApp.sqlite.query("SELECT COUNT(*) n FROM email_proofs WHERE subject = 'pay_license_redirect'").get()).toEqual({ n: 0 });
 	} finally {
 		globalThis.fetch = original;
 	}
@@ -1644,10 +1651,15 @@ test('security: footer fetch refuses private DNS, unsafe redirects and oversized
 	let ip = '127.0.0.1';
 	let page = '';
 	let redirect = '';
+	let dnsRedirect = false;
 	const fetched: string[] = [];
 	globalThis.fetch = (async (input: string, init: RequestInit) => {
 		const url = String(input);
-		if (url.startsWith('https://cloudflare-dns.com/')) return Response.json({ Status: 0, Answer: [{ type: 1, data: ip }] });
+		if (url.startsWith('https://cloudflare-dns.com/')) {
+			expect(init.redirect).toBe('manual');
+			if (dnsRedirect) return new Response(null, { status: 302, headers: { location: 'https://evil.example/' } });
+			return Response.json({ Status: 0, Answer: [{ type: 1, data: ip }] });
+		}
 		fetched.push(url);
 		expect(init.redirect).toBe('manual');
 		if (redirect) return new Response(null, { status: 302, headers: { location: redirect } });
@@ -1657,7 +1669,11 @@ test('security: footer fetch refuses private DNS, unsafe redirects and oversized
 		expect(await checkFooter('localhost')).toBe('unreachable');
 		expect(await checkFooter('acme.io')).toBe('unreachable');
 		expect(fetched).toHaveLength(0);
+		dnsRedirect = true;
 		ip = '1.1.1.1';
+		expect(await checkFooter('acme.io')).toBe('unreachable');
+		expect(fetched).toHaveLength(0);
+		dnsRedirect = false;
 		redirect = 'https://127.0.0.1/';
 		expect(await checkFooter('acme.io')).toBe('unreachable');
 		expect(fetched).toEqual(['https://acme.io/']);

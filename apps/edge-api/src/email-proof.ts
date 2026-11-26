@@ -17,7 +17,7 @@ export async function sendEmailProof(env: Bindings, purpose: Purpose, subject: s
 	try {
 		const response = await fetch('https://next-api.useplunk.com/v1/send', {
 			method: 'POST',
-			redirect: 'error',
+			redirect: 'manual',
 			signal: AbortSignal.timeout(8000),
 			headers: { authorization: `Bearer ${env.PLUNK_API_KEY}`, 'content-type': 'application/json' },
 			body: JSON.stringify({
@@ -26,7 +26,10 @@ export async function sendEmailProof(env: Bindings, purpose: Purpose, subject: s
 				body: `<p>Paste this code into Grosslytics to continue.</p><p><code>${code}</code></p><p>It expires in 15 minutes. If you did not request it, you can ignore this email.</p>`,
 			}),
 		});
-		if (!response.ok) throw new Error('Email delivery failed');
+		if (!response.ok) {
+			await response.body?.cancel();
+			throw new Error('Email delivery failed');
+		}
 	} catch {
 		await env.DB.prepare('DELETE FROM email_proofs WHERE purpose = ? AND subject = ? AND code_hash = ?').bind(purpose, subject, hash).run();
 		throw new Error('Email delivery failed');
